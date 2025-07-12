@@ -1,19 +1,19 @@
-import { prisma } from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
+import { prisma } from "@/lib/prisma"
+import type { Prisma } from "@prisma/client"
 
 interface LookupOptions {
-  search?: string;
-  limit?: number;
-  offset?: number;
+  search?: string
+  limit?: number
+  offset?: number
 }
 
 interface LookupSourceData {
-  id: string;
-  name: string;
-  description?: string | null;
-  type: string;
-  recordCount: number;
-  icon: string;
+  id: string
+  name: string
+  description?: string | null
+  type: string
+  recordCount: number
+  icon: string
 }
 
 export class LookupService {
@@ -64,16 +64,169 @@ export class LookupService {
       { id: "legal", name: "Legal", code: "LEG", description: "Legal Department" },
       { id: "support", name: "Customer Support", code: "SUP", description: "Customer Support" },
     ],
-  };
+  }
+
+  // Helper function to get form records from the correct table
+  private async getFormRecords(formId: string, options: { limit?: number; offset?: number } = {}): Promise<any[]> {
+    const { limit = 50, offset = 0 } = options
+
+    // Get the table mapping for this form
+    const mapping = await prisma.formTableMapping.findUnique({
+      where: { formId },
+    })
+
+    if (!mapping) {
+      console.log(`No table mapping found for form ${formId}`)
+      return []
+    }
+
+    const tableName = mapping.storageTable
+    console.log(`Querying table ${tableName} for form ${formId}`)
+
+    // Query the appropriate table
+    const queryParams = {
+      where: { formId },
+      orderBy: { createdAt: "desc" as const },
+      take: limit,
+      skip: offset,
+    }
+
+    let records: any[] = []
+
+    switch (tableName) {
+      case "form_records_1":
+        records = await prisma.formRecord1.findMany(queryParams)
+        break
+      case "form_records_2":
+        records = await prisma.formRecord2.findMany(queryParams)
+        break
+      case "form_records_3":
+        records = await prisma.formRecord3.findMany(queryParams)
+        break
+      case "form_records_4":
+        records = await prisma.formRecord4.findMany(queryParams)
+        break
+      case "form_records_5":
+        records = await prisma.formRecord5.findMany(queryParams)
+        break
+      case "form_records_6":
+        records = await prisma.formRecord6.findMany(queryParams)
+        break
+      case "form_records_7":
+        records = await prisma.formRecord7.findMany(queryParams)
+        break
+      case "form_records_8":
+        records = await prisma.formRecord8.findMany(queryParams)
+        break
+      case "form_records_9":
+        records = await prisma.formRecord9.findMany(queryParams)
+        break
+      case "form_records_10":
+        records = await prisma.formRecord10.findMany(queryParams)
+        break
+      case "form_records_11":
+        records = await prisma.formRecord11.findMany(queryParams)
+        break
+      case "form_records_12":
+        records = await prisma.formRecord12.findMany(queryParams)
+        break
+      case "form_records_13":
+        records = await prisma.formRecord13.findMany(queryParams)
+        break
+      case "form_records_14":
+        records = await prisma.formRecord14.findMany(queryParams)
+        break
+      case "form_records_15":
+        records = await prisma.formRecord15.findMany(queryParams)
+        break
+      default:
+        console.log(`Invalid table name: ${tableName}`)
+        return []
+    }
+
+    return records
+  }
+
+  // Helper function to count form records
+  private async countFormRecords(formId: string): Promise<number> {
+    const mapping = await prisma.formTableMapping.findUnique({
+      where: { formId },
+    })
+
+    if (!mapping) return 0
+
+    const tableName = mapping.storageTable
+    const where = { formId }
+
+    switch (tableName) {
+      case "form_records_1":
+        return await prisma.formRecord1.count({ where })
+      case "form_records_2":
+        return await prisma.formRecord2.count({ where })
+      case "form_records_3":
+        return await prisma.formRecord3.count({ where })
+      case "form_records_4":
+        return await prisma.formRecord4.count({ where })
+      case "form_records_5":
+        return await prisma.formRecord5.count({ where })
+      case "form_records_6":
+        return await prisma.formRecord6.count({ where })
+      case "form_records_7":
+        return await prisma.formRecord7.count({ where })
+      case "form_records_8":
+        return await prisma.formRecord8.count({ where })
+      case "form_records_9":
+        return await prisma.formRecord9.count({ where })
+      case "form_records_10":
+        return await prisma.formRecord10.count({ where })
+      case "form_records_11":
+        return await prisma.formRecord11.count({ where })
+      case "form_records_12":
+        return await prisma.formRecord12.count({ where })
+      case "form_records_13":
+        return await prisma.formRecord13.count({ where })
+      case "form_records_14":
+        return await prisma.formRecord14.count({ where })
+      case "form_records_15":
+        return await prisma.formRecord15.count({ where })
+      default:
+        return 0
+    }
+  }
 
   async seedStaticSources(): Promise<void> {
     const staticSourceConfigs = [
-      { id: "lookup_countries", name: "Countries", staticSourceName: "countries", description: "World countries with codes and regions", data: this.staticSources.countries },
-      { id: "lookup_currencies", name: "Currencies", staticSourceName: "currencies", description: "World currencies with symbols", data: this.staticSources.currencies },
-      { id: "lookup_priorities", name: "Priorities", staticSourceName: "priorities", description: "Task and project priorities", data: this.staticSources.priorities },
-      { id: "lookup_statuses", name: "Status Options", staticSourceName: "statuses", description: "Common status values", data: this.staticSources.statuses },
-      { id: "lookup_departments", name: "Departments", staticSourceName: "departments", description: "Common company departments", data: this.staticSources.departments },
-    ];
+      {
+        id: "lookup_countries",
+        name: "Countries",
+        description: "World countries with codes and regions",
+        data: this.staticSources.countries,
+      },
+      {
+        id: "lookup_currencies",
+        name: "Currencies",
+        description: "World currencies with symbols",
+        data: this.staticSources.currencies,
+      },
+      {
+        id: "lookup_priorities",
+        name: "Priorities",
+        description: "Task and project priorities",
+        data: this.staticSources.priorities,
+      },
+      {
+        id: "lookup_statuses",
+        name: "Status Options",
+        description: "Common status values",
+        data: this.staticSources.statuses,
+      },
+      {
+        id: "lookup_departments",
+        name: "Departments",
+        description: "Common company departments",
+        data: this.staticSources.departments,
+      },
+    ]
 
     for (const config of staticSourceConfigs) {
       await prisma.lookupSource.upsert({
@@ -81,9 +234,8 @@ export class LookupService {
         update: {
           name: config.name,
           type: "static",
-          staticSourceName: config.staticSourceName,
           description: config.description,
-          data: config.data as Prisma.InputJsonValue,
+          staticData: config.data as Prisma.InputJsonValue,
           active: true,
           updatedAt: new Date(),
         },
@@ -91,70 +243,68 @@ export class LookupService {
           id: config.id,
           name: config.name,
           type: "static",
-          staticSourceName: config.staticSourceName,
           description: config.description,
-          data: config.data as Prisma.InputJsonValue,
+          staticData: config.data as Prisma.InputJsonValue,
           active: true,
           createdAt: new Date(),
           updatedAt: new Date(),
         },
-      });
+      })
     }
-    console.log("Static lookup sources seeded.");
+
+    console.log("Static lookup sources seeded.")
   }
 
   async getData(sourceId: string, options: LookupOptions = {}): Promise<any[]> {
-    const { search = "", limit = 50, offset = 0 } = options;
-
-    console.log(`LookupService.getData called with:`, { sourceId, search, limit, offset });
+    const { search = "", limit = 50, offset = 0 } = options
+    console.log(`LookupService.getData called with:`, { sourceId, search, limit, offset })
 
     try {
       const lookupSource = await prisma.lookupSource.findUnique({
         where: { id: sourceId },
         include: { sourceModule: true, sourceForm: true },
-      });
+      })
 
       if (!lookupSource) {
-        console.log(`No lookup source found for ID: ${sourceId}`);
-        return [];
+        console.log(`No lookup source found for ID: ${sourceId}`)
+        return []
       }
 
       if (lookupSource.type === "static") {
-        console.log(`Using static data for source: ${lookupSource.staticSourceName}`);
-        let data = (lookupSource.data as any[]) || [];
+        console.log(`Using static data for source: ${sourceId}`)
+        let data = (lookupSource.staticData as any[]) || []
 
         if (search) {
-          const searchLower = search.toLowerCase();
+          const searchLower = search.toLowerCase()
           data = data.filter((item) =>
-            Object.values(item).some((value) => value != null && String(value).toLowerCase().includes(searchLower))
-          );
+            Object.values(item).some((value) => value != null && String(value).toLowerCase().includes(searchLower)),
+          )
         }
 
         const result = data.slice(offset, offset + limit).map((item) => ({
           record_id: item.id || String(Math.random()),
           ...item,
           type: item.type || "text",
-        }));
-        console.log(`Returning ${result.length} static records`);
-        return result;
+        }))
+
+        console.log(`Returning ${result.length} static records`)
+        return result
       }
 
       if (lookupSource.type === "form" && lookupSource.sourceFormId) {
         const form = await prisma.form.findUnique({
           where: { id: lookupSource.sourceFormId },
           include: {
-            records: {
-              take: limit,
-              skip: offset,
-              orderBy: { createdAt: "desc" },
-            },
+            tableMapping: true,
           },
-        });
+        })
 
         if (form) {
-          console.log(`Found form: ${form.name} with ${form.records.length} records`);
-          const records = form.records.map((record) => {
-            const recordData = record.recordData as any;
+          console.log(`Found form: ${form.name}`)
+          const records = await this.getFormRecords(form.id, { limit, offset })
+
+          const transformedRecords = records.map((record: any) => {
+            const recordData = record.recordData as any
             const transformedData: any = {
               record_id: record.id,
               form_id: form.id,
@@ -163,47 +313,50 @@ export class LookupService {
               _formName: form.name,
               createdAt: record.createdAt.toISOString(),
               updatedAt: record.updatedAt.toISOString(),
-            };
+            }
 
             Object.entries(recordData).forEach(([key, value]: [string, any]) => {
-              const fieldType = value?.type || "text";
-              let fieldValue = value?.value;
+              const fieldType = value?.type || "text"
+              let fieldValue = value?.value
 
               if (fieldType === "number" && fieldValue != null) {
-                fieldValue = Number(fieldValue);
-                if (isNaN(fieldValue)) fieldValue = value.value;
+                fieldValue = Number(fieldValue)
+                if (isNaN(fieldValue)) fieldValue = value.value
               } else if (fieldType === "datetime" && fieldValue) {
                 try {
-                  fieldValue = new Date(fieldValue).toISOString();
+                  fieldValue = new Date(fieldValue).toISOString()
                 } catch {
-                  fieldValue = value.value;
+                  fieldValue = value.value
                 }
               } else if (fieldType === "date" && fieldValue) {
                 try {
-                  fieldValue = new Date(fieldValue).toISOString().split("T")[0];
+                  fieldValue = new Date(fieldValue).toISOString().split("T")[0]
                 } catch {
-                  fieldValue = value.value;
+                  fieldValue = value.value
                 }
               } else if (fieldType === "checkbox") {
-                fieldValue = Boolean(fieldValue);
+                fieldValue = Boolean(fieldValue)
               } else if (fieldType === "tel" || fieldType === "email" || fieldType === "url") {
-                fieldValue = String(fieldValue);
+                fieldValue = String(fieldValue)
               }
 
-              let parsedOptions: any = null;
-              let parsedValidation: any = null;
+              let parsedOptions: any = null
+              let parsedValidation: any = null
+
               if (value?.options != null) {
                 try {
-                  parsedOptions = typeof value.options === "string" ? JSON.parse(value.options) : value.options;
+                  parsedOptions = typeof value.options === "string" ? JSON.parse(value.options) : value.options
                 } catch {
-                  parsedOptions = [];
+                  parsedOptions = []
                 }
               }
+
               if (value?.validation != null) {
                 try {
-                  parsedValidation = typeof value.validation === "string" ? JSON.parse(value.validation) : value.validation;
+                  parsedValidation =
+                    typeof value.validation === "string" ? JSON.parse(value.validation) : value.validation
                 } catch {
-                  parsedValidation = {};
+                  parsedValidation = {}
                 }
               }
 
@@ -215,24 +368,27 @@ export class LookupService {
                 field_section_id: value?.sectionId || null,
                 field_options: parsedOptions,
                 field_validation: parsedValidation,
-              };
-            });
+              }
+            })
 
             if (search) {
-              const searchLower = search.toLowerCase();
+              const searchLower = search.toLowerCase()
               const matchesSearch = Object.values(transformedData).some((field: any) =>
                 field.field_value != null && typeof field.field_value === "string"
                   ? field.field_value.toLowerCase().includes(searchLower)
-                  : false
-              );
-              return matchesSearch ? transformedData : null;
+                  : false,
+              )
+              return matchesSearch ? transformedData : null
             }
-            return transformedData;
-          });
 
-          const filteredRecords = records.filter((record): record is NonNullable<typeof record> => record !== null);
-          console.log(`Processed ${filteredRecords.length} form records`);
-          return filteredRecords;
+            return transformedData
+          })
+
+          const filteredRecords = transformedRecords.filter(
+            (record): record is NonNullable<typeof record> => record !== null,
+          )
+          console.log(`Processed ${filteredRecords.length} form records`)
+          return filteredRecords
         }
       }
 
@@ -242,22 +398,21 @@ export class LookupService {
           include: {
             forms: {
               include: {
-                records: {
-                  take: Math.floor(limit / 10),
-                  orderBy: { createdAt: "desc" },
-                },
+                tableMapping: true,
               },
             },
           },
-        });
+        })
 
         if (module) {
-          console.log(`Found module: ${module.name} with ${module.forms.length} forms`);
-          const records: any[] = [];
+          console.log(`Found module: ${module.name} with ${module.forms.length} forms`)
+          const records: any[] = []
 
-          module.forms.forEach((form) => {
-            form.records.forEach((record) => {
-              const recordData = record.recordData as any;
+          for (const form of module.forms) {
+            const formRecords = await this.getFormRecords(form.id, { limit: Math.floor(limit / module.forms.length) })
+
+            formRecords.forEach((record: any) => {
+              const recordData = record.recordData as any
               const transformedData: any = {
                 record_id: record.id,
                 form_id: form.id,
@@ -268,47 +423,50 @@ export class LookupService {
                 _moduleName: module.name,
                 createdAt: record.createdAt.toISOString(),
                 updatedAt: record.updatedAt.toISOString(),
-              };
+              }
 
               Object.entries(recordData).forEach(([key, value]: [string, any]) => {
-                const fieldType = value?.type || "text";
-                let fieldValue = value?.value;
+                const fieldType = value?.type || "text"
+                let fieldValue = value?.value
 
                 if (fieldType === "number" && fieldValue != null) {
-                  fieldValue = Number(fieldValue);
-                  if (isNaN(fieldValue)) fieldValue = value.value;
+                  fieldValue = Number(fieldValue)
+                  if (isNaN(fieldValue)) fieldValue = value.value
                 } else if (fieldType === "datetime" && fieldValue) {
                   try {
-                    fieldValue = new Date(fieldValue).toISOString();
+                    fieldValue = new Date(fieldValue).toISOString()
                   } catch {
-                    fieldValue = value.value;
+                    fieldValue = value.value
                   }
                 } else if (fieldType === "date" && fieldValue) {
                   try {
-                    fieldValue = new Date(fieldValue).toISOString().split("T")[0];
+                    fieldValue = new Date(fieldValue).toISOString().split("T")[0]
                   } catch {
-                    fieldValue = value.value;
+                    fieldValue = value.value
                   }
                 } else if (fieldType === "checkbox") {
-                  fieldValue = Boolean(fieldValue);
+                  fieldValue = Boolean(fieldValue)
                 } else if (fieldType === "tel" || fieldType === "email" || fieldType === "url") {
-                  fieldValue = String(fieldValue);
+                  fieldValue = String(fieldValue)
                 }
 
-                let parsedOptions: any = null;
-                let parsedValidation: any = null;
+                let parsedOptions: any = null
+                let parsedValidation: any = null
+
                 if (value?.options != null) {
                   try {
-                    parsedOptions = typeof value.options === "string" ? JSON.parse(value.options) : value.options;
+                    parsedOptions = typeof value.options === "string" ? JSON.parse(value.options) : value.options
                   } catch {
-                    parsedOptions = [];
+                    parsedOptions = []
                   }
                 }
+
                 if (value?.validation != null) {
                   try {
-                    parsedValidation = typeof value.validation === "string" ? JSON.parse(value.validation) : value.validation;
+                    parsedValidation =
+                      typeof value.validation === "string" ? JSON.parse(value.validation) : value.validation
                   } catch {
-                    parsedValidation = {};
+                    parsedValidation = {}
                   }
                 }
 
@@ -320,85 +478,95 @@ export class LookupService {
                   field_section_id: value?.sectionId || null,
                   field_options: parsedOptions,
                   field_validation: parsedValidation,
-                };
-              });
+                }
+              })
 
               if (search) {
-                const searchLower = search.toLowerCase();
+                const searchLower = search.toLowerCase()
                 const matchesSearch = Object.values(transformedData).some((field: any) =>
                   field.field_value != null && typeof field.field_value === "string"
                     ? field.field_value.toLowerCase().includes(searchLower)
-                    : false
-                );
-                if (matchesSearch) records.push(transformedData);
+                    : false,
+                )
+                if (matchesSearch) records.push(transformedData)
               } else {
-                records.push(transformedData);
+                records.push(transformedData)
               }
-            });
-          });
+            })
+          }
 
-          console.log(`Processed ${records.length} module records`);
-          return records.slice(0, limit);
+          console.log(`Processed ${records.length} module records`)
+          return records.slice(0, limit)
         }
       }
 
-      console.log(`No data found for source: ${sourceId}`);
-      return [];
+      console.log(`No data found for source: ${sourceId}`)
+      return []
     } catch (error: any) {
-      console.log("Error in LookupService.getData:", { error: error.message, stack: error.stack });
-      throw error;
+      console.log("Error in LookupService.getData:", { error: error.message, stack: error.stack })
+      throw error
     }
   }
 
   async getFields(sourceId: string): Promise<string[]> {
-    console.log(`LookupService.getFields called for source: ${sourceId}`);
+    console.log(`LookupService.getFields called for source: ${sourceId}`)
 
     try {
       const lookupSource = await prisma.lookupSource.findUnique({
         where: { id: sourceId },
-        include: { sourceForm: { include: { records: { take: 1, orderBy: { createdAt: "desc" } } } }, sourceModule: true },
-      });
+        include: {
+          sourceForm: {
+            include: {
+              tableMapping: true,
+            },
+          },
+          sourceModule: true,
+        },
+      })
 
       if (!lookupSource) {
-        console.log(`No lookup source found for ID: ${sourceId}`);
-        return [];
+        console.log(`No lookup source found for ID: ${sourceId}`)
+        return []
       }
 
       if (lookupSource.type === "static") {
-        const data = (lookupSource.data as any[]) || [];
-        const sampleData = data[0];
+        const data = (lookupSource.staticData as any[]) || []
+        const sampleData = data[0]
         if (sampleData) {
-          const fields = Object.keys(sampleData);
-          console.log(`Static source ${sourceId} fields:`, fields);
-          return fields;
+          const fields = Object.keys(sampleData)
+          console.log(`Static source ${sourceId} fields:`, fields)
+          return fields
         }
-        return [];
+        return []
       }
 
       if (lookupSource.type === "form" && lookupSource.sourceForm) {
-        const form = lookupSource.sourceForm;
-        const fields = new Set<string>();
+        const form = lookupSource.sourceForm
+        const fields = new Set<string>()
 
-        if (form.records.length > 0) {
-          const recordData = form.records[0].recordData as any;
+        // Get a sample record to extract field names
+        const sampleRecords = await this.getFormRecords(form.id, { limit: 1 })
+
+        if (sampleRecords.length > 0) {
+          const recordData = sampleRecords[0].recordData as any
           if (recordData && typeof recordData === "object") {
             Object.entries(recordData).forEach(([key, value]: [string, any]) => {
-              const fieldLabel = value?.label || key;
-              fields.add(fieldLabel);
-            });
+              const fieldLabel = value?.label || key
+              fields.add(fieldLabel)
+            })
           }
         }
 
-        fields.add("id");
-        fields.add("name");
-        fields.add("title");
-        fields.add("description");
-        fields.add("createdAt");
-        fields.add("updatedAt");
+        fields.add("id")
+        fields.add("name")
+        fields.add("title")
+        fields.add("description")
+        fields.add("createdAt")
+        fields.add("updatedAt")
 
-        const fieldArray = Array.from(fields);
-        console.log(`Form ${sourceId} fields:`, fieldArray);
-        return fieldArray;
+        const fieldArray = Array.from(fields)
+        console.log(`Form ${sourceId} fields:`, fieldArray)
+        return fieldArray
       }
 
       if (lookupSource.type === "module" && lookupSource.sourceModuleId) {
@@ -407,57 +575,58 @@ export class LookupService {
           include: {
             forms: {
               include: {
-                records: {
-                  take: 1,
-                  orderBy: { createdAt: "desc" },
-                },
+                tableMapping: true,
               },
             },
           },
-        });
+        })
 
         if (module) {
-          const fields = new Set<string>();
-          module.forms.forEach((form) => {
-            if (form.records.length > 0) {
-              const recordData = form.records[0].recordData as any;
+          const fields = new Set<string>()
+
+          for (const form of module.forms) {
+            const sampleRecords = await this.getFormRecords(form.id, { limit: 1 })
+
+            if (sampleRecords.length > 0) {
+              const recordData = sampleRecords[0].recordData as any
               if (recordData && typeof recordData === "object") {
                 Object.entries(recordData).forEach(([key, value]: [string, any]) => {
-                  const fieldLabel = value?.label || key;
-                  fields.add(fieldLabel);
-                });
+                  const fieldLabel = value?.label || key
+                  fields.add(fieldLabel)
+                })
               }
             }
-          });
+          }
 
-          fields.add("id");
-          fields.add("name");
-          fields.add("title");
-          fields.add("description");
-          fields.add("createdAt");
-          fields.add("updatedAt");
+          fields.add("id")
+          fields.add("name")
+          fields.add("title")
+          fields.add("description")
+          fields.add("createdAt")
+          fields.add("updatedAt")
 
-          const fieldArray = Array.from(fields);
-          console.log(`Module ${sourceId} fields:`, fieldArray);
-          return fieldArray;
+          const fieldArray = Array.from(fields)
+          console.log(`Module ${sourceId} fields:`, fieldArray)
+          return fieldArray
         }
       }
 
-      console.log(`No fields found for source: ${sourceId}`);
-      return [];
+      console.log(`No fields found for source: ${sourceId}`)
+      return []
     } catch (error) {
-      console.error("Error in LookupService.getFields:", error);
-      throw error;
+      console.error("Error in LookupService.getFields:", error)
+      throw error
     }
   }
 
   static async getLookupSources(): Promise<LookupSourceData[]> {
     try {
-      const sources: LookupSourceData[] = [];
+      const sources: LookupSourceData[] = []
 
+      // Get static sources
       const staticSources = await prisma.lookupSource.findMany({
         where: { type: "static", active: true },
-      });
+      })
 
       sources.push(
         ...staticSources.map((source) => ({
@@ -465,30 +634,41 @@ export class LookupService {
           name: source.name,
           description: source.description,
           type: source.type,
-          recordCount: (source.data as any[])?.length || 0,
-          icon: source.staticSourceName === "countries" ? "🌍" :
-                source.staticSourceName === "currencies" ? "💰" :
-                source.staticSourceName === "priorities" ? "⚡" :
-                source.staticSourceName === "statuses" ? "🔄" :
-                source.staticSourceName === "departments" ? "🏢" : "📋",
-        }))
-      );
+          recordCount: (source.staticData as any[])?.length || 0,
+          icon: source.id.includes("countries")
+            ? "🌍"
+            : source.id.includes("currencies")
+              ? "💰"
+              : source.id.includes("priorities")
+                ? "⚡"
+                : source.id.includes("statuses")
+                  ? "🔄"
+                  : source.id.includes("departments")
+                    ? "🏢"
+                    : "📋",
+        })),
+      )
 
+      // Get modules and create lookup sources
       const modules = await prisma.formModule.findMany({
         include: {
           forms: {
             include: {
-              _count: {
-                select: { records: true },
-              },
+              tableMapping: true,
             },
           },
         },
-      });
+      })
 
       for (const module of modules) {
-        const totalRecords = module.forms.reduce((sum: number, form: any) => sum + form._count.records, 0);
+        // Count total records across all forms in the module
+        let totalRecords = 0
+        for (const form of module.forms) {
+          const service = new LookupService()
+          totalRecords += await service.countFormRecords(form.id)
+        }
 
+        // Create/update module lookup source
         const moduleSource = await prisma.lookupSource.upsert({
           where: { id: `module_${module.id}` },
           update: {
@@ -508,7 +688,7 @@ export class LookupService {
             createdAt: new Date(),
             updatedAt: new Date(),
           },
-        });
+        })
 
         sources.push({
           id: moduleSource.id,
@@ -517,9 +697,13 @@ export class LookupService {
           type: moduleSource.type,
           recordCount: totalRecords,
           icon: "📁",
-        });
+        })
 
+        // Create/update form lookup sources
         for (const form of module.forms) {
+          const service = new LookupService()
+          const formRecordCount = await service.countFormRecords(form.id)
+
           const formSource = await prisma.lookupSource.upsert({
             where: { id: `form_${form.id}` },
             update: {
@@ -539,23 +723,23 @@ export class LookupService {
               createdAt: new Date(),
               updatedAt: new Date(),
             },
-          });
+          })
 
           sources.push({
             id: formSource.id,
             name: formSource.name,
             description: formSource.description,
             type: formSource.type,
-            recordCount: form._count.records,
+            recordCount: formRecordCount,
             icon: "📄",
-          });
+          })
         }
       }
 
-      return sources;
+      return sources
     } catch (error) {
-      console.error("Error fetching lookup sources:", error);
-      return [];
+      console.error("Error fetching lookup sources:", error)
+      return []
     }
   }
 }

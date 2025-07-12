@@ -3,19 +3,22 @@ import { DatabaseService } from "@/lib/database-service"
 
 export async function GET(request: NextRequest, { params }: { params: { formId: string } }) {
   try {
-    console.log("API: Fetching records for form:", params.formId)
-
+    const { formId } = params
     const { searchParams } = new URL(request.url)
+
+    // Parse query parameters
     const page = Number.parseInt(searchParams.get("page") || "1")
-    const limit = Number.parseInt(searchParams.get("limit") || "50")
+    const limit = Number.parseInt(searchParams.get("limit") || "20")
     const status = searchParams.get("status") || undefined
     const search = searchParams.get("search") || undefined
     const sortBy = searchParams.get("sortBy") || "submittedAt"
     const sortOrder = (searchParams.get("sortOrder") || "desc") as "asc" | "desc"
+    const employeeId = searchParams.get("employeeId") || undefined
+    const dateFrom = searchParams.get("dateFrom") ? new Date(searchParams.get("dateFrom")!) : undefined
+    const dateTo = searchParams.get("dateTo") ? new Date(searchParams.get("dateTo")!) : undefined
 
-    console.log("API: Query params:", { page, limit, status, search, sortBy, sortOrder })
-
-    const records = await DatabaseService.getFormRecords(params.formId, {
+    console.log("Fetching records with params:", {
+      formId,
       page,
       limit,
       status,
@@ -24,22 +27,51 @@ export async function GET(request: NextRequest, { params }: { params: { formId: 
       sortOrder,
     })
 
-    const total = await DatabaseService.getFormSubmissionCount(params.formId)
+    // Get form to ensure it exists
+    const form = await DatabaseService.getForm(formId)
+    if (!form) {
+      return NextResponse.json({ error: "Form not found" }, { status: 404 })
+    }
 
-    console.log("API: Records fetched:", records.length, "Total:", total)
+    // Fetch records with enhanced options
+    const records = await DatabaseService.getFormRecords(formId, {
+      page,
+      limit,
+      status: status !== "all" ? status : undefined,
+      search,
+      sortBy,
+      sortOrder,
+      employeeId,
+      dateFrom,
+      dateTo,
+    })
+
+    // Get total count for pagination
+    const totalCount = await DatabaseService.getFormSubmissionCount(formId)
+
+    console.log(`Found ${records.length} records out of ${totalCount} total`)
 
     return NextResponse.json({
       success: true,
-      records,
-      total,
+      records: records,
+      total: totalCount,
       page,
       limit,
-      totalPages: Math.ceil(total / limit),
+      totalPages: Math.ceil(totalCount / limit),
+      form: {
+        id: form.id,
+        name: form.name,
+        sections: form.sections,
+      },
     })
   } catch (error: any) {
-    console.error("API: Error fetching form records:", error)
+    console.error("Error fetching form records:", error)
     return NextResponse.json(
-      { success: false, error: "Failed to fetch form records", details: error.message },
+      {
+        success: false,
+        error: "Failed to fetch form records",
+        details: process.env.NODE_ENV === "development" ? error.message : undefined,
+      },
       { status: 500 },
     )
   }
@@ -47,12 +79,42 @@ export async function GET(request: NextRequest, { params }: { params: { formId: 
 
 export async function POST(request: NextRequest, { params }: { params: { formId: string } }) {
   try {
+    const { formId } = params
     const body = await request.json()
-    const record = await DatabaseService.createFormRecord(params.formId, body.recordData, body.submittedBy)
 
-    return NextResponse.json({ success: true, data: record })
+    console.log("Creating new record for form:", formId)
+
+    // Get form to validate
+    const form = await DatabaseService.getForm(formId)
+    if (!form) {
+      return NextResponse.json({ error: "Form not found" }, { status: 404 })
+    }
+
+    // Create the record
+    const record = await DatabaseService.createFormRecord(
+      formId,
+      body.recordData,
+      body.submittedBy || "system",
+      body.employeeId,
+      body.amount,
+      body.date,
+    )
+
+    console.log("Record created successfully:", record.id)
+
+    return NextResponse.json({
+      success: true,
+      data: record,
+    })
   } catch (error: any) {
-    console.error("API: Error creating form record:", error)
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    console.error("Error creating form record:", error)
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Failed to create form record",
+        details: process.env.NODE_ENV === "development" ? error.message : undefined,
+      },
+      { status: 500 },
+    )
   }
 }

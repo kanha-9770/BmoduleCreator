@@ -1,275 +1,193 @@
-import { type NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
-import { createHash } from "crypto";
+import { type NextRequest, NextResponse } from "next/server"
+import { DatabaseService } from "@/lib/database-service"
+import { headers } from "next/headers"
 
-interface FieldMetadata {
-  id: string;
-  label: string;
-  type: string;
-  sectionId: string | null;
-  subformId?: string | null;
-  description?: string | null;
-  placeholder?: string | null;
-  options?: Prisma.JsonValue;
-  validation?: Prisma.JsonValue;
-  sourceModule?: string | null;
-  sourceForm?: string | null;
-  displayField?: string | null;
-  valueField?: string | null;
-  multiple?: boolean | null;
-  searchable?: boolean | null;
-  filters?: Prisma.JsonValue;
-}
-
-interface EnrichedRecordData {
-  [key: string]: {
-    value: unknown;
-    label: string;
-    type: string;
-    sectionId: string | null;
-    subformId?: string | null;
-    description?: string | null;
-    placeholder?: string | null;
-    options?: Prisma.JsonValue;
-    validation?: Prisma.JsonValue;
-  };
-}
-
-export async function POST(request: NextRequest, { params }: { params: { formId: string } }): Promise<NextResponse> {
+export async function POST(request: NextRequest, { params }: { params: { formId: string } }) {
   try {
-    const { formId } = params;
-    const body = await request.json();
+    const { formId } = params
+    const body = await request.json()
 
-    console.log("Form submission API called", { formId, body });
-
-    // Validate request body
-    if (!body || typeof body !== "object") {
-      console.log("Invalid request body", { body });
-      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
-    }
-
-    const { recordData } = body as { recordData: { [key: string]: unknown } };
-
-    // Validate recordData
-    if (!recordData || typeof recordData !== "object") {
-      console.log("Invalid or missing recordData", { recordData });
-      return NextResponse.json({ error: "Record data is required and must be an object" }, { status: 400 });
-    }
-
-    // Check if recordData is empty
-    const hasData =
-      Object.keys(recordData).length > 0 &&
-      Object.values(recordData).some((value) => value !== null && value !== undefined && value !== "");
-
-    if (!hasData) {
-      console.log("Empty form data submitted", { recordData });
-      return NextResponse.json({ error: "Please fill out at least one field before submitting" }, { status: 400 });
-    }
-
-    // Fetch form with sections, fields, and subforms
-    const form = await prisma.form.findUnique({
-      where: { id: formId },
-      include: {
-        sections: {
-          include: {
-            fields: {
-              select: {
-                id: true,
-                label: true,
-                type: true,
-                sectionId: true,
-                subformId: true,
-                description: true,
-                placeholder: true,
-                options: true,
-                validation: true,
-                sourceModule: true,
-                sourceForm: true,
-                displayField: true,
-                valueField: true,
-                multiple: true,
-                searchable: true,
-                filters: true,
-              },
-            },
-            subforms: {
-              include: {
-                fields: {
-                  select: {
-                    id: true,
-                    label: true,
-                    type: true,
-                    sectionId: true,
-                    subformId: true,
-                    description: true,
-                    placeholder: true,
-                    options: true,
-                    validation: true,
-                    sourceModule: true,
-                    sourceForm: true,
-                    displayField: true,
-                    valueField: true,
-                    multiple: true,
-                    searchable: true,
-                    filters: true,
-                  },
-                },
-              },
-            },
-          },
-        },
+    console.log("Form submission API called", {
+      formId,
+      body: {
+        recordData: body.recordData,
+        submittedBy: body.submittedBy,
+        userAgent: body.userAgent,
       },
-    });
+    })
+
+    // Validate required fields
+    if (!formId) {
+      return NextResponse.json({ error: "Form ID is required" }, { status: 400 })
+    }
+
+    if (!body.recordData || typeof body.recordData !== "object") {
+      return NextResponse.json({ error: "Record data is required and must be an object" }, { status: 400 })
+    }
+
+    // Get form details to check if it exists and is published
+    const form = await DatabaseService.getForm(formId)
 
     if (!form) {
-      console.log("Form not found", { formId });
-      return NextResponse.json({ error: "Form not found" }, { status: 404 });
+      return NextResponse.json({ error: "Form not found" }, { status: 404 })
     }
 
-    console.log("Fetched form", { formId, fieldCount: form.sections.flatMap(s => s.fields).length });
-
-    // Create a map of FormField IDs to their metadata
-    const fieldMap = new Map<string, FieldMetadata>(
-      form.sections.flatMap((section) =>
-        [
-          ...section.fields.map((field) => ({
-            id: field.id,
-            label: field.label,
-            type: field.type,
-            sectionId: field.sectionId,
-            subformId: field.subformId,
-            description: field.description,
-            placeholder: field.placeholder,
-            options: field.options,
-            validation: field.validation,
-            sourceModule: field.sourceModule,
-            sourceForm: field.sourceForm,
-            displayField: field.displayField,
-            valueField: field.valueField,
-            multiple: field.multiple,
-            searchable: field.searchable,
-            filters: field.filters,
-          })),
-          ...section.subforms.flatMap((subform) =>
-            subform.fields.map((field) => ({
-              id: field.id,
-              label: field.label,
-              type: field.type,
-              sectionId: section.id,
-              subformId: field.subformId,
-              description: field.description,
-              placeholder: field.placeholder,
-              options: field.options,
-              validation: field.validation,
-              sourceModule: field.sourceModule,
-              sourceForm: field.sourceForm,
-              displayField: field.displayField,
-              valueField: field.valueField,
-              multiple: field.multiple,
-              searchable: field.searchable,
-              filters: field.filters,
-            }))
-          ),
-        ].map((field) => [field.id, field] as [string, FieldMetadata])
-      )
-    );
-
-    // Validate that all recordData keys correspond to valid FormField IDs
-    const invalidFieldIds = Object.keys(recordData).filter((fieldId) => !fieldMap.has(fieldId));
-    if (invalidFieldIds.length > 0) {
-      console.log("Invalid field IDs in recordData", { invalidFieldIds });
-      return NextResponse.json(
-        { error: `Invalid field IDs: ${invalidFieldIds.join(", ")}` },
-        { status: 400 }
-      );
+    if (!form.isPublished) {
+      return NextResponse.json({ error: "Form is not published" }, { status: 403 })
     }
 
-    // Check for duplicate form submission
-    const recordDataHash = createHash("sha256")
-      .update(JSON.stringify(recordData))
-      .digest("hex");
+    // Check submission limits if configured
+    if (form.maxSubmissions) {
+      const currentCount = await DatabaseService.getFormSubmissionCount(formId)
+      if (currentCount >= form.maxSubmissions) {
+        return NextResponse.json({ error: "Maximum submissions reached for this form" }, { status: 429 })
+      }
+    }
 
-    const existingRecord = await prisma.formRecord.findFirst({
-      where: {
-        formId,
-        recordData: {
-          equals: recordData as Prisma.InputJsonValue,
-        },
+    // Transform field IDs to structured field data with metadata
+    const structuredRecordData = await transformToStructuredData(form, body.recordData)
+
+    console.log("Structured record data:", structuredRecordData)
+
+    // Get client information
+    const headersList = headers()
+    const userAgent = headersList.get("user-agent") || body.userAgent || "Unknown"
+    const ipAddress = headersList.get("x-forwarded-for") || headersList.get("x-real-ip") || "Unknown"
+
+    // Extract additional data from body if present
+    const employeeId = body.employeeId || body.employee_id
+    const amount = body.amount ? Number.parseFloat(body.amount) : undefined
+    const date = body.date ? new Date(body.date) : undefined
+
+    // Create the form record in the appropriate table with structured data
+    const record = await DatabaseService.createFormRecord(
+      formId,
+      structuredRecordData,
+      body.submittedBy || "anonymous",
+      employeeId,
+      amount,
+      date,
+    )
+
+    // Track form submission event
+    await DatabaseService.trackFormEvent(
+      formId,
+      "submit",
+      {
+        recordId: record.id,
+        fieldsCount: Object.keys(structuredRecordData).length,
+        submissionSource: "form",
+        hasEmployeeId: !!employeeId,
+        hasAmount: !!amount,
+        hasDate: !!date,
+        originalFieldIds: Object.keys(body.recordData),
+        structuredFields: Object.keys(structuredRecordData),
       },
-    });
+      body.sessionId,
+      userAgent,
+      ipAddress,
+    )
 
-    if (existingRecord) {
-      console.log("Duplicate form record detected", { recordId: existingRecord.id });
-      return NextResponse.json(
-        { error: "Duplicate submission detected", recordId: existingRecord.id },
-        { status: 409 }
-      );
-    }
-
-    // Transform recordData to include metadata
-    const enrichedRecordData: EnrichedRecordData = Object.fromEntries(
-      Object.entries(recordData).map(([fieldId, value]) => {
-        const field = fieldMap.get(fieldId)!;
-        // Normalize lookup field values
-        let storeValue = value;
-        if (field.type === "lookup") {
-          if (Array.isArray(value)) {
-            storeValue = value.map((item) =>
-              item && typeof item === "object" && item.storeValue !== undefined ? item.storeValue : item
-            );
-          } else if (value && typeof value === "object" && (value as any).storeValue !== undefined) {
-            storeValue = (value as any).storeValue;
-          }
-          console.log("Normalized lookup value", { fieldId, originalValue: value, storeValue });
-        }
-        return [
-          fieldId,
-          {
-            value: storeValue,
-            label: field.label,
-            type: field.type,
-            sectionId: field.sectionId,
-            ...(field.subformId ? { subformId: field.subformId } : {}),
-            ...(field.description ? { description: field.description } : {}),
-            ...(field.placeholder ? { placeholder: field.placeholder } : {}),
-            ...(field.options ? { options: field.options } : {}),
-            ...(field.validation ? { validation: field.validation } : {}),
-          },
-        ];
-      })
-    );
-
-    console.log("Enriched record data", { enrichedRecordData });
-
-    // Create the form record
-    const record = await prisma.formRecord.create({
-      data: {
-        formId,
-        recordData: enrichedRecordData as Prisma.InputJsonValue,
-        submittedBy: "anonymous",
-        submittedAt: new Date(),
-      },
-    });
-
-    console.log("Form record created successfully", { recordId: record.id });
+    console.log("Form submission successful:", {
+      recordId: record.id,
+      formId,
+      submittedBy: record.submittedBy,
+      structuredData: structuredRecordData,
+    })
 
     return NextResponse.json({
       success: true,
+      message: form.submissionMessage || "Form submitted successfully!",
       data: {
         id: record.id,
+        recordData: structuredRecordData,
+        submittedAt: record.submittedAt,
+        form: {
+          id: form.id,
+          name: form.name,
+          sections: form.sections.map((section) => ({
+            id: section.id,
+            title: section.title,
+            fields: section.fields.map((field) => ({
+              id: field.id,
+              label: field.label,
+              type: field.type,
+              value: structuredRecordData[field.id]?.value || null,
+            })),
+          })),
+        },
       },
-      message: "Form submitted successfully",
-    });
+    })
   } catch (error: any) {
-    console.error("Form submission error", { error: error.message, stack: error.stack });
+    console.error("Form submission error", {
+      error: error.message,
+      stack: error.stack,
+    })
+
     return NextResponse.json(
       {
-        success: false,
-        error: error.message || "Failed to submit form",
-        details: process.env.NODE_ENV === "development" ? error.stack : undefined,
+        error: "Failed to submit form",
+        details: process.env.NODE_ENV === "development" ? error.message : undefined,
       },
-      { status: 500 }
-    );
+      { status: 500 },
+    )
   }
+}
+
+// Helper function to transform field IDs to structured data with field metadata
+async function transformToStructuredData(form: any, recordData: Record<string, any>): Promise<Record<string, any>> {
+  const structuredData: Record<string, any> = {}
+
+  // Create a mapping of field IDs to field definitions
+  const fieldIdToFieldMap: Record<string, any> = {}
+  let fieldOrder = 0
+
+  form.sections.forEach((section: any) => {
+    section.fields.forEach((field: any) => {
+      fieldIdToFieldMap[field.id] = {
+        ...field,
+        sectionId: section.id,
+        sectionTitle: section.title,
+        order: fieldOrder++,
+      }
+    })
+  })
+
+  // Transform the record data to include field metadata
+  for (const [fieldId, value] of Object.entries(recordData)) {
+    const fieldDef = fieldIdToFieldMap[fieldId]
+    console.log(`Processing field ID: ${fieldId}, value: ${value}, definition:`, fieldDef);
+    
+    if (fieldDef) {
+      // Store structured data with field metadata
+      structuredData[fieldId] = {
+        fieldId: fieldId,
+        label: fieldDef.label,
+        type: fieldDef.type,
+        value: value,
+        sectionId: fieldDef.sectionId,
+        sectionTitle: fieldDef.sectionTitle,
+        order: fieldDef.order,
+        placeholder: fieldDef.placeholder,
+        description: fieldDef.description,
+        validation: fieldDef.validation || {},
+        options: fieldDef.options || [],
+        lookup: fieldDef.lookup || null,
+      }
+    } else {
+      // If no field definition found, store with minimal metadata
+      console.warn(`No field definition found for ID: ${fieldId}`)
+      structuredData[fieldId] = {
+        fieldId: fieldId,
+        label: fieldId,
+        type: "text",
+        value: value,
+        sectionId: null,
+        sectionTitle: "Unknown",
+        order: 999,
+      }
+    }
+  }
+
+  return structuredData
 }

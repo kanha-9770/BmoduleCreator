@@ -3,16 +3,28 @@ import { DatabaseService } from "@/lib/database-service"
 
 export async function GET(request: NextRequest, { params }: { params: { formId: string } }) {
   try {
-    console.log("API: Fetching detailed lookup sources for form:", params.formId)
+    const { formId } = params
 
-    const result = await DatabaseService.getLookupSources(params.formId)
+    console.log("Fetching enhanced lookup sources for form:", formId)
 
-    console.log("API: Detailed lookup sources fetched:", result.sources.length)
-    return NextResponse.json({ success: true, ...result })
+    // Get enhanced lookup sources with detailed information
+    const lookupSources = await DatabaseService.getLookupSources(formId)
+
+    console.log(`Found ${lookupSources.sources.length} lookup sources`)
+
+    return NextResponse.json({
+      success: true,
+      sources: lookupSources.sources,
+    })
   } catch (error: any) {
-    console.error("API: Error fetching lookup sources:", error)
+    console.error("Error fetching lookup sources:", error)
     return NextResponse.json(
-      { success: false, error: "Failed to fetch lookup sources", details: error.message },
+      {
+        success: false,
+        error: "Failed to fetch lookup sources",
+        details: process.env.NODE_ENV === "development" ? error.message : undefined,
+        sources: [],
+      },
       { status: 500 },
     )
   }

@@ -1,30 +1,32 @@
-import { prisma } from "./prisma"
+import { prisma } from "@/lib/prisma"
+import { Prisma } from "@prisma/client"
+import { v4 as uuidv4 } from "uuid"
 import type { FormModule, Form, FormSection, FormField, FormRecord, FormEvent, FieldType } from "@/types/form-builder"
 
 export class DatabaseService {
   // Helper method to transform raw module data to include hierarchy fields
-  private static transformModule(rawModule: any, level: number = 0, parentPath: string = ""): FormModule {
+  private static transformModule(rawModule: any, level = 0, parentPath = ""): FormModule {
     const settings = (rawModule.settings || {}) as Record<string, any>
-    
+
     // Extract hierarchy data from settings or calculate defaults
-    const moduleType = settings.moduleType || (level === 0 ? "master" : "child")
-    const modulePath = settings.path || rawModule.name.toLowerCase().replace(/\s+/g, '-')
+    const moduleType = rawModule.moduleType || (level === 0 ? "master" : "child")
+    const modulePath = rawModule.path || rawModule.name.toLowerCase().replace(/\s+/g, "-")
     const fullPath = parentPath ? `${parentPath}/${modulePath}` : modulePath
-    
+
     return {
       ...rawModule,
       settings,
       // Add hierarchy fields that don't exist in Prisma schema
-      parentId: settings.parentId || null,
+      parentId: rawModule.parentId || null,
       parent: rawModule.parent || null,
-      children: rawModule.children ? rawModule.children.map((child: any) => 
-        this.transformModule(child, level + 1, fullPath)
-      ) : [],
+      children: rawModule.children
+        ? rawModule.children.map((child: any) => this.transformModule(child, level + 1, fullPath))
+        : [],
       moduleType: moduleType as "master" | "child" | "standard",
-      level,
-      path: fullPath,
-      isActive: settings.isActive ?? true,
-      sortOrder: settings.sortOrder || 0,
+      level: rawModule.level || level,
+      path: rawModule.path || fullPath,
+      isActive: rawModule.isActive ?? true,
+      sortOrder: rawModule.sortOrder || 0,
       forms: rawModule.forms ? rawModule.forms.map((form: any) => this.transformForm(form)) : [],
     }
   }
@@ -34,12 +36,58 @@ export class DatabaseService {
     return {
       ...rawForm,
       settings: (rawForm.settings || {}) as Record<string, any>,
-      conditional: null,
-      styling: null,
+      conditional: rawForm.conditional || null,
+      styling: rawForm.styling || null,
       sections: rawForm.sections ? rawForm.sections.map((s: any) => this.transformSection(s)) : [],
-      recordCount: rawForm.records?.length || 0,
-      records: rawForm.records ? rawForm.records.map((r: any) => this.transformRecord(r)) : [],
+      recordCount: this.calculateRecordCount(rawForm),
+      records: this.transformRecords(rawForm),
     }
+  }
+
+  // Calculate total record count from all record tables
+  private static calculateRecordCount(form: any): number {
+    if (!form._count) return 0
+
+    return (
+      (form._count.records1 || 0) +
+      (form._count.records2 || 0) +
+      (form._count.records3 || 0) +
+      (form._count.records4 || 0) +
+      (form._count.records5 || 0) +
+      (form._count.records6 || 0) +
+      (form._count.records7 || 0) +
+      (form._count.records8 || 0) +
+      (form._count.records9 || 0) +
+      (form._count.records10 || 0) +
+      (form._count.records11 || 0) +
+      (form._count.records12 || 0) +
+      (form._count.records13 || 0) +
+      (form._count.records14 || 0) +
+      (form._count.records15 || 0)
+    )
+  }
+
+  // Transform records from all tables
+  private static transformRecords(form: any): any[] {
+    const allRecords = [
+      ...(form.records1 || []),
+      ...(form.records2 || []),
+      ...(form.records3 || []),
+      ...(form.records4 || []),
+      ...(form.records5 || []),
+      ...(form.records6 || []),
+      ...(form.records7 || []),
+      ...(form.records8 || []),
+      ...(form.records9 || []),
+      ...(form.records10 || []),
+      ...(form.records11 || []),
+      ...(form.records12 || []),
+      ...(form.records13 || []),
+      ...(form.records14 || []),
+      ...(form.records15 || []),
+    ]
+
+    return allRecords.map((r) => this.transformRecord(r))
   }
 
   // Helper method to transform section data
@@ -65,13 +113,6 @@ export class DatabaseService {
       rollup: (rawField.rollup || null) as Record<string, any> | null,
       lookup: (rawField.lookup || null) as any,
       width: (rawField.width as "full" | "half" | "third" | "quarter") || "full",
-      sourceModule: rawField.sourceModule,
-      sourceForm: rawField.sourceForm,
-      displayField: rawField.displayField,
-      valueField: rawField.valueField,
-      multiple: rawField.multiple,
-      searchable: rawField.searchable,
-      filters: rawField.filters,
     }
   }
 
@@ -80,10 +121,12 @@ export class DatabaseService {
     return {
       ...rawSubform,
       fields: rawSubform.fields ? rawSubform.fields.map((f: any) => this.transformField(f)) : [],
-      records: rawSubform.records ? rawSubform.records.map((r: any) => ({
-        ...r,
-        recordData: (r.data || {}) as Record<string, any>,
-      })) : [],
+      records: rawSubform.records
+        ? rawSubform.records.map((r: any) => ({
+            ...r,
+            recordData: (r.data || {}) as Record<string, any>,
+          }))
+        : [],
     }
   }
 
@@ -92,6 +135,9 @@ export class DatabaseService {
     return {
       ...rawRecord,
       recordData: (rawRecord.recordData || {}) as Record<string, any>,
+      employee_id: rawRecord.employee_id || null,
+      amount: rawRecord.amount ? Number(rawRecord.amount) : null,
+      date: rawRecord.date || null,
       ipAddress: rawRecord.ipAddress || undefined,
       userAgent: rawRecord.userAgent || undefined,
       createdAt: rawRecord.createdAt || rawRecord.updatedAt,
@@ -99,14 +145,50 @@ export class DatabaseService {
     }
   }
 
+  // Get the appropriate record table for a form
+  static async getFormRecordTable(formId: string): Promise<string> {
+    // Check if form has a mapping
+    const mapping = await prisma.formTableMapping.findUnique({
+      where: { formId },
+    })
+
+    if (mapping) {
+      return mapping.storageTable
+    }
+
+    // If no mapping exists, find the next available table
+    for (let i = 1; i <= 15; i++) {
+      const tableName = `form_records_${i}`
+
+      // Check if this table is already assigned to another form
+      const existingMapping = await prisma.formTableMapping.findFirst({
+        where: { storageTable: tableName },
+      })
+
+      if (!existingMapping) {
+        // Create mapping for this form
+        await prisma.formTableMapping.create({
+          data: {
+            formId,
+            storageTable: tableName,
+          },
+        })
+        return tableName
+      }
+    }
+
+    // If all tables are taken, use table 1 (this should be handled better in production)
+    return "form_records_1"
+  }
+
   // Module operations with hierarchy support
-  static async createModule(data: { 
-    name: string; 
-    description?: string; 
-    parentId?: string;
-    moduleType?: string;
-    icon?: string;
-    color?: string;
+  static async createModule(data: {
+    name: string
+    description?: string
+    parentId?: string
+    moduleType?: string
+    icon?: string
+    color?: string
   }): Promise<FormModule> {
     if (!data.name || data.name.trim() === "") {
       throw new Error("Module name is required")
@@ -115,25 +197,22 @@ export class DatabaseService {
     try {
       // Calculate hierarchy data
       let level = 0
-      let path = data.name.toLowerCase().replace(/\s+/g, '-')
       let moduleType = data.moduleType || "standard"
 
       if (data.parentId) {
-        // For now, we'll store hierarchy info in settings since Prisma schema doesn't have these fields
-        level = 1 // Simplified - in real implementation, you'd calculate based on parent
+        // Get parent module to calculate level
+        const parentModule = await prisma.formModule.findUnique({
+          where: { id: data.parentId },
+          select: { level: true },
+        })
+
+        if (parentModule) {
+          level = parentModule.level + 1
+        }
+
         moduleType = "child"
       } else {
         moduleType = "master"
-      }
-
-      // Store hierarchy data in settings JSON field
-      const settings = {
-        parentId: data.parentId || null,
-        level,
-        path,
-        moduleType,
-        isActive: true,
-        sortOrder: 0,
       }
 
       const module = await prisma.formModule.create({
@@ -142,11 +221,16 @@ export class DatabaseService {
           description: data.description?.trim() || null,
           icon: data.icon || null,
           color: data.color || null,
-          settings,
+          parentId: data.parentId || null,
+          moduleType,
+          level,
+          isActive: true,
+          sortOrder: 0,
         },
         include: {
           forms: {
             include: {
+              tableMapping: true,
               sections: {
                 include: {
                   fields: true,
@@ -159,7 +243,6 @@ export class DatabaseService {
                 },
                 orderBy: { order: "asc" },
               },
-              records: true,
             },
           },
         },
@@ -186,11 +269,12 @@ export class DatabaseService {
   // Get modules with proper hierarchy structure
   static async getModuleHierarchy(): Promise<FormModule[]> {
     try {
-      // Get all modules and build hierarchy in memory
+      // Get all modules
       const allModules = await prisma.formModule.findMany({
         include: {
           forms: {
             include: {
+              tableMapping: true,
               sections: {
                 include: {
                   fields: true,
@@ -203,11 +287,29 @@ export class DatabaseService {
                 },
                 orderBy: { order: "asc" },
               },
-              records: true,
+              _count: {
+                select: {
+                  records1: true,
+                  records2: true,
+                  records3: true,
+                  records4: true,
+                  records5: true,
+                  records6: true,
+                  records7: true,
+                  records8: true,
+                  records9: true,
+                  records10: true,
+                  records11: true,
+                  records12: true,
+                  records13: true,
+                  records14: true,
+                  records15: true,
+                },
+              },
             },
           },
         },
-        orderBy: { createdAt: "desc" },
+        orderBy: [{ level: "asc" }, { sortOrder: "asc" }, { name: "asc" }],
       })
 
       // Build hierarchy from flat list
@@ -215,31 +317,25 @@ export class DatabaseService {
       const rootModules: any[] = []
 
       // First pass: create map and identify root modules
-      allModules.forEach(module => {
-        const settings = (module.settings || {}) as Record<string, any>
-        const parentId = settings.parentId
-        
+      allModules.forEach((module) => {
         moduleMap.set(module.id, { ...module, children: [] })
-        
-        if (!parentId) {
+
+        if (!module.parentId) {
           rootModules.push(moduleMap.get(module.id))
         }
       })
 
       // Second pass: build parent-child relationships
-      allModules.forEach(module => {
-        const settings = (module.settings || {}) as Record<string, any>
-        const parentId = settings.parentId
-        
-        if (parentId && moduleMap.has(parentId)) {
-          const parent = moduleMap.get(parentId)
+      allModules.forEach((module) => {
+        if (module.parentId && moduleMap.has(module.parentId)) {
+          const parent = moduleMap.get(module.parentId)
           const child = moduleMap.get(module.id)
           parent.children.push(child)
         }
       })
 
       // Transform to proper format with hierarchy levels
-      return rootModules.map(module => this.transformModuleHierarchy(module, 0))
+      return rootModules.map((module) => this.transformModuleHierarchy(module, 0))
     } catch (error: any) {
       console.error("Database error fetching module hierarchy:", error)
       throw new Error(`Failed to fetch module hierarchy: ${error?.message}`)
@@ -249,13 +345,11 @@ export class DatabaseService {
   // Recursive helper to transform hierarchy with proper levels
   private static transformModuleHierarchy(module: any, level: number): FormModule {
     const transformed = this.transformModule(module, level)
-    
+
     if (module.children && module.children.length > 0) {
-      transformed.children = module.children.map((child: any) => 
-        this.transformModuleHierarchy(child, level + 1)
-      )
+      transformed.children = module.children.map((child: any) => this.transformModuleHierarchy(child, level + 1))
     }
-    
+
     return transformed
   }
 
@@ -273,7 +367,7 @@ export class DatabaseService {
   // Flatten hierarchy into a flat list
   private static flattenModuleHierarchy(modules: FormModule[]): FormModule[] {
     const flattened: FormModule[] = []
-    
+
     const flatten = (moduleList: FormModule[]) => {
       for (const module of moduleList) {
         flattened.push(module)
@@ -282,7 +376,7 @@ export class DatabaseService {
         }
       }
     }
-    
+
     flatten(modules)
     return flattened
   }
@@ -294,6 +388,7 @@ export class DatabaseService {
         include: {
           forms: {
             include: {
+              tableMapping: true,
               sections: {
                 include: {
                   fields: true,
@@ -306,14 +401,31 @@ export class DatabaseService {
                 },
                 orderBy: { order: "asc" },
               },
-              records: true,
+              _count: {
+                select: {
+                  records1: true,
+                  records2: true,
+                  records3: true,
+                  records4: true,
+                  records5: true,
+                  records6: true,
+                  records7: true,
+                  records8: true,
+                  records9: true,
+                  records10: true,
+                  records11: true,
+                  records12: true,
+                  records13: true,
+                  records14: true,
+                  records15: true,
+                },
+              },
             },
           },
         },
       })
 
       if (!module) return null
-
       return this.transformModule(module)
     } catch (error: any) {
       console.error("Database error fetching module:", error)
@@ -323,25 +435,6 @@ export class DatabaseService {
 
   static async updateModule(id: string, data: Partial<FormModule>): Promise<FormModule> {
     try {
-      // Get current module to preserve existing settings
-      const currentModule = await prisma.formModule.findUnique({
-        where: { id },
-        select: { settings: true }
-      })
-
-      const currentSettings = (currentModule?.settings || {}) as Record<string, any>
-      
-      // Update settings with new hierarchy data if provided
-      const updatedSettings = {
-        ...currentSettings,
-        ...(data.parentId !== undefined && { parentId: data.parentId }),
-        ...(data.moduleType && { moduleType: data.moduleType }),
-        ...(data.level !== undefined && { level: data.level }),
-        ...(data.path && { path: data.path }),
-        ...(data.isActive !== undefined && { isActive: data.isActive }),
-        ...(data.sortOrder !== undefined && { sortOrder: data.sortOrder }),
-      }
-
       const module = await prisma.formModule.update({
         where: { id },
         data: {
@@ -349,11 +442,17 @@ export class DatabaseService {
           description: data.description,
           icon: data.icon,
           color: data.color,
-          settings: updatedSettings,
+          parentId: data.parentId,
+          moduleType: data.moduleType,
+          level: data.level,
+          path: data.path,
+          isActive: data.isActive,
+          sortOrder: data.sortOrder,
         },
         include: {
           forms: {
             include: {
+              tableMapping: true,
               sections: {
                 include: {
                   fields: true,
@@ -366,7 +465,25 @@ export class DatabaseService {
                 },
                 orderBy: { order: "asc" },
               },
-              records: true,
+              _count: {
+                select: {
+                  records1: true,
+                  records2: true,
+                  records3: true,
+                  records4: true,
+                  records5: true,
+                  records6: true,
+                  records7: true,
+                  records8: true,
+                  records9: true,
+                  records10: true,
+                  records11: true,
+                  records12: true,
+                  records13: true,
+                  records14: true,
+                  records15: true,
+                },
+              },
             },
           },
         },
@@ -381,54 +498,32 @@ export class DatabaseService {
 
   static async moveModule(moduleId: string, newParentId?: string): Promise<FormModule> {
     try {
-      // Get current module
-      const currentModule = await prisma.formModule.findUnique({
-        where: { id: moduleId },
-        select: { settings: true, name: true }
-      })
-
-      if (!currentModule) {
-        throw new Error("Module not found")
-      }
-
-      const currentSettings = (currentModule.settings || {}) as Record<string, any>
-      
-      // Calculate new hierarchy data
+      // Calculate new level
       let level = 0
-      let moduleType = "master"
-      let path = currentModule.name.toLowerCase().replace(/\s+/g, '-')
 
       if (newParentId) {
-        // Get parent info from settings
         const parent = await prisma.formModule.findUnique({
           where: { id: newParentId },
-          select: { settings: true }
+          select: { level: true },
         })
 
         if (parent) {
-          const parentSettings = (parent.settings || {}) as Record<string, any>
-          level = (parentSettings.level || 0) + 1
-          moduleType = "child"
-          path = parentSettings.path ? `${parentSettings.path}/${path}` : path
+          level = parent.level + 1
         }
       }
 
-      const updatedSettings = {
-        ...currentSettings,
-        parentId: newParentId || null,
-        level,
-        moduleType,
-        path,
-      }
-
+      // Update module
       const module = await prisma.formModule.update({
         where: { id: moduleId },
         data: {
-          settings: updatedSettings,
+          parentId: newParentId || null,
+          level,
+          moduleType: newParentId ? "child" : "master",
         },
         include: {
           forms: {
             include: {
+              tableMapping: true,
               sections: {
                 include: {
                   fields: true,
@@ -441,7 +536,25 @@ export class DatabaseService {
                 },
                 orderBy: { order: "asc" },
               },
-              records: true,
+              _count: {
+                select: {
+                  records1: true,
+                  records2: true,
+                  records3: true,
+                  records4: true,
+                  records5: true,
+                  records6: true,
+                  records7: true,
+                  records8: true,
+                  records9: true,
+                  records10: true,
+                  records11: true,
+                  records12: true,
+                  records13: true,
+                  records14: true,
+                  records15: true,
+                },
+              },
             },
           },
         },
@@ -456,17 +569,12 @@ export class DatabaseService {
 
   static async deleteModule(id: string): Promise<void> {
     try {
-      // Check if module has children by looking at settings of other modules
-      const allModules = await prisma.formModule.findMany({
-        select: { id: true, settings: true }
+      // Check if module has children
+      const childrenCount = await prisma.formModule.count({
+        where: { parentId: id },
       })
 
-      const hasChildren = allModules.some(module => {
-        const settings = (module.settings || {}) as Record<string, any>
-        return settings.parentId === id
-      })
-
-      if (hasChildren) {
+      if (childrenCount > 0) {
         throw new Error("Cannot delete module with child modules. Please delete or move child modules first.")
       }
 
@@ -494,6 +602,7 @@ export class DatabaseService {
           submissionMessage: "Thank you for your submission!",
         },
         include: {
+          tableMapping: true,
           sections: {
             include: {
               fields: true,
@@ -533,6 +642,7 @@ export class DatabaseService {
       const forms = await prisma.form.findMany({
         where: moduleId ? { moduleId } : undefined,
         include: {
+          tableMapping: true,
           sections: {
             include: {
               fields: {
@@ -550,12 +660,30 @@ export class DatabaseService {
             },
             orderBy: { order: "asc" },
           },
-          records: true,
+          _count: {
+            select: {
+              records1: true,
+              records2: true,
+              records3: true,
+              records4: true,
+              records5: true,
+              records6: true,
+              records7: true,
+              records8: true,
+              records9: true,
+              records10: true,
+              records11: true,
+              records12: true,
+              records13: true,
+              records14: true,
+              records15: true,
+            },
+          },
         },
         orderBy: { createdAt: "desc" },
       })
 
-      return forms.map(form => this.transformForm(form))
+      return forms.map((form) => this.transformForm(form))
     } catch (error: any) {
       console.error("Database error fetching forms:", error)
       throw new Error(`Failed to fetch forms: ${error.message}`)
@@ -567,6 +695,7 @@ export class DatabaseService {
       const form = await prisma.form.findUnique({
         where: { id },
         include: {
+          tableMapping: true,
           sections: {
             include: {
               fields: {
@@ -584,12 +713,29 @@ export class DatabaseService {
             },
             orderBy: { order: "asc" },
           },
-          records: true,
+          _count: {
+            select: {
+              records1: true,
+              records2: true,
+              records3: true,
+              records4: true,
+              records5: true,
+              records6: true,
+              records7: true,
+              records8: true,
+              records9: true,
+              records10: true,
+              records11: true,
+              records12: true,
+              records13: true,
+              records14: true,
+              records15: true,
+            },
+          },
         },
       })
 
       if (!form) return null
-
       return this.transformForm(form)
     } catch (error: any) {
       console.error("Database error fetching form:", error)
@@ -612,8 +758,11 @@ export class DatabaseService {
           requireLogin: data.requireLogin,
           maxSubmissions: data.maxSubmissions,
           submissionMessage: data.submissionMessage,
+          conditional: data.conditional,
+          styling: data.styling,
         },
         include: {
+          tableMapping: true,
           sections: {
             include: {
               fields: {
@@ -631,7 +780,25 @@ export class DatabaseService {
             },
             orderBy: { order: "asc" },
           },
-          records: true,
+          _count: {
+            select: {
+              records1: true,
+              records2: true,
+              records3: true,
+              records4: true,
+              records5: true,
+              records6: true,
+              records7: true,
+              records8: true,
+              records9: true,
+              records10: true,
+              records11: true,
+              records12: true,
+              records13: true,
+              records14: true,
+              records15: true,
+            },
+          },
         },
       })
 
@@ -717,7 +884,7 @@ export class DatabaseService {
         orderBy: { order: "asc" },
       })
 
-      return sections.map(section => this.transformSection(section))
+      return sections.map((section) => this.transformSection(section))
     } catch (error: any) {
       console.error("Database error fetching sections:", error)
       throw new Error(`Failed to fetch sections: ${error.message}`)
@@ -786,7 +953,7 @@ export class DatabaseService {
         include: {
           fields: true,
           form: {
-            select: { id: true, name: true },
+            select: { id: true, name: true, tableMapping: true },
           },
         },
       })
@@ -804,19 +971,18 @@ export class DatabaseService {
       )
 
       // Step 1: Clean up form records - remove field data for deleted fields
-      if (fieldLabels.length > 0) {
+      if (fieldLabels.length > 0 && section.form.tableMapping) {
         console.log("[DatabaseService] Cleaning up form records...")
 
-        // Get all records for this form
-        const formRecords = await prisma.formRecord.findMany({
-          where: { formId },
-          select: { id: true, recordData: true },
-        })
+        const tableName = section.form.tableMapping.storageTable
 
-        console.log(`[DatabaseService] Found ${formRecords.length} records to clean`)
+        // Get all records for this form from the appropriate table
+        const records = await this.getFormRecords(formId)
+
+        console.log(`[DatabaseService] Found ${records.length} records to clean`)
 
         // Clean each record by removing data for deleted fields
-        for (const record of formRecords) {
+        for (const record of records) {
           const recordData = (record.recordData as any) || {}
           let hasChanges = false
 
@@ -831,14 +997,10 @@ export class DatabaseService {
 
           // Update record if changes were made
           if (hasChanges) {
-            await prisma.formRecord.update({
-              where: { id: record.id },
-              data: {
-                recordData: recordData,
-                updatedAt: new Date(),
-              },
+            await this.updateFormRecord(record.id, {
+              recordData,
+              updatedAt: new Date(),
             })
-
             console.log(`[DatabaseService] Updated record ${record.id}`)
           }
         }
@@ -848,22 +1010,18 @@ export class DatabaseService {
 
       // Step 2: Clean up lookup relations for deleted fields
       console.log("[DatabaseService] Cleaning up lookup relations...")
-
       const fieldIds = section.fields.map((f) => f.id)
-
       if (fieldIds.length > 0) {
         const deletedRelations = await prisma.lookupFieldRelation.deleteMany({
           where: {
             formFieldId: { in: fieldIds },
           },
         })
-
         console.log(`[DatabaseService] Deleted ${deletedRelations.count} lookup relations`)
       }
 
       // Step 3: Delete the section (this will cascade delete fields due to foreign key constraints)
       console.log("[DatabaseService] Deleting section and fields...")
-
       await prisma.formSection.delete({
         where: { id: sectionId },
       })
@@ -874,7 +1032,6 @@ export class DatabaseService {
 
       // Step 4: Reorder remaining sections
       console.log("[DatabaseService] Reordering remaining sections...")
-
       const remainingSections = await prisma.formSection.findMany({
         where: { formId },
         orderBy: { order: "asc" },
@@ -891,7 +1048,6 @@ export class DatabaseService {
       }
 
       console.log(`[DatabaseService] Reordered ${remainingSections.length} remaining sections`)
-
       console.log("[DatabaseService] Section deletion with cleanup completed successfully")
     } catch (error: any) {
       console.error("Database error deleting section with cleanup:", error)
@@ -914,50 +1070,10 @@ export class DatabaseService {
     readonly?: boolean
     width?: string
     order?: number
-    sourceModule?: string
-    sourceForm?: string
-    displayField?: string
-    valueField?: string
-    multiple?: boolean
-    searchable?: boolean
-    filters?: any
     lookup?: any
   }): Promise<FormField> {
     try {
-      console.log("[DatabaseService] Creating field with full data:", data)
-
-      // Extract source information from lookup if not provided directly
-      let sourceModule = data.sourceModule
-      let sourceForm = data.sourceForm
-      let displayField = data.displayField
-      let valueField = data.valueField
-      let multiple = data.multiple
-      let searchable = data.searchable
-
-      if (data.lookup && data.lookup.sourceId) {
-        if (data.lookup.sourceId.startsWith("module_")) {
-          sourceModule = data.lookup.sourceId.replace("module_", "")
-        } else if (data.lookup.sourceId.startsWith("form_")) {
-          sourceForm = data.lookup.sourceId.replace("form_", "")
-        }
-
-        if (data.lookup.fieldMapping) {
-          displayField = displayField || data.lookup.fieldMapping.display
-          valueField = valueField || data.lookup.fieldMapping.value
-        }
-
-        multiple = multiple ?? data.lookup.multiple
-        searchable = searchable ?? data.lookup.searchable
-      }
-
-      console.log("[DatabaseService] Extracted source info:", {
-        sourceModule,
-        sourceForm,
-        displayField,
-        valueField,
-        multiple,
-        searchable,
-      })
+      console.log("[DatabaseService] Creating field with data:", data)
 
       const field = await prisma.formField.create({
         data: {
@@ -974,14 +1090,6 @@ export class DatabaseService {
           readonly: data.readonly ?? false,
           width: data.width || "full",
           order: data.order || 0,
-          // Store lookup configuration directly on field
-          sourceModule,
-          sourceForm,
-          displayField,
-          valueField,
-          multiple,
-          searchable,
-          filters: data.filters,
           lookup: data.lookup, // Store complete lookup configuration
         },
       })
@@ -1024,7 +1132,6 @@ export class DatabaseService {
         where: { id: fieldData.sectionId },
         select: { formId: true, form: { select: { moduleId: true } } },
       })
-
       if (section) {
         formId = section.formId
         moduleId = section.form.moduleId
@@ -1034,7 +1141,6 @@ export class DatabaseService {
         where: { id: fieldData.subformId },
         select: { section: { select: { formId: true, form: { select: { moduleId: true } } } } },
       })
-
       if (subform?.section) {
         formId = subform.section.formId
         moduleId = subform.section.form.moduleId
@@ -1100,7 +1206,6 @@ export class DatabaseService {
 
     // Create LookupFieldRelation
     const relationId = `lfr_${lookupSourceId}_${fieldId}`
-
     await prisma.lookupFieldRelation.upsert({
       where: { id: relationId },
       update: {
@@ -1108,11 +1213,11 @@ export class DatabaseService {
         formFieldId: fieldId,
         formId,
         moduleId,
-        displayField: fieldData.displayField,
-        valueField: fieldData.valueField,
-        multiple: fieldData.multiple,
-        searchable: fieldData.searchable,
-        filters: fieldData.filters || {},
+        displayField: fieldData.lookup.fieldMapping?.display,
+        valueField: fieldData.lookup.fieldMapping?.value,
+        multiple: fieldData.lookup.multiple,
+        searchable: fieldData.lookup.searchable,
+        filters: fieldData.lookup.filters || {},
         updatedAt: new Date(),
       },
       create: {
@@ -1121,11 +1226,11 @@ export class DatabaseService {
         formFieldId: fieldId,
         formId,
         moduleId,
-        displayField: fieldData.displayField,
-        valueField: fieldData.valueField,
-        multiple: fieldData.multiple,
-        searchable: fieldData.searchable,
-        filters: fieldData.filters || {},
+        displayField: fieldData.lookup.fieldMapping?.display,
+        valueField: fieldData.lookup.fieldMapping?.value,
+        multiple: fieldData.lookup.multiple,
+        searchable: fieldData.lookup.searchable,
+        filters: fieldData.lookup.filters || {},
       },
     })
 
@@ -1139,52 +1244,15 @@ export class DatabaseService {
         orderBy: { order: "asc" },
       })
 
-      return fields.map(field => this.transformField(field))
+      return fields.map((field) => this.transformField(field))
     } catch (error: any) {
       console.error("Database error fetching fields:", error)
       throw new Error(`Failed to fetch fields: ${error.message}`)
     }
   }
 
-  static async updateField(
-    id: string,
-    data: Partial<
-      FormField & {
-        sourceModule?: string
-        sourceForm?: string
-        displayField?: string
-        valueField?: string
-        multiple?: boolean
-        searchable?: boolean
-        filters?: any
-      }
-    >,
-  ): Promise<FormField> {
+  static async updateField(id: string, data: Partial<FormField>): Promise<FormField> {
     try {
-      // Extract source information from lookup if not provided directly
-      let sourceModule = data.sourceModule
-      let sourceForm = data.sourceForm
-      let displayField = data.displayField
-      let valueField = data.valueField
-      let multiple = data.multiple
-      let searchable = data.searchable
-
-      if (data.lookup && data.lookup.sourceId) {
-        if (data.lookup.sourceId.startsWith("module_")) {
-          sourceModule = data.lookup.sourceId.replace("module_", "")
-        } else if (data.lookup.sourceId.startsWith("form_")) {
-          sourceForm = data.lookup.sourceId.replace("form_", "")
-        }
-
-        if (data.lookup.fieldMapping) {
-          displayField = displayField || data.lookup.fieldMapping.display
-          valueField = valueField || data.lookup.fieldMapping.value
-        }
-
-        multiple = multiple ?? data.lookup.multiple
-        searchable = searchable ?? data.lookup.searchable
-      }
-
       const updateData: any = {
         sectionId: data.sectionId,
         subformId: data.subformId,
@@ -1204,14 +1272,6 @@ export class DatabaseService {
         formula: data.formula,
         rollup: data.rollup || undefined,
         lookup: data.lookup || undefined,
-        // Update lookup configuration fields
-        sourceModule,
-        sourceForm,
-        displayField,
-        valueField,
-        multiple,
-        searchable,
-        filters: data.filters,
       }
 
       // Handle options separately to avoid type issues
@@ -1223,6 +1283,15 @@ export class DatabaseService {
         where: { id },
         data: updateData,
       })
+
+      // Update lookup relations if needed
+      if (data.lookup?.sourceId) {
+        try {
+          await this.handleLookupRelations(id, data)
+        } catch (error: any) {
+          console.error("[DatabaseService] Error updating lookup relations:", error.message)
+        }
+      }
 
       return this.transformField(field)
     } catch (error: any) {
@@ -1242,74 +1311,645 @@ export class DatabaseService {
     }
   }
 
-  /**
-   * Enhanced method to handle record creation/update with ID field support
-   */
-  static async upsertFormRecord(
+  // Create a form record in the appropriate table
+  static async createFormRecord(
     formId: string,
-    recordData: Record<string, any>,
-    idFieldName?: string,
-  ): Promise<{ success: boolean; action: "created" | "updated"; recordId: string; message: string }> {
-    console.log("[DatabaseService] Upserting form record:", { formId, idFieldName, recordData })
-
+    recordData: any,
+    submittedBy?: string,
+    employeeId?: string,
+    amount?: number,
+    date?: Date,
+  ): Promise<FormRecord> {
     try {
-      // If ID field is configured and provided, try to update existing record
-      if (idFieldName && recordData[idFieldName]) {
-        const idValue = recordData[idFieldName]
+      console.log("DatabaseService.createFormRecord called with:", {
+        formId,
+        recordData,
+        submittedBy,
+        employeeId,
+        amount,
+        date,
+      })
 
-        // Find existing record by the configured ID field
-        const existingRecord = await prisma.formRecord.findFirst({
-          where: {
-            formId: formId,
-            recordData: {
-              path: [idFieldName, "value"],
-              equals: idValue,
-            },
-          },
-        })
-
-        if (existingRecord) {
-          console.log(`[DatabaseService] Updating existing record with ${idFieldName}: ${idValue}`)
-
-          // Update existing record
-          const updatedRecord = await prisma.formRecord.update({
-            where: { id: existingRecord.id },
-            data: {
-              recordData: recordData as any,
-              updatedAt: new Date(),
-            },
-          })
-
-          return {
-            success: true,
-            action: "updated",
-            recordId: updatedRecord.id,
-            message: `Record updated successfully using ${idFieldName}: ${idValue}`,
-          }
-        }
+      // Validate inputs
+      if (!formId) {
+        throw new Error("Form ID is required")
       }
 
-      // Create new record if no ID field configured or no existing record found
-      console.log(`[DatabaseService] Creating new record for form: ${formId}`)
+      if (!recordData || typeof recordData !== "object") {
+        throw new Error("Record data must be a valid object")
+      }
 
-      const newRecord = await prisma.formRecord.create({
-        data: {
-          formId: formId,
-          recordData: recordData as any,
-          submittedAt: new Date(),
-          updatedAt: new Date(),
+      // Get the appropriate table for this form
+      const tableName = await this.getFormRecordTable(formId)
+      console.log(`Using table ${tableName} for form ${formId}`)
+
+      // Base record data
+      const recordParams = {
+        id: uuidv4(),
+        formId,
+        recordData,
+        submittedBy: submittedBy || "anonymous",
+        employee_id: employeeId,
+        amount: amount ? new Prisma.Decimal(amount) : null,
+        date: date || null,
+        submittedAt: new Date(),
+        status: "submitted",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }
+
+      // Create record in the appropriate table
+      let record
+
+      switch (tableName) {
+        case "form_records_1":
+          record = await prisma.formRecord1.create({ data: recordParams })
+          break
+        case "form_records_2":
+          record = await prisma.formRecord2.create({ data: recordParams })
+          break
+        case "form_records_3":
+          record = await prisma.formRecord3.create({ data: recordParams })
+          break
+        case "form_records_4":
+          record = await prisma.formRecord4.create({ data: recordParams })
+          break
+        case "form_records_5":
+          record = await prisma.formRecord5.create({ data: recordParams })
+          break
+        case "form_records_6":
+          record = await prisma.formRecord6.create({ data: recordParams })
+          break
+        case "form_records_7":
+          record = await prisma.formRecord7.create({ data: recordParams })
+          break
+        case "form_records_8":
+          record = await prisma.formRecord8.create({ data: recordParams })
+          break
+        case "form_records_9":
+          record = await prisma.formRecord9.create({ data: recordParams })
+          break
+        case "form_records_10":
+          record = await prisma.formRecord10.create({ data: recordParams })
+          break
+        case "form_records_11":
+          record = await prisma.formRecord11.create({ data: recordParams })
+          break
+        case "form_records_12":
+          record = await prisma.formRecord12.create({ data: recordParams })
+          break
+        case "form_records_13":
+          record = await prisma.formRecord13.create({ data: recordParams })
+          break
+        case "form_records_14":
+          record = await prisma.formRecord14.create({ data: recordParams })
+          break
+        case "form_records_15":
+          record = await prisma.formRecord15.create({ data: recordParams })
+          break
+        default:
+          throw new Error(`Invalid table name: ${tableName}`)
+      }
+
+      console.log("Record created successfully:", record.id)
+      return this.transformRecord(record)
+    } catch (error: any) {
+      console.error("Error in DatabaseService.createFormRecord:", error)
+      throw new Error(`Failed to create form record: ${error.message}`)
+    }
+  }
+
+  static async getFormRecords(
+    formId: string,
+    options?: {
+      page?: number
+      limit?: number
+      status?: string
+      search?: string
+      sortBy?: string
+      sortOrder?: "asc" | "desc"
+      employeeId?: string
+      dateFrom?: Date
+      dateTo?: Date
+    },
+  ): Promise<FormRecord[]> {
+    try {
+      const {
+        page = 1,
+        limit = 50,
+        status,
+        search,
+        sortBy = "submittedAt",
+        sortOrder = "desc",
+        employeeId,
+        dateFrom,
+        dateTo,
+      } = options || {}
+
+      console.log(`[DatabaseService] Getting form records for form: ${formId}`)
+
+      // First, get the form structure with all fields
+      const form = await prisma.form.findUnique({
+        where: { id: formId },
+        include: {
+          module: {
+            select: { id: true, name: true },
+          },
+          sections: {
+            include: {
+              fields: {
+                orderBy: { order: "asc" },
+              },
+            },
+            orderBy: { order: "asc" },
+          },
         },
       })
 
-      return {
-        success: true,
-        action: "created",
-        recordId: newRecord.id,
-        message: "New record created successfully",
+      if (!form) {
+        throw new Error(`Form not found: ${formId}`)
+      }
+
+      const tableName = await this.getFormRecordTable(formId)
+      const skip = (page - 1) * limit
+
+      // Build where clause
+      const where: any = { formId }
+
+      if (status && status !== "all") {
+        where.status = status
+      }
+
+      if (employeeId) {
+        where.employee_id = employeeId
+      }
+
+      if (dateFrom || dateTo) {
+        where.date = {}
+        if (dateFrom) where.date.gte = dateFrom
+        if (dateTo) where.date.lte = dateTo
+      }
+
+      // Build orderBy
+      const orderBy: any = {}
+      orderBy[sortBy] = sortOrder
+
+      // Execute query based on table name
+      let records: any[] = []
+
+      const queryParams = {
+        where,
+        orderBy,
+        skip,
+        take: limit,
+      }
+
+      console.log(`[DatabaseService] Querying table: ${tableName}`)
+
+      switch (tableName) {
+        case "form_records_1":
+          records = await prisma.formRecord1.findMany(queryParams)
+          break
+        case "form_records_2":
+          records = await prisma.formRecord2.findMany(queryParams)
+          break
+        case "form_records_3":
+          records = await prisma.formRecord3.findMany(queryParams)
+          break
+        case "form_records_4":
+          records = await prisma.formRecord4.findMany(queryParams)
+          break
+        case "form_records_5":
+          records = await prisma.formRecord5.findMany(queryParams)
+          break
+        case "form_records_6":
+          records = await prisma.formRecord6.findMany(queryParams)
+          break
+        case "form_records_7":
+          records = await prisma.formRecord7.findMany(queryParams)
+          break
+        case "form_records_8":
+          records = await prisma.formRecord8.findMany(queryParams)
+          break
+        case "form_records_9":
+          records = await prisma.formRecord9.findMany(queryParams)
+          break
+        case "form_records_10":
+          records = await prisma.formRecord10.findMany(queryParams)
+          break
+        case "form_records_11":
+          records = await prisma.formRecord11.findMany(queryParams)
+          break
+        case "form_records_12":
+          records = await prisma.formRecord12.findMany(queryParams)
+          break
+        case "form_records_13":
+          records = await prisma.formRecord13.findMany(queryParams)
+          break
+        case "form_records_14":
+          records = await prisma.formRecord14.findMany(queryParams)
+          break
+        case "form_records_15":
+          records = await prisma.formRecord15.findMany(queryParams)
+          break
+        default:
+          throw new Error(`Invalid table name: ${tableName}`)
+      }
+
+      console.log(`[DatabaseService] Found ${records.length} records in ${tableName}`)
+
+      // Handle search if provided (client-side filtering since we can't easily search JSON)
+      if (search && search.trim() !== "") {
+        const searchLower = search.toLowerCase()
+        records = records.filter((record) => {
+          // Search in record data
+          const recordDataStr = JSON.stringify(record.recordData).toLowerCase()
+          if (recordDataStr.includes(searchLower)) return true
+
+          // Search in other fields
+          if (record.employee_id?.toLowerCase().includes(searchLower)) return true
+          if (record.submittedBy?.toLowerCase().includes(searchLower)) return true
+          if (record.status?.toLowerCase().includes(searchLower)) return true
+
+          return false
+        })
+      }
+
+      // Transform records and include form structure
+      const transformedRecords = records.map((record) => {
+        const transformedRecord = this.transformRecord(record)
+        // Include the complete form structure with each record
+        transformedRecord.form = this.transformForm(form)
+        return transformedRecord
+      })
+
+      console.log(`[DatabaseService] Returning ${transformedRecords.length} transformed records with form structure`)
+
+      return transformedRecords
+    } catch (error: any) {
+      console.error("Database error fetching form records:", error)
+      throw new Error(`Failed to fetch form records: ${error?.message}`)
+    }
+  }
+
+  static async getFormSubmissionCount(formId: string): Promise<number> {
+    try {
+      const tableName = await this.getFormRecordTable(formId)
+
+      let count = 0
+
+      switch (tableName) {
+        case "form_records_1":
+          count = await prisma.formRecord1.count({ where: { formId } })
+          break
+        case "form_records_2":
+          count = await prisma.formRecord2.count({ where: { formId } })
+          break
+        case "form_records_3":
+          count = await prisma.formRecord3.count({ where: { formId } })
+          break
+        case "form_records_4":
+          count = await prisma.formRecord4.count({ where: { formId } })
+          break
+        case "form_records_5":
+          count = await prisma.formRecord5.count({ where: { formId } })
+          break
+        case "form_records_6":
+          count = await prisma.formRecord6.count({ where: { formId } })
+          break
+        case "form_records_7":
+          count = await prisma.formRecord7.count({ where: { formId } })
+          break
+        case "form_records_8":
+          count = await prisma.formRecord8.count({ where: { formId } })
+          break
+        case "form_records_9":
+          count = await prisma.formRecord9.count({ where: { formId } })
+          break
+        case "form_records_10":
+          count = await prisma.formRecord10.count({ where: { formId } })
+          break
+        case "form_records_11":
+          count = await prisma.formRecord11.count({ where: { formId } })
+          break
+        case "form_records_12":
+          count = await prisma.formRecord12.count({ where: { formId } })
+          break
+        case "form_records_13":
+          count = await prisma.formRecord13.count({ where: { formId } })
+          break
+        case "form_records_14":
+          count = await prisma.formRecord14.count({ where: { formId } })
+          break
+        case "form_records_15":
+          count = await prisma.formRecord15.count({ where: { formId } })
+          break
+        default:
+          throw new Error(`Invalid table name: ${tableName}`)
+      }
+
+      return count
+    } catch (error: any) {
+      console.error("Database error getting form submission count:", error)
+      throw new Error(`Failed to get form submission count: ${error?.message}`)
+    }
+  }
+
+  static async getFormRecord(recordId: string): Promise<FormRecord | null> {
+    try {
+      // Try each table until we find the record
+      for (let i = 1; i <= 15; i++) {
+        const currentTable = `formRecord${i}`
+        try {
+          const record = await (prisma as any)[currentTable].findUnique({
+            where: { id: recordId },
+          })
+
+          if (record) {
+            // Get the form structure for this record
+            const form = await prisma.form.findUnique({
+              where: { id: record.formId },
+              include: {
+                module: {
+                  select: { id: true, name: true },
+                },
+                sections: {
+                  include: {
+                    fields: {
+                      orderBy: { order: "asc" },
+                    },
+                  },
+                  orderBy: { order: "asc" },
+                },
+              },
+            })
+
+            const transformedRecord = this.transformRecord(record)
+            if (form) {
+              transformedRecord.form = this.transformForm(form)
+            }
+
+            return transformedRecord
+          }
+        } catch (error) {
+          // Continue to next table
+        }
+      }
+
+      return null
+    } catch (error: any) {
+      console.error("Database error fetching form record:", error)
+      throw new Error(`Failed to fetch form record: ${error?.message}`)
+    }
+  }
+
+  static async updateFormRecord(recordId: string, data: Partial<FormRecord>): Promise<FormRecord> {
+    try {
+      // First, find which table contains this record
+      let tableName = ""
+      let record = null
+
+      // Try each table until we find the record
+      for (let i = 1; i <= 15; i++) {
+        const currentTable = `formRecord${i}`
+        try {
+          record = await (prisma as any)[currentTable].findUnique({
+            where: { id: recordId },
+            select: { id: true, formId: true },
+          })
+
+          if (record) {
+            tableName = `form_records_${i}`
+            break
+          }
+        } catch (error) {
+          // Continue to next table
+        }
+      }
+
+      if (!record) {
+        throw new Error(`Record not found: ${recordId}`)
+      }
+
+      // Update the record in the correct table
+      const updateData = {
+        recordData: data.recordData,
+        employee_id: data.employee_id,
+        amount: data.amount ? new Prisma.Decimal(data.amount) : undefined,
+        date: data.date,
+        submittedBy: data.submittedBy,
+        status: data.status,
+        updatedAt: new Date(),
+      }
+
+      let updatedRecord
+
+      switch (tableName) {
+        case "form_records_1":
+          updatedRecord = await prisma.formRecord1.update({
+            where: { id: recordId },
+            data: updateData,
+          })
+          break
+        case "form_records_2":
+          updatedRecord = await prisma.formRecord2.update({
+            where: { id: recordId },
+            data: updateData,
+          })
+          break
+        case "form_records_3":
+          updatedRecord = await prisma.formRecord3.update({
+            where: { id: recordId },
+            data: updateData,
+          })
+          break
+        case "form_records_4":
+          updatedRecord = await prisma.formRecord4.update({
+            where: { id: recordId },
+            data: updateData,
+          })
+          break
+        case "form_records_5":
+          updatedRecord = await prisma.formRecord5.update({
+            where: { id: recordId },
+            data: updateData,
+          })
+          break
+        case "form_records_6":
+          updatedRecord = await prisma.formRecord6.update({
+            where: { id: recordId },
+            data: updateData,
+          })
+          break
+        case "form_records_7":
+          updatedRecord = await prisma.formRecord7.update({
+            where: { id: recordId },
+            data: updateData,
+          })
+          break
+        case "form_records_8":
+          updatedRecord = await prisma.formRecord8.update({
+            where: { id: recordId },
+            data: updateData,
+          })
+          break
+        case "form_records_9":
+          updatedRecord = await prisma.formRecord9.update({
+            where: { id: recordId },
+            data: updateData,
+          })
+          break
+        case "form_records_10":
+          updatedRecord = await prisma.formRecord10.update({
+            where: { id: recordId },
+            data: updateData,
+          })
+          break
+        case "form_records_11":
+          updatedRecord = await prisma.formRecord11.update({
+            where: { id: recordId },
+            data: updateData,
+          })
+          break
+        case "form_records_12":
+          updatedRecord = await prisma.formRecord12.update({
+            where: { id: recordId },
+            data: updateData,
+          })
+          break
+        case "form_records_13":
+          updatedRecord = await prisma.formRecord13.update({
+            where: { id: recordId },
+            data: updateData,
+          })
+          break
+        case "form_records_14":
+          updatedRecord = await prisma.formRecord14.update({
+            where: { id: recordId },
+            data: updateData,
+          })
+          break
+        case "form_records_15":
+          updatedRecord = await prisma.formRecord15.update({
+            where: { id: recordId },
+            data: updateData,
+          })
+          break
+        default:
+          throw new Error(`Invalid table name: ${tableName}`)
+      }
+
+      // Get the form structure for the updated record
+      const form = await prisma.form.findUnique({
+        where: { id: updatedRecord.formId },
+        include: {
+          module: {
+            select: { id: true, name: true },
+          },
+          sections: {
+            include: {
+              fields: {
+                orderBy: { order: "asc" },
+              },
+            },
+            orderBy: { order: "asc" },
+          },
+        },
+      })
+
+      const transformedRecord = this.transformRecord(updatedRecord)
+      if (form) {
+        transformedRecord.form = this.transformForm(form)
+      }
+
+      return transformedRecord
+    } catch (error: any) {
+      console.error("Database error updating form record:", error)
+      throw new Error(`Failed to update form record: ${error?.message}`)
+    }
+  }
+
+  static async deleteFormRecord(recordId: string): Promise<void> {
+    try {
+      // First, find which table contains this record
+      let tableName = ""
+      let record = null
+
+      // Try each table until we find the record
+      for (let i = 1; i <= 15; i++) {
+        const currentTable = `formRecord${i}`
+        try {
+          record = await (prisma as any)[currentTable].findUnique({
+            where: { id: recordId },
+            select: { id: true },
+          })
+
+          if (record) {
+            tableName = `form_records_${i}`
+            break
+          }
+        } catch (error) {
+          // Continue to next table
+        }
+      }
+
+      if (!record) {
+        throw new Error(`Record not found: ${recordId}`)
+      }
+
+      // Delete the record from the correct table
+      switch (tableName) {
+        case "form_records_1":
+          await prisma.formRecord1.delete({ where: { id: recordId } })
+          break
+        case "form_records_2":
+          await prisma.formRecord2.delete({ where: { id: recordId } })
+          break
+        case "form_records_3":
+          await prisma.formRecord3.delete({ where: { id: recordId } })
+          break
+        case "form_records_4":
+          await prisma.formRecord4.delete({ where: { id: recordId } })
+          break
+        case "form_records_5":
+          await prisma.formRecord5.delete({ where: { id: recordId } })
+          break
+        case "form_records_6":
+          await prisma.formRecord6.delete({ where: { id: recordId } })
+          break
+        case "form_records_7":
+          await prisma.formRecord7.delete({ where: { id: recordId } })
+          break
+        case "form_records_8":
+          await prisma.formRecord8.delete({ where: { id: recordId } })
+          break
+        case "form_records_9":
+          await prisma.formRecord9.delete({ where: { id: recordId } })
+          break
+        case "form_records_10":
+          await prisma.formRecord10.delete({ where: { id: recordId } })
+          break
+        case "form_records_11":
+          await prisma.formRecord11.delete({ where: { id: recordId } })
+          break
+        case "form_records_12":
+          await prisma.formRecord12.delete({ where: { id: recordId } })
+          break
+        case "form_records_13":
+          await prisma.formRecord13.delete({ where: { id: recordId } })
+          break
+        case "form_records_14":
+          await prisma.formRecord14.delete({ where: { id: recordId } })
+          break
+        case "form_records_15":
+          await prisma.formRecord15.delete({ where: { id: recordId } })
+          break
+        default:
+          throw new Error(`Invalid table name: ${tableName}`)
       }
     } catch (error: any) {
-      console.error("[DatabaseService] Error upserting form record:", error)
-      throw new Error(`Failed to upsert form record: ${error.message}`)
+      console.error("Database error deleting form record:", error)
+      throw new Error(`Failed to delete form record: ${error?.message}`)
     }
   }
 
@@ -1351,495 +1991,6 @@ export class DatabaseService {
     } catch (error: any) {
       console.error("Database error unpublishing form:", error)
       throw new Error(`Failed to unpublish form: ${error?.message}`)
-    }
-  }
-
-  // Enhanced form records with ID field support for create/update
-  static async createFormRecord(
-    formId: string,
-    recordData: Record<string, any>,
-    submittedBy?: string,
-  ): Promise<FormRecord> {
-    try {
-      console.log("DatabaseService.createFormRecord called with:", { formId, recordData, submittedBy })
-
-      // Validate inputs
-      if (!formId) {
-        throw new Error("Form ID is required")
-      }
-
-      if (!recordData || typeof recordData !== "object") {
-        throw new Error("Record data must be a valid object")
-      }
-
-      // Check if form exists and get lookup fields with ID field configuration
-      const form = await prisma.form.findUnique({
-        where: { id: formId },
-        select: {
-          id: true,
-          name: true,
-          sections: {
-            include: {
-              fields: {
-                where: { type: "lookup" },
-                select: {
-                  id: true,
-                  label: true,
-                  lookup: true,
-                  sourceForm: true,
-                },
-              },
-            },
-          },
-        },
-      })
-
-      if (!form) {
-        throw new Error(`Form with ID ${formId} not found`)
-      }
-
-      console.log("Form found:", form.name)
-
-      // Check for lookup fields with ID field configuration
-      const lookupFields = form.sections.flatMap((section) => section.fields)
-      let shouldUpdate = false
-      let existingRecordId: string | null = null
-
-      for (const field of lookupFields) {
-        const lookupConfig = field.lookup as any
-        if (lookupConfig?.useIdField && lookupConfig?.idFieldName && field.sourceForm) {
-          const idFieldName = lookupConfig.idFieldName
-          const fieldValue = recordData[field.label]
-
-          if (fieldValue && typeof fieldValue === "object" && fieldValue.value) {
-            // Check if this value contains the ID field
-            const idValue = fieldValue.value[idFieldName]
-
-            if (idValue) {
-              console.log(`Checking for existing record with ${idFieldName}: ${idValue}`)
-
-              // Look for existing record in the source form
-              const existingRecord = await prisma.formRecord.findFirst({
-                where: {
-                  formId: field.sourceForm,
-                  recordData: {
-                    path: [idFieldName, "value"],
-                    equals: idValue,
-                  },
-                },
-              })
-
-              if (existingRecord) {
-                console.log(`Found existing record to update: ${existingRecord.id}`)
-                shouldUpdate = true
-                existingRecordId = existingRecord.id
-                break
-              }
-            }
-          }
-        }
-      }
-
-      if (shouldUpdate && existingRecordId) {
-        // Update existing record
-        const updatedRecord = await prisma.formRecord.update({
-          where: { id: existingRecordId },
-          data: {
-            recordData: recordData as any,
-            submittedBy: submittedBy || "anonymous",
-            updatedAt: new Date(),
-          },
-        })
-
-        console.log("Record updated successfully:", updatedRecord.id)
-
-        return this.transformRecord(updatedRecord)
-      } else {
-        // Create new record
-        const record = await prisma.formRecord.create({
-          data: {
-            formId,
-            recordData: recordData as any,
-            submittedBy: submittedBy || "anonymous",
-            submittedAt: new Date(),
-          },
-        })
-
-        console.log("Record created successfully:", record.id)
-
-        return this.transformRecord(record)
-      }
-    } catch (error: any) {
-      console.error("Error in DatabaseService.createFormRecord:", error)
-      throw new Error(`Failed to create form record: ${error.message}`)
-    }
-  }
-
-  static async getFormRecords(
-    formId: string,
-    options?: {
-      page?: number
-      limit?: number
-      status?: string
-      search?: string
-      sortBy?: string
-      sortOrder?: "asc" | "desc"
-    },
-  ): Promise<FormRecord[]> {
-    try {
-      const { page = 1, limit = 50, status, search, sortBy = "submittedAt", sortOrder = "desc" } = options || {}
-
-      const where: any = { formId }
-
-      if (status && status !== "all") {
-        where.status = status
-      }
-
-      // JSONB search capabilities
-      if (search) {
-        where.OR = [
-          {
-            submittedBy: {
-              contains: search,
-              mode: "insensitive",
-            },
-          },
-          {
-            recordData: {
-              path: [],
-              string_contains: search,
-            },
-          },
-        ]
-      }
-
-      const records = await prisma.formRecord.findMany({
-        where,
-        orderBy: { [sortBy]: sortOrder },
-        skip: (page - 1) * limit,
-        take: limit,
-        include: {
-          form: {
-            include: {
-              sections: {
-                include: {
-                  fields: {
-                    orderBy: { order: "asc" },
-                  },
-                },
-                orderBy: { order: "asc" },
-              },
-            },
-          },
-        },
-      })
-
-      return records.map((r) => ({
-        ...this.transformRecord(r),
-        form: r.form ? this.transformForm(r.form) : undefined,
-      }))
-    } catch (error: any) {
-      console.error("Database error fetching form records:", error)
-      throw new Error(`Failed to fetch form records: ${error?.message}`)
-    }
-  }
-
-  static async getFormSubmissionCount(formId: string): Promise<number> {
-    try {
-      const count = await prisma.formRecord.count({
-        where: { formId },
-      })
-
-      return count
-    } catch (error: any) {
-      console.error("Database error getting form submission count:", error)
-      throw new Error(`Failed to get form submission count: ${error?.message}`)
-    }
-  }
-
-  static async updateFormRecord(id: string, data: Partial<FormRecord>): Promise<FormRecord> {
-    try {
-      const record = await prisma.formRecord.update({
-        where: { id },
-        data: {
-          recordData: data.recordData,
-          submittedBy: data.submittedBy,
-        },
-      })
-
-      return this.transformRecord(record)
-    } catch (error: any) {
-      console.error("Database error updating form record:", error)
-      throw new Error(`Failed to update form record: ${error?.message}`)
-    }
-  }
-
-  static async deleteFormRecord(id: string): Promise<void> {
-    try {
-      await prisma.formRecord.delete({
-        where: { id },
-      })
-    } catch (error: any) {
-      console.error("Database error deleting form record:", error)
-      throw new Error(`Failed to delete form record: ${error?.message}`)
-    }
-  }
-
-  // Enhanced relationship methods for the records page with detailed module/form information
-  static async getLookupSources(formId: string): Promise<{
-    sources: Array<{
-      id: string
-      name: string
-      type: "form" | "module"
-      recordCount: number
-      description?: string
-      moduleName?: string
-      moduleId?: string
-      breadcrumb: string
-      createdAt: Date
-      updatedAt: Date
-      isPublished?: boolean
-      fieldCount?: number
-    }>
-  }> {
-    try {
-      console.log("[DatabaseService] Getting detailed lookup sources for form:", formId)
-
-      // Get all lookup fields in this form
-      const form = await prisma.form.findUnique({
-        where: { id: formId },
-        include: {
-          sections: {
-            include: {
-              fields: {
-                where: { type: "lookup" },
-              },
-            },
-          },
-        },
-      })
-
-      if (!form) {
-        return { sources: [] }
-      }
-
-      const lookupFields = form.sections.flatMap((section) => section.fields)
-
-      const sources: Array<{
-        id: string
-        name: string
-        type: "form" | "module"
-        recordCount: number
-        description?: string
-        moduleName?: string
-        moduleId?: string
-        breadcrumb: string
-        createdAt: Date
-        updatedAt: Date
-        isPublished?: boolean
-        fieldCount?: number
-      }> = []
-
-      for (const field of lookupFields) {
-        const lookupConfig = field.lookup as any
-        if (!lookupConfig?.sourceId) continue
-
-        if (lookupConfig.sourceId.startsWith("form_")) {
-          const sourceFormId = lookupConfig.sourceId.replace("form_", "")
-          const sourceForm = await prisma.form.findUnique({
-            where: { id: sourceFormId },
-            include: {
-              module: true,
-              _count: {
-                select: {
-                  records: true,
-                  sections: true,
-                },
-              },
-              sections: {
-                include: {
-                  _count: {
-                    select: { fields: true },
-                  },
-                },
-              },
-            },
-          })
-
-          if (sourceForm) {
-            const totalFields = sourceForm.sections.reduce((sum, section) => sum + section._count.fields, 0)
-
-            sources.push({
-              id: sourceForm.id,
-              name: sourceForm.name,
-              type: "form",
-              recordCount: sourceForm._count.records,
-              description: sourceForm.description || undefined,
-              moduleName: sourceForm.module?.name,
-              moduleId: sourceForm.module?.id,
-              breadcrumb: `${sourceForm.module?.name} > ${sourceForm.name}`,
-              createdAt: sourceForm.createdAt,
-              updatedAt: sourceForm.updatedAt,
-              isPublished: sourceForm.isPublished,
-              fieldCount: totalFields,
-            })
-          }
-        } else if (lookupConfig.sourceId.startsWith("module_")) {
-          const sourceModuleId = lookupConfig.sourceId.replace("module_", "")
-          const sourceModule = await prisma.formModule.findUnique({
-            where: { id: sourceModuleId },
-            include: {
-              forms: {
-                include: {
-                  _count: {
-                    select: {
-                      records: true,
-                      sections: true,
-                    },
-                  },
-                  sections: {
-                    include: {
-                      _count: {
-                        select: { fields: true },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          })
-
-          if (sourceModule) {
-            const totalRecords = sourceModule.forms.reduce((sum, form) => sum + form._count.records, 0)
-            const totalFields = sourceModule.forms.reduce(
-              (sum, form) => sum + form.sections.reduce((sectionSum, section) => sectionSum + section._count.fields, 0),
-              0,
-            )
-
-            sources.push({
-              id: sourceModule.id,
-              name: sourceModule.name,
-              type: "module",
-              recordCount: totalRecords,
-              description: sourceModule.description || undefined,
-              moduleName: sourceModule.name,
-              moduleId: sourceModule.id,
-              breadcrumb: `${sourceModule.name} (Module)`,
-              createdAt: sourceModule.createdAt,
-              updatedAt: sourceModule.updatedAt,
-              fieldCount: totalFields,
-            })
-          }
-        }
-      }
-
-      // Remove duplicates
-      const uniqueSources = sources.filter(
-        (source, index, self) => index === self.findIndex((s) => s.id === source.id && s.type === source.type),
-      )
-
-      console.log("[DatabaseService] Found detailed lookup sources:", uniqueSources.length)
-
-      return { sources: uniqueSources }
-    } catch (error: any) {
-      console.error("Database error getting lookup sources:", error)
-      return { sources: [] }
-    }
-  }
-
-  static async getLinkedRecords(formId: string): Promise<{
-    linkedForms: Array<{
-      id: string
-      name: string
-      recordCount: number
-      description?: string
-      moduleName?: string
-      moduleId?: string
-      breadcrumb: string
-      createdAt: Date
-      updatedAt: Date
-      isPublished?: boolean
-      fieldCount?: number
-      lookupFieldsCount?: number
-    }>
-  }> {
-    try {
-      console.log("[DatabaseService] Getting detailed linked records for form:", formId)
-
-      // Find all forms that have lookup fields pointing to this form
-      const formsWithLookups = await prisma.form.findMany({
-        include: {
-          module: true,
-          sections: {
-            include: {
-              fields: {
-                where: { type: "lookup" },
-              },
-              _count: {
-                select: { fields: true },
-              },
-            },
-          },
-          _count: {
-            select: {
-              records: true,
-              sections: true,
-            },
-          },
-        },
-      })
-
-      const linkedForms: Array<{
-        id: string
-        name: string
-        recordCount: number
-        description?: string
-        moduleName?: string
-        moduleId?: string
-        breadcrumb: string
-        createdAt: Date
-        updatedAt: Date
-        isPublished?: boolean
-        fieldCount?: number
-        lookupFieldsCount?: number
-      }> = []
-
-      for (const form of formsWithLookups) {
-        if (form.id === formId) continue // Skip self
-
-        const lookupFieldsToThisForm = form.sections.flatMap((section) =>
-          section.fields.filter((field) => {
-            const lookupConfig = field.lookup as any
-            return lookupConfig?.sourceId === `form_${formId}`
-          }),
-        )
-
-        if (lookupFieldsToThisForm.length > 0) {
-          const totalFields = form.sections.reduce((sum, section) => sum + section._count.fields, 0)
-
-          linkedForms.push({
-            id: form.id,
-            name: form.name,
-            recordCount: form._count.records,
-            description: form.description || undefined,
-            moduleName: form.module?.name,
-            moduleId: form.module?.id,
-            breadcrumb: `${form.module?.name} > ${form.name}`,
-            createdAt: form.createdAt,
-            updatedAt: form.updatedAt,
-            isPublished: form.isPublished,
-            fieldCount: totalFields,
-            lookupFieldsCount: lookupFieldsToThisForm.length,
-          })
-        }
-      }
-
-      console.log("[DatabaseService] Found detailed linked forms:", linkedForms.length)
-
-      return { linkedForms }
-    } catch (error: any) {
-      console.error("Database error getting linked records:", error)
-      return { linkedForms: [] }
     }
   }
 
@@ -1890,7 +2041,7 @@ export class DatabaseService {
       })
 
       const totalViews = events.filter((e) => e.eventType === "view").length
-      const totalSubmissions = events.filter((e) => e.eventType === "submit").length
+      const totalSubmissions = await this.getFormSubmissionCount(formId)
       const conversionRate = totalViews > 0 ? (totalSubmissions / totalViews) * 100 : 0
 
       return {
@@ -2140,7 +2291,261 @@ export class DatabaseService {
       throw new Error(`Failed to seed field types: ${error?.message}`)
     }
   }
-}
 
-// Export an instance of the DatabaseService as 'db'
-export const db = DatabaseService
+  // Enhanced relationship methods for the records page with detailed module/form information
+  static async getLookupSources(formId: string): Promise<{
+    sources: Array<{
+      id: string
+      name: string
+      type: "form" | "module"
+      recordCount: number
+      description?: string
+      moduleName?: string
+      moduleId?: string
+      breadcrumb: string
+      createdAt: Date
+      updatedAt: Date
+      isPublished?: boolean
+      fieldCount?: number
+    }>
+  }> {
+    try {
+      console.log("[DatabaseService] Getting detailed lookup sources for form:", formId)
+
+      // Get all lookup fields in this form
+      const form = await prisma.form.findUnique({
+        where: { id: formId },
+        include: {
+          sections: {
+            include: {
+              fields: {
+                where: { type: "lookup" },
+              },
+            },
+          },
+        },
+      })
+
+      if (!form) {
+        return { sources: [] }
+      }
+
+      const lookupFields = form.sections.flatMap((section) => section.fields)
+
+      const sources: Array<{
+        id: string
+        name: string
+        type: "form" | "module"
+        recordCount: number
+        description?: string
+        moduleName?: string
+        moduleId?: string
+        breadcrumb: string
+        createdAt: Date
+        updatedAt: Date
+        isPublished?: boolean
+        fieldCount?: number
+      }> = []
+
+      for (const field of lookupFields) {
+        const lookupConfig = field.lookup as any
+        if (!lookupConfig?.sourceId) continue
+
+        if (lookupConfig.sourceId.startsWith("form_")) {
+          const sourceFormId = lookupConfig.sourceId.replace("form_", "")
+          const sourceForm = await prisma.form.findUnique({
+            where: { id: sourceFormId },
+            include: {
+              module: true,
+              tableMapping: true,
+              _count: {
+                select: {
+                  sections: true,
+                },
+              },
+              sections: {
+                include: {
+                  _count: {
+                    select: { fields: true },
+                  },
+                },
+              },
+            },
+          })
+
+          if (sourceForm) {
+            const totalFields = sourceForm.sections.reduce((sum, section) => sum + section._count.fields, 0)
+            const recordCount = await this.getFormSubmissionCount(sourceFormId)
+
+            sources.push({
+              id: sourceForm.id,
+              name: sourceForm.name,
+              type: "form",
+              recordCount,
+              description: sourceForm.description || undefined,
+              moduleName: sourceForm.module?.name,
+              moduleId: sourceForm.module?.id,
+              breadcrumb: `${sourceForm.module?.name} > ${sourceForm.name}`,
+              createdAt: sourceForm.createdAt,
+              updatedAt: sourceForm.updatedAt,
+              isPublished: sourceForm.isPublished,
+              fieldCount: totalFields,
+            })
+          }
+        } else if (lookupConfig.sourceId.startsWith("module_")) {
+          const sourceModuleId = lookupConfig.sourceId.replace("module_", "")
+          const sourceModule = await prisma.formModule.findUnique({
+            where: { id: sourceModuleId },
+            include: {
+              forms: {
+                include: {
+                  tableMapping: true,
+                  _count: {
+                    select: {
+                      sections: true,
+                    },
+                  },
+                  sections: {
+                    include: {
+                      _count: {
+                        select: { fields: true },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          })
+
+          if (sourceModule) {
+            let totalRecords = 0
+            for (const form of sourceModule.forms) {
+              totalRecords += await this.getFormSubmissionCount(form.id)
+            }
+
+            const totalFields = sourceModule.forms.reduce(
+              (sum, form) => sum + form.sections.reduce((sectionSum, section) => sectionSum + section._count.fields, 0),
+              0,
+            )
+
+            sources.push({
+              id: sourceModule.id,
+              name: sourceModule.name,
+              type: "module",
+              recordCount: totalRecords,
+              description: sourceModule.description || undefined,
+              moduleName: sourceModule.name,
+              moduleId: sourceModule.id,
+              breadcrumb: `${sourceModule.name} (Module)`,
+              createdAt: sourceModule.createdAt,
+              updatedAt: sourceModule.updatedAt,
+              fieldCount: totalFields,
+            })
+          }
+        }
+      }
+
+      // Remove duplicates
+      const uniqueSources = sources.filter(
+        (source, index, self) => index === self.findIndex((s) => s.id === source.id && s.type === source.type),
+      )
+
+      console.log("[DatabaseService] Found detailed lookup sources:", uniqueSources.length)
+      return { sources: uniqueSources }
+    } catch (error: any) {
+      console.error("Database error getting lookup sources:", error)
+      return { sources: [] }
+    }
+  }
+
+  static async getLinkedRecords(formId: string): Promise<{
+    linkedForms: Array<{
+      id: string
+      name: string
+      recordCount: number
+      description?: string
+      moduleName?: string
+      moduleId?: string
+      breadcrumb: string
+      createdAt: Date
+      updatedAt: Date
+      isPublished?: boolean
+      fieldCount?: number
+      lookupFieldsCount?: number
+    }>
+  }> {
+    try {
+      console.log("[DatabaseService] Getting detailed linked records for form:", formId)
+
+      // Find all forms that have lookup fields pointing to this form
+      const formsWithLookups = await prisma.form.findMany({
+        include: {
+          module: true,
+          tableMapping: true,
+          sections: {
+            include: {
+              fields: {
+                where: { type: "lookup" },
+              },
+              _count: {
+                select: { fields: true },
+              },
+            },
+          },
+        },
+      })
+
+      const linkedForms: Array<{
+        id: string
+        name: string
+        recordCount: number
+        description?: string
+        moduleName?: string
+        moduleId?: string
+        breadcrumb: string
+        createdAt: Date
+        updatedAt: Date
+        isPublished?: boolean
+        fieldCount?: number
+        lookupFieldsCount?: number
+      }> = []
+
+      for (const form of formsWithLookups) {
+        if (form.id === formId) continue // Skip self
+
+        const lookupFieldsToThisForm = form.sections.flatMap((section) =>
+          section.fields.filter((field) => {
+            const lookupConfig = field.lookup as any
+            return lookupConfig?.sourceId === `form_${formId}`
+          }),
+        )
+
+        if (lookupFieldsToThisForm.length > 0) {
+          const totalFields = form.sections.reduce((sum, section) => sum + section._count.fields, 0)
+          const recordCount = await this.getFormSubmissionCount(form.id)
+
+          linkedForms.push({
+            id: form.id,
+            name: form.name,
+            recordCount,
+            description: form.description || undefined,
+            moduleName: form.module?.name,
+            moduleId: form.module?.id,
+            breadcrumb: `${form.module?.name} > ${form.name}`,
+            createdAt: form.createdAt,
+            updatedAt: form.updatedAt,
+            isPublished: form.isPublished,
+            fieldCount: totalFields,
+            lookupFieldsCount: lookupFieldsToThisForm.length,
+          })
+        }
+      }
+
+      console.log("[DatabaseService] Found detailed linked forms:", linkedForms.length)
+      return { linkedForms }
+    } catch (error: any) {
+      console.error("Database error getting linked records:", error)
+      return { linkedForms: [] }
+    }
+  }
+}

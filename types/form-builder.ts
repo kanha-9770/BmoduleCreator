@@ -5,7 +5,6 @@ export interface FormModule {
   icon?: string | null
   color?: string | null
   settings: Record<string, any>
-
   // Hierarchical fields
   parentId?: string | null
   parent?: FormModule | null
@@ -15,7 +14,6 @@ export interface FormModule {
   path?: string | null
   isActive: boolean
   sortOrder: number
-
   forms: Form[]
   isPublished?: any
   createdAt: Date
@@ -29,6 +27,7 @@ export interface Form {
   description?: string | null
   settings: Record<string, any>
   sections: FormSection[]
+  subforms: Subform[]
   isPublished?: boolean
   publishedAt?: Date | null
   formUrl?: string | null
@@ -57,7 +56,30 @@ export interface FormSection {
   conditional?: Record<string, any> | null
   styling?: Record<string, any> | null
   fields: FormField[]
-  subforms: any[]
+  subforms: Subform[]
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface Subform {
+  id: string
+  formId?: string | null
+  sectionId?: string | null
+  name: string
+  description?: string | null
+  order: number
+  columns: number
+  visible: boolean
+  collapsible: boolean
+  collapsed: boolean
+  fields: FormField[]
+  conditional?: Record<string, any> | null
+  styling?: Record<string, any> | null
+  integration?: {
+    enabled: boolean
+    type: "webhook" | "database" | "api" | null
+    config: Record<string, any>
+  } | null
   createdAt: Date
   updatedAt: Date
 }
@@ -184,8 +206,11 @@ export interface FormRecord {
   status: string
   id: string
   formId: string
-  form?: Form
+  form?: Form // Include complete form structure with sections and fields
   recordData: Record<string, any>
+  employee_id?: string | null
+  amount?: number | null
+  date?: Date | null
   submittedBy?: string | null
   submittedAt: Date
   ipAddress?: string | null
@@ -203,6 +228,7 @@ export interface FormEvent {
   userAgent?: string | null
   ipAddress?: string | null
   createdAt: Date
+  updatedAt: Date
 }
 
 export interface FieldType {
@@ -232,6 +258,7 @@ export interface DragItem {
   fieldType?: string
   field?: FormField
   section?: FormSection
+  subform?: Subform
 }
 
 export interface DropResult {
@@ -261,6 +288,7 @@ export const ItemTypes = {
   PALETTE_FIELD: "palette_field",
   FIELD: "field",
   SECTION: "section",
+  SUBFORM: "subform",
 }
 
 // Additional types for hierarchical module management
@@ -297,7 +325,7 @@ export interface HierarchicalModuleStats {
 }
 
 // Module management actions
-export type ModuleAction = 
+export type ModuleAction =
   | { type: "CREATE_CHILD"; parentId: string; moduleData: Partial<FormModule> }
   | { type: "MOVE_MODULE"; moduleId: string; newParentId?: string }
   | { type: "REORDER_MODULES"; moduleIds: string[]; parentId?: string }
@@ -343,26 +371,60 @@ export interface HierarchicalModuleSettings {
   sortDirection: "asc" | "desc"
 }
 
-// Legacy interfaces for backward compatibility
-export interface Subform {
-  id: string
-  sectionId: string
-  name: string
-  order: number
-  fields: FormField[]
-  records: SubformRecord[]
-  createdAt: Date
-  updatedAt: Date
-}
-
-export interface SubformRecord {
+// Integration types for subforms
+export interface SubformIntegration {
   id: string
   subformId: string
-  recordData: Record<string, any>
+  type: "webhook" | "database" | "api" | "email" | "sms"
+  name: string
+  enabled: boolean
+  config: {
+    url?: string
+    method?: "GET" | "POST" | "PUT" | "DELETE"
+    headers?: Record<string, string>
+    authentication?: {
+      type: "none" | "bearer" | "basic" | "api_key"
+      token?: string
+      username?: string
+      password?: string
+      apiKey?: string
+    }
+    mapping?: Record<string, string>
+    triggers?: ("create" | "update" | "delete")[]
+    conditions?: ConditionalLogic[]
+  }
   createdAt: Date
   updatedAt: Date
 }
 
+// Webhook payload structure
+export interface WebhookPayload {
+  event: "subform.created" | "subform.updated" | "subform.deleted"
+  timestamp: string
+  subform: {
+    id: string
+    name: string
+    formId: string
+    data: Record<string, any>
+  }
+  fields: FormField[]
+  metadata: {
+    userAgent?: string
+    ipAddress?: string
+    userId?: string
+  }
+}
+
+// API Integration response
+export interface APIIntegrationResponse {
+  success: boolean
+  data?: any
+  error?: string
+  statusCode: number
+  headers?: Record<string, string>
+}
+
+// Legacy interfaces for backward compatibility
 export interface LookupFieldRelation {
   id: string
   lookupSourceId: string

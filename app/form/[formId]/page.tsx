@@ -10,12 +10,14 @@ import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
+import { Slider } from "@/components/ui/slider"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Progress } from "@/components/ui/progress"
 import { useToast } from "@/hooks/use-toast"
-import { CheckCircle, AlertCircle, Loader2, Send, Eye, Calendar } from "lucide-react"
+import { CheckCircle, AlertCircle, Loader2, Send, Eye, Calendar, Star } from "lucide-react"
 import type { Form, FormField } from "@/types/form-builder"
 import { LookupField } from "@/components/lookup-field"
 
@@ -43,7 +45,6 @@ export default function PublicFormPage() {
     calculateCompletion()
   }, [formData, form])
 
-  // Debug logging
   useEffect(() => {
     console.log("Form data changed:", formData)
   }, [formData])
@@ -64,13 +65,12 @@ export default function PublicFormPage() {
 
       setForm(result.data)
 
-      // Initialize form data with default values
+      // Initialize form data with default values using field IDs as keys
       const initialData: Record<string, any> = {}
       result.data.sections.forEach((section: any) => {
         section.fields.forEach((field: FormField) => {
           if (field.defaultValue) {
-            // Convert default values to strings for consistent handling
-            initialData[field.id] = String(field.defaultValue)
+            initialData[field.id] = field.defaultValue
           }
         })
       })
@@ -127,40 +127,8 @@ export default function PublicFormPage() {
     const validation = field.validation || {}
 
     // Required validation
-    if (validation.required && (!value || value === "" || (Array.isArray(value) && value.length === 0))) {
+    if (validation.required && (!value || value === "")) {
       return `${field.label} is required`
-    }
-
-    // Lookup field validation for custom values
-    if (field.type === "lookup" && value) {
-      // Validate length for single or multiple values
-      const values = Array.isArray(value) ? value : [value]
-
-      if (validation.minLength) {
-        for (const val of values) {
-          if (val && val.length < validation.minLength) {
-            return `Each ${field.label} must be at least ${validation.minLength} characters`
-          }
-        }
-      }
-
-      if (validation.maxLength) {
-        for (const val of values) {
-          if (val && val.length > validation.maxLength) {
-            return `Each ${field.label} must be at most ${validation.maxLength} characters`
-          }
-        }
-      }
-
-      // Pattern validation
-      if (validation.pattern) {
-        const regex = new RegExp(validation.pattern)
-        for (const val of values) {
-          if (val && !regex.test(val)) {
-            return validation.patternMessage || `Invalid format for ${field.label}`
-          }
-        }
-      }
     }
 
     // Email validation
@@ -168,6 +136,23 @@ export default function PublicFormPage() {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
       if (!emailRegex.test(value)) {
         return "Please enter a valid email address"
+      }
+    }
+
+    // URL validation
+    if (field.type === "url" && value) {
+      try {
+        new URL(value)
+      } catch {
+        return "Please enter a valid URL"
+      }
+    }
+
+    // Phone validation
+    if (field.type === "tel" && value) {
+      const phoneRegex = /^[+]?[1-9][\d]{0,15}$/
+      if (!phoneRegex.test(value.replace(/[\s\-()]/g, ""))) {
+        return "Please enter a valid phone number"
       }
     }
 
@@ -195,8 +180,8 @@ export default function PublicFormPage() {
       }
     }
 
-    // Pattern validation for other fields
-    if (validation.pattern && value && field.type !== "lookup") {
+    // Pattern validation
+    if (validation.pattern && value) {
       const regex = new RegExp(validation.pattern)
       if (!regex.test(value)) {
         return validation.patternMessage || "Invalid format"
@@ -209,30 +194,15 @@ export default function PublicFormPage() {
   const handleFieldChange = (fieldId: string, value: any) => {
     console.log(`Field ${fieldId} changed to:`, value)
 
-    // For lookup fields, handle both predefined and custom values
+    // For lookup fields, store the actual value we want to save
     let storeValue = value
-
-    const field = form?.sections.flatMap((section) => section.fields).find((f) => f.id === fieldId)
-
-    if (field?.type === "lookup" && value) {
+    if (value && typeof value === "object") {
       if (Array.isArray(value)) {
-        // Multiple selection - extract store values safely
-        storeValue = value.map((item) => {
-          if (item && typeof item === "object") {
-            const val = item.storeValue !== undefined ? item.storeValue : item.label || item.value || item
-            console.log(`Processing lookup multi-select value:`, { item, storeValue: val })
-            return val
-          }
-          console.log(`Processing lookup multi-select raw value:`, item)
-          return item
-        })
-      } else if (typeof value === "object") {
+        // Multiple selection - extract store values
+        storeValue = value.map((item) => item.storeValue || item.label || item.value)
+      } else if (value.storeValue !== undefined) {
         // Single selection - use store value
-        storeValue = value.storeValue !== undefined ? value.storeValue : value.label || value.value || value
-      } else {
-        // Custom value (string) from LookupField
-        console.log(`Processing lookup custom value:`, value)
-        storeValue = value
+        storeValue = value.storeValue
       }
     }
 
@@ -297,14 +267,13 @@ export default function PublicFormPage() {
     }
 
     setSubmitting(true)
-
     try {
-      console.log("Sending form submission...")
+      console.log("Sending form submission with field IDs as keys...")
       const response = await fetch(`/api/forms/${formId}/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          recordData: formData,
+          recordData: formData, // This contains field IDs as keys
           submittedBy: "anonymous",
           userAgent: navigator.userAgent,
         }),
@@ -332,9 +301,12 @@ export default function PublicFormPage() {
           payload: {
             recordId: result.data.id,
             timestamp: new Date().toISOString(),
+            fieldLabels: result.data.form?.sections.flatMap((s: any) => s.fields.map((f: any) => f.label)) || [],
           },
         }),
       })
+
+      console.log("Form submitted successfully with field labels:", result.data.recordData)
     } catch (error: any) {
       console.error("Submission error:", error)
       toast({
@@ -350,7 +322,6 @@ export default function PublicFormPage() {
   const renderField = (field: FormField) => {
     const value = formData[field.id]
     const error = errors[field.id]
-
     const fieldProps = {
       id: field.id,
       disabled: submitting || submitted,
@@ -360,40 +331,15 @@ export default function PublicFormPage() {
     // Ensure options is an array for select and radio fields
     const options = Array.isArray(field.options) ? field.options : []
 
-    // Helper function to get a valid option value
-    const getOptionValue = (option: any, index: number): string => {
-      if (option.value && String(option.value).trim() !== "") {
-        return String(option.value).trim()
-      }
-      if (option.id && String(option.id).trim() !== "") {
-        return String(option.id).trim()
-      }
-      if (option.label && String(option.label).trim() !== "") {
-        return String(option.label).trim()
-      }
-      // Fallback to index-based value if all else fails
-      return `option-${index}`
+    // Convert field to match LookupField interface
+    const lookupFieldData = {
+      id: field.id,
+      label: field.label,
+      placeholder: field.placeholder || undefined,
+      description: field.description || undefined,
+      validation: field.validation || { required: false },
+      lookup: field.lookup || undefined,
     }
-
-    // Helper function to get option label
-    const getOptionLabel = (option: any): string => {
-      if (option.label && String(option.label).trim() !== "") {
-        return String(option.label).trim()
-      }
-      if (option.value && String(option.value).trim() !== "") {
-        return String(option.value).trim()
-      }
-      if (option.id && String(option.id).trim() !== "") {
-        return String(option.id).trim()
-      }
-      return "Untitled Option"
-    }
-
-    console.log(`Rendering field ${field.id} (${field.type}):`, {
-      value,
-      options,
-      fieldOptions: field.options,
-    })
 
     switch (field.type) {
       case "text":
@@ -401,11 +347,21 @@ export default function PublicFormPage() {
       case "number":
       case "tel":
       case "url":
-      case "password":
         return (
           <Input
             {...fieldProps}
             type={field.type}
+            placeholder={field.placeholder || ""}
+            value={value || ""}
+            onChange={(e) => handleFieldChange(field.id, e.target.value)}
+          />
+        )
+
+      case "password":
+        return (
+          <Input
+            {...fieldProps}
+            type="password"
             placeholder={field.placeholder || ""}
             value={value || ""}
             onChange={(e) => handleFieldChange(field.id, e.target.value)}
@@ -458,71 +414,99 @@ export default function PublicFormPage() {
           </div>
         )
 
+      case "switch":
+        return (
+          <div className="flex items-center space-x-2">
+            <Switch
+              id={field.id}
+              checked={value || false}
+              onCheckedChange={(checked) => handleFieldChange(field.id, checked)}
+              disabled={submitting || submitted}
+            />
+            <Label htmlFor={field.id} className="text-sm">
+              {field.label}
+            </Label>
+          </div>
+        )
+
       case "radio":
-        console.log(`Radio field ${field.id} - Current value: "${value}", Options:`, options)
         return (
           <RadioGroup
-            value={String(value || "")}
-            onValueChange={(val) => {
-              console.log(`Radio field ${field.id} changed to: "${val}"`)
-              handleFieldChange(field.id, val)
-            }}
+            value={value || ""}
+            onValueChange={(val) => handleFieldChange(field.id, val)}
             disabled={submitting || submitted}
           >
-            {options.map((option: any, index: number) => {
-              const optionValue = getOptionValue(option, index)
-              const optionLabel = getOptionLabel(option)
-              const isChecked = String(value || "") === optionValue
-
-              console.log(`Radio option: value="${optionValue}", label="${optionLabel}", checked=${isChecked}`)
-
-              return (
-                <div key={optionValue} className="flex items-center space-x-2">
-                  <RadioGroupItem value={optionValue} id={`${field.id}-${optionValue}`} checked={isChecked} />
-                  <Label htmlFor={`${field.id}-${optionValue}`} className="text-sm cursor-pointer">
-                    {optionLabel}
-                  </Label>
-                </div>
-              )
-            })}
+            {options.map((option: any) => (
+              <div key={option.value} className="flex items-center space-x-2">
+                <RadioGroupItem value={option.value} id={`${field.id}-${option.value}`} />
+                <Label htmlFor={`${field.id}-${option.value}`} className="text-sm">
+                  {option.label}
+                </Label>
+              </div>
+            ))}
           </RadioGroup>
         )
 
       case "select":
-        console.log(`Select field ${field.id} - Current value: "${value}", Options:`, options)
         return (
           <Select
-            value={String(value || "")}
-            onValueChange={(val) => {
-              console.log(`Select field ${field.id} changed to: "${val}"`)
-              handleFieldChange(field.id, val)
-            }}
+            value={value || ""}
+            onValueChange={(val) => handleFieldChange(field.id, val)}
             disabled={submitting || submitted}
           >
             <SelectTrigger className={error ? "border-red-500" : ""}>
               <SelectValue placeholder={field.placeholder || "Select an option"} />
             </SelectTrigger>
             <SelectContent>
-              {options.map((option: any, index: number) => {
-                const optionValue = getOptionValue(option, index)
-                const optionLabel = getOptionLabel(option)
-
-                console.log(`Select option: value="${optionValue}", label="${optionLabel}"`)
-
-                return (
-                  <SelectItem key={`${field.id}-${optionValue}`} value={optionValue}>
-                    {optionLabel}
-                  </SelectItem>
-                )
-              })}
+              {options.map((option: any) => (
+                <SelectItem key={option.value || option.id} value={option.value || option.id}>
+                  {option.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
+        )
+
+      case "slider":
+        return (
+          <div className="space-y-2">
+            <Slider
+              value={[value || 0]}
+              onValueChange={(vals) => handleFieldChange(field.id, vals[0])}
+              max={field.validation?.max || 100}
+              min={field.validation?.min || 0}
+              step={1}
+              disabled={submitting || submitted}
+              className="w-full"
+            />
+            <div className="text-center text-sm text-muted-foreground">Value: {value || 0}</div>
+          </div>
+        )
+
+      case "rating":
+        return (
+          <div className="flex items-center space-x-1">
+            {[1, 2, 3, 4, 5].map((rating) => (
+              <button
+                key={rating}
+                type="button"
+                onClick={() => handleFieldChange(field.id, rating)}
+                disabled={submitting || submitted}
+                className="p-1 hover:scale-110 transition-transform"
+              >
+                <Star
+                  className={`h-6 w-6 ${rating <= (value || 0) ? "fill-yellow-400 text-yellow-400" : "text-gray-300"}`}
+                />
+              </button>
+            ))}
+            <span className="ml-2 text-sm text-muted-foreground">{value ? `${value}/5` : "Not rated"}</span>
+          </div>
         )
 
       case "lookup":
         return (
           <LookupField
-            field={field}
+            field={lookupFieldData}
             value={value}
             onChange={(val) => handleFieldChange(field.id, val)}
             disabled={submitting || submitted}
@@ -546,14 +530,7 @@ export default function PublicFormPage() {
         )
 
       case "hidden":
-        return (
-          <Input
-            {...fieldProps}
-            type="hidden"
-            value={value || field.defaultValue || ""}
-            onChange={(e) => handleFieldChange(field.id, e.target.value)}
-          />
-        )
+        return <Input {...fieldProps} type="hidden" value={value || field.defaultValue || ""} />
 
       default:
         return (
@@ -642,7 +619,6 @@ export default function PublicFormPage() {
                 Public
               </Badge>
             </div>
-
             {/* Progress Bar */}
             <div className="mt-4">
               <div className="flex justify-between text-sm text-muted-foreground mb-2">
@@ -655,7 +631,7 @@ export default function PublicFormPage() {
 
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-8">
-              {form.sections.map((section, sectionIndex) => (
+              {form.sections.map((section) => (
                 <div key={section.id} className="space-y-6">
                   {/* Section Header */}
                   <div className="border-b pb-4">
@@ -667,7 +643,7 @@ export default function PublicFormPage() {
                   <div className={`grid gap-6 ${section.columns > 1 ? `md:grid-cols-${section.columns}` : ""}`}>
                     {section.fields.map((field) => (
                       <div key={field.id} className="space-y-2">
-                        {field.type !== "checkbox" && field.type !== "hidden" && (
+                        {field.type !== "checkbox" && field.type !== "switch" && field.type !== "hidden" && (
                           <Label htmlFor={field.id} className="text-sm font-medium">
                             {field.label}
                             {field.validation?.required && <span className="text-red-500 ml-1">*</span>}
@@ -713,10 +689,21 @@ export default function PublicFormPage() {
         {process.env.NODE_ENV === "development" && (
           <Card className="mt-4">
             <CardHeader>
-              <CardTitle className="text-sm">Debug: Form Data</CardTitle>
-            </CardHeader>1
+              <CardTitle className="text-sm">Debug: Form Data (Field IDs as Keys)</CardTitle>
+            </CardHeader>
             <CardContent>
               <pre className="text-xs bg-gray-100 p-2 rounded overflow-auto">{JSON.stringify(formData, null, 2)}</pre>
+              <div className="mt-2">
+                <strong>Field ID to Label Mapping:</strong>
+                <pre className="text-xs bg-blue-50 p-2 rounded overflow-auto mt-1">
+                  {form &&
+                    JSON.stringify(
+                      form.sections.flatMap((s) => s.fields.map((f) => ({ id: f.id, label: f.label }))),
+                      null,
+                      2,
+                    )}
+                </pre>
+              </div>
             </CardContent>
           </Card>
         )}

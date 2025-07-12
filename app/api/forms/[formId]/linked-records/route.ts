@@ -3,16 +3,28 @@ import { DatabaseService } from "@/lib/database-service"
 
 export async function GET(request: NextRequest, { params }: { params: { formId: string } }) {
   try {
-    console.log("API: Fetching detailed linked records for form:", params.formId)
+    const { formId } = params
 
-    const result = await DatabaseService.getLinkedRecords(params.formId)
+    console.log("Fetching enhanced linked records for form:", formId)
 
-    console.log("API: Detailed linked records fetched:", result.linkedForms.length)
-    return NextResponse.json({ success: true, ...result })
+    // Get enhanced linked records with detailed information
+    const linkedRecords = await DatabaseService.getLinkedRecords(formId)
+
+    console.log(`Found ${linkedRecords.linkedForms.length} linked forms`)
+
+    return NextResponse.json({
+      success: true,
+      linkedForms: linkedRecords.linkedForms,
+    })
   } catch (error: any) {
-    console.error("API: Error fetching linked records:", error)
+    console.error("Error fetching linked records:", error)
     return NextResponse.json(
-      { success: false, error: "Failed to fetch linked records", details: error.message },
+      {
+        success: false,
+        error: "Failed to fetch linked records",
+        details: process.env.NODE_ENV === "development" ? error.message : undefined,
+        linkedForms: [],
+      },
       { status: 500 },
     )
   }

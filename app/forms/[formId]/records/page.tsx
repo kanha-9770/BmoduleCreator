@@ -1,6 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import React from "react"
+
+import { useState, useEffect, useRef } from "react"
 import { useParams } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -8,10 +10,41 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Switch } from "@/components/ui/switch"
+import { useToast } from "@/hooks/use-toast"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -43,7 +76,6 @@ import {
   CheckCircle,
   AlertCircle,
   XCircle,
-  User,
   Mail,
   Hash,
   Type,
@@ -55,11 +87,19 @@ import {
   ChevronDown,
   Grid3X3,
   Database,
+  Plus,
+  Edit,
+  Trash2,
+  MoreHorizontal,
+  Save,
+  X,
+  Loader2,
+  Lock,
+  Edit3,
+  MousePointer2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { Form, FormRecord, FormModule, FormField } from "@/types/form-builder"
-
-type RecordsPageProps = {}
 
 interface StatsData {
   totalRecords: number
@@ -106,15 +146,50 @@ interface ProcessedFieldData {
   displayValue: string
   icon: string
   order: number
+  sectionId?: string
+  sectionTitle?: string
 }
 
 interface EnhancedFormRecord extends FormRecord {
   processedData: ProcessedFieldData[]
 }
 
-export default function RecordsPage({}: RecordsPageProps) {
+interface FormFieldWithSection {
+  id: string
+  label: string
+  type: string
+  order: number
+  sectionTitle: string
+  sectionId: string
+  placeholder?: string
+  description?: string
+  validation?: any
+  options?: any[]
+  lookup?: any
+}
+
+interface EditingCell {
+  recordId: string
+  fieldId: string
+  value: any
+  originalValue: any
+  fieldType: string
+  options?: any[]
+}
+
+interface PendingChange {
+  recordId: string
+  fieldId: string
+  value: any
+  originalValue: any
+  fieldType: string
+  fieldLabel: string
+}
+
+export default function RecordsPage() {
   const params = useParams()
   const formId = params.formId as string
+  const { toast } = useToast()
 
   // State management
   const [module, setModule] = useState<FormModule | null>(null)
@@ -123,6 +198,7 @@ export default function RecordsPage({}: RecordsPageProps) {
   const [lookupSources, setLookupSources] = useState<EnhancedLookupSource[]>([])
   const [linkedForms, setLinkedForms] = useState<EnhancedLinkedForm[]>([])
   const [allFormFields, setAllFormFields] = useState<FormField[]>([])
+  const [formFieldsWithSections, setFormFieldsWithSections] = useState<FormFieldWithSection[]>([])
   const [stats, setStats] = useState<StatsData>({
     totalRecords: 0,
     todayRecords: 0,
@@ -134,8 +210,29 @@ export default function RecordsPage({}: RecordsPageProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedRecord, setSelectedRecord] = useState<EnhancedFormRecord | null>(null)
+  const [editingRecord, setEditingRecord] = useState<EnhancedFormRecord | null>(null)
+  const [deleteRecord, setDeleteRecord] = useState<EnhancedFormRecord | null>(null)
   const [viewMode, setViewMode] = useState<"table" | "timeline" | "excel">("excel")
   const [activeTab, setActiveTab] = useState("records")
+
+  // ENHANCED INLINE EDITING STATE - DOUBLE CLICK + GLOBAL EDIT MODE
+  const [editMode, setEditMode] = useState<"locked" | "single-click" | "double-click">("double-click")
+  const [editingCell, setEditingCell] = useState<EditingCell | null>(null)
+  const [pendingChanges, setPendingChanges] = useState<Map<string, PendingChange>>(new Map())
+  const [savingChanges, setSavingChanges] = useState(false)
+  const [clickTimeout, setClickTimeout] = useState<NodeJS.Timeout | null>(null)
+  const [clickCount, setClickCount] = useState<Map<string, number>>(new Map())
+
+  // Dialog states
+  const [showViewDialog, setShowViewDialog] = useState(false)
+  const [showEditDialog, setShowEditDialog] = useState(false)
+  const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+
+  // Form data for editing/creating
+  const [editFormData, setEditFormData] = useState<Record<string, any>>({})
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   // Filters and pagination
   const [searchTerm, setSearchTerm] = useState("")
@@ -145,6 +242,10 @@ export default function RecordsPage({}: RecordsPageProps) {
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const recordsPerPage = 20
+
+  // Refs for input focus
+  const inputRef = useRef<HTMLInputElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // Helper function to get field icon
   const getFieldIcon = (fieldType: string) => {
@@ -171,7 +272,10 @@ export default function RecordsPage({}: RecordsPageProps) {
       case "textarea":
         return FileText
       case "tel":
+      case "phone":
         return Hash
+      case "url":
+        return Link
       default:
         return Type
     }
@@ -194,13 +298,13 @@ export default function RecordsPage({}: RecordsPageProps) {
           }
         }
         return ""
-
       case "email":
       case "tel":
+      case "phone":
       case "text":
       case "textarea":
+      case "url":
         return String(value)
-
       case "number":
         if (typeof value === "number") {
           return value.toLocaleString()
@@ -209,7 +313,6 @@ export default function RecordsPage({}: RecordsPageProps) {
           return Number(value).toLocaleString()
         }
         return String(value)
-
       case "checkbox":
       case "switch":
         if (typeof value === "boolean") {
@@ -219,10 +322,8 @@ export default function RecordsPage({}: RecordsPageProps) {
           return value.toLowerCase() === "true" || value === "1" ? "✓ Yes" : "✗ No"
         }
         return value ? "✓ Yes" : "✗ No"
-
       case "lookup":
         return String(value)
-
       case "file":
         if (typeof value === "object" && value !== null) {
           if (value.name) return String(value.name)
@@ -234,11 +335,9 @@ export default function RecordsPage({}: RecordsPageProps) {
           }
         }
         return String(value)
-
       case "radio":
       case "select":
         return String(value)
-
       default:
         if (typeof value === "object" && value !== null) {
           return JSON.stringify(value).substring(0, 50) + "..."
@@ -248,39 +347,23 @@ export default function RecordsPage({}: RecordsPageProps) {
   }
 
   // Process record data to extract field values properly
-  const processRecordData = (record: FormRecord, formFields: FormField[]): EnhancedFormRecord => {
-    console.log("Processing record:", record.id, "with data:", record.recordData)
-
+  const processRecordData = (record: FormRecord, formFields: FormFieldWithSection[]): EnhancedFormRecord => {
     const processedData: ProcessedFieldData[] = []
 
-    // Create field lookup maps
-    const fieldById = new Map<string, FormField>()
-    const fieldByLabel = new Map<string, FormField>()
-
-    formFields.forEach((field, index) => {
+    // Create field lookup map by ID
+    const fieldById = new Map<string, FormFieldWithSection>()
+    formFields.forEach((field) => {
       fieldById.set(field.id, field)
-      fieldByLabel.set(field.label.toLowerCase(), field)
-      field.order = field.order || index
     })
 
     if (record.recordData && typeof record.recordData === "object") {
       // Process each field in the record data
       Object.entries(record.recordData).forEach(([fieldKey, fieldData]) => {
-        console.log("Processing field:", fieldKey, fieldData)
-
-        // The record data structure shows that each field contains metadata
         if (typeof fieldData === "object" && fieldData !== null) {
           const fieldInfo = fieldData as any
 
-          // Try to find the form field definition
-          let formField = fieldById.get(fieldKey)
-          if (!formField) {
-            // Try to find by label
-            const label = fieldInfo.label?.toLowerCase()
-            if (label) {
-              formField = fieldByLabel.get(label)
-            }
-          }
+          // Get the form field definition
+          const formField = fieldById.get(fieldKey)
 
           const displayValue = formatFieldValue(fieldInfo.type || "text", fieldInfo.value)
 
@@ -291,7 +374,9 @@ export default function RecordsPage({}: RecordsPageProps) {
             value: fieldInfo.value,
             displayValue: displayValue,
             icon: fieldInfo.type || "text",
-            order: formField?.order || 999,
+            order: formField?.order || fieldInfo.order || 999,
+            sectionId: fieldInfo.sectionId,
+            sectionTitle: fieldInfo.sectionTitle,
           })
         }
       })
@@ -300,52 +385,599 @@ export default function RecordsPage({}: RecordsPageProps) {
     // Sort by field order
     processedData.sort((a, b) => a.order - b.order)
 
-    console.log("Processed data:", processedData)
-
     return {
       ...record,
       processedData,
     }
   }
 
+  // ENHANCED CLICK HANDLING - DOUBLE CLICK + SINGLE CLICK MODES
+  const handleCellClick = (
+    recordId: string,
+    fieldId: string,
+    currentValue: any,
+    fieldType: string,
+    event: React.MouseEvent,
+  ) => {
+    event.preventDefault()
+    event.stopPropagation()
+
+    const cellKey = `${recordId}-${fieldId}`
+
+    console.log("Cell clicked:", {
+      cellKey,
+      editMode,
+      fieldType,
+      currentClickCount: clickCount.get(cellKey) || 0,
+    })
+
+    // Don't allow editing of file fields
+    if (fieldType === "file") {
+      toast({
+        title: "Cannot Edit",
+        description: "File fields cannot be edited inline",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // If table is locked, do nothing
+    if (editMode === "locked") {
+      return
+    }
+
+    // If single-click mode, edit immediately
+    if (editMode === "single-click") {
+      startCellEdit(recordId, fieldId, currentValue, fieldType)
+      return
+    }
+
+    // Double-click mode logic
+    if (editMode === "double-click") {
+      const currentCount = clickCount.get(cellKey) || 0
+      const newCount = currentCount + 1
+
+      // Clear any existing timeout for this cell
+      if (clickTimeout) {
+        clearTimeout(clickTimeout)
+      }
+
+      // Update click count
+      setClickCount((prev) => new Map(prev.set(cellKey, newCount)))
+
+      if (newCount === 1) {
+        // First click - set timeout to reset count
+        const timeout = setTimeout(() => {
+          setClickCount((prev) => {
+            const newMap = new Map(prev)
+            newMap.delete(cellKey)
+            return newMap
+          })
+        }, 300) // 300ms window for double click
+
+        setClickTimeout(timeout)
+      } else if (newCount >= 2) {
+        // Double click detected - start editing
+        console.log("Double click detected, starting edit")
+
+        // Clear timeout and reset count
+        if (clickTimeout) {
+          clearTimeout(clickTimeout)
+        }
+        setClickCount((prev) => {
+          const newMap = new Map(prev)
+          newMap.delete(cellKey)
+          return newMap
+        })
+
+        startCellEdit(recordId, fieldId, currentValue, fieldType)
+      }
+    }
+  }
+
+  // ENHANCED CELL EDIT FUNCTIONS
+  const startCellEdit = (recordId: string, fieldId: string, currentValue: any, fieldType: string) => {
+    console.log("Starting cell edit:", { recordId, fieldId, currentValue, fieldType, editMode })
+
+    const field = formFieldsWithSections.find((f) => f.id === fieldId)
+    if (!field) {
+      console.log("Field not found:", fieldId)
+      return
+    }
+
+    console.log("Setting editing cell:", { recordId, fieldId, value: currentValue, fieldType })
+
+    setEditingCell({
+      recordId,
+      fieldId,
+      value: currentValue,
+      originalValue: currentValue,
+      fieldType,
+      options: field.options,
+    })
+
+    // Focus the input after state update
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus()
+        if (fieldType === "text" || fieldType === "email" || fieldType === "url") {
+          inputRef.current.select()
+        }
+      } else if (textareaRef.current) {
+        textareaRef.current.focus()
+        textareaRef.current.select()
+      }
+    }, 100)
+  }
+
+  const updateCellValue = (newValue: any) => {
+    if (!editingCell) return
+    console.log("Updating cell value:", newValue)
+    setEditingCell({
+      ...editingCell,
+      value: newValue,
+    })
+  }
+
+  const saveCellEdit = async () => {
+    if (!editingCell) return
+
+    console.log("Saving cell edit:", editingCell)
+
+    const changeKey = `${editingCell.recordId}-${editingCell.fieldId}`
+    const field = formFieldsWithSections.find((f) => f.id === editingCell.fieldId)
+
+    // Add to pending changes
+    setPendingChanges((prev) => {
+      const newChanges = new Map(prev)
+      newChanges.set(changeKey, {
+        recordId: editingCell.recordId,
+        fieldId: editingCell.fieldId,
+        value: editingCell.value,
+        originalValue: editingCell.originalValue,
+        fieldType: editingCell.fieldType,
+        fieldLabel: field?.label || editingCell.fieldId,
+      })
+      console.log("Added pending change:", changeKey, newChanges.get(changeKey))
+      return newChanges
+    })
+
+    // Update the record in the UI immediately for visual feedback
+    setRecords((prevRecords) => {
+      return prevRecords.map((record) => {
+        if (record.id === editingCell.recordId) {
+          const updatedProcessedData = record.processedData.map((field) => {
+            if (field.fieldId === editingCell.fieldId) {
+              return {
+                ...field,
+                value: editingCell.value,
+                displayValue: formatFieldValue(editingCell.fieldType, editingCell.value),
+              }
+            }
+            return field
+          })
+          return {
+            ...record,
+            processedData: updatedProcessedData,
+          }
+        }
+        return record
+      })
+    })
+
+    setEditingCell(null)
+
+    toast({
+      title: "Change Staged",
+      description: `Field "${field?.label}" has been modified. Click "Save All Changes" to persist.`,
+    })
+  }
+
+  const cancelCellEdit = () => {
+    console.log("Canceling cell edit")
+    setEditingCell(null)
+  }
+
+  const saveAllPendingChanges = async () => {
+    if (pendingChanges.size === 0) return
+
+    console.log("Saving all pending changes:", pendingChanges)
+    setSavingChanges(true)
+
+    try {
+      // Group changes by record ID
+      const changesByRecord = new Map<string, PendingChange[]>()
+      pendingChanges.forEach((change) => {
+        if (!changesByRecord.has(change.recordId)) {
+          changesByRecord.set(change.recordId, [])
+        }
+        changesByRecord.get(change.recordId)!.push(change)
+      })
+
+      let savedCount = 0
+
+      // Save each record's changes
+      for (const [recordId, changes] of changesByRecord) {
+        // Find the record
+        const record = records.find((r) => r.id === recordId)
+        if (!record) continue
+
+        // Create updated record data
+        const updatedRecordData = { ...record.recordData }
+
+        changes.forEach((change) => {
+          if (updatedRecordData[change.fieldId]) {
+            updatedRecordData[change.fieldId] = {
+              ...updatedRecordData[change.fieldId],
+              value: change.value,
+            }
+          }
+        })
+
+        // Save to API
+        const response = await fetch(`/api/forms/${formId}/records/${recordId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            recordData: updatedRecordData,
+            submittedBy: "admin",
+            status: record.status || "submitted",
+          }),
+        })
+
+        const result = await response.json()
+        if (!result.success) {
+          throw new Error(`Failed to save record ${recordId}: ${result.error}`)
+        }
+
+        savedCount += changes.length
+      }
+
+      // Clear pending changes and refresh data
+      setPendingChanges(new Map())
+      await fetchRecords()
+
+      toast({
+        title: "Success",
+        description: `Successfully saved ${savedCount} changes across ${changesByRecord.size} records`,
+      })
+    } catch (error: any) {
+      console.error("Error saving changes:", error)
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      })
+    } finally {
+      setSavingChanges(false)
+    }
+  }
+
+  const discardAllPendingChanges = () => {
+    console.log("Discarding all pending changes")
+    setPendingChanges(new Map())
+    setEditingCell(null)
+    // Refresh records to revert UI changes
+    fetchRecords()
+    toast({
+      title: "Changes Discarded",
+      description: "All unsaved changes have been discarded",
+    })
+  }
+
+  // ENHANCED EDIT MODE TOGGLE
+  const toggleEditMode = () => {
+    console.log("Toggling edit mode. Current mode:", editMode)
+
+    if (editMode !== "locked" && (pendingChanges.size > 0 || editingCell)) {
+      // If there are unsaved changes, ask user what to do
+      const shouldSave = window.confirm("You have unsaved changes. Do you want to save them before changing edit mode?")
+      if (shouldSave) {
+        saveAllPendingChanges().then(() => {
+          cycleEditMode()
+        })
+      } else {
+        discardAllPendingChanges()
+        cycleEditMode()
+      }
+    } else {
+      cycleEditMode()
+    }
+  }
+
+  const cycleEditMode = () => {
+    setEditingCell(null)
+    setPendingChanges(new Map())
+    setClickCount(new Map())
+
+    if (editMode === "locked") {
+      setEditMode("double-click")
+      console.log("Edit mode: Double-click to edit")
+    } else if (editMode === "double-click") {
+      setEditMode("single-click")
+      console.log("Edit mode: Single-click to edit")
+    } else {
+      setEditMode("locked")
+      console.log("Edit mode: Locked (read-only)")
+    }
+  }
+
+  // Get current value for a field (either from pending changes or original data)
+  const getCurrentFieldValue = (recordId: string, fieldId: string, originalValue: any) => {
+    const changeKey = `${recordId}-${fieldId}`
+    const pendingChange = pendingChanges.get(changeKey)
+    return pendingChange ? pendingChange.value : originalValue
+  }
+
+  // Check if a field has pending changes
+  const hasFieldChanged = (recordId: string, fieldId: string) => {
+    const changeKey = `${recordId}-${fieldId}`
+    return pendingChanges.has(changeKey)
+  }
+
+  // ENHANCED RENDER EDITABLE CELL WITH CLICK HANDLING
+  const renderEditableCell = (record: EnhancedFormRecord, field: FormFieldWithSection, originalValue: string) => {
+    const isCurrentlyEditing = editingCell?.recordId === record.id && editingCell?.fieldId === field.id
+    const processedField = record.processedData.find((f) => f.fieldId === field.id)
+    const currentValue = getCurrentFieldValue(record.id, field.id, processedField?.value)
+    const hasChanged = hasFieldChanged(record.id, field.id)
+    const cellKey = `${record.id}-${field.id}`
+    const isBeingClicked = (clickCount.get(cellKey) || 0) > 0
+
+    // If currently editing this cell
+    if (isCurrentlyEditing) {
+      switch (field.type) {
+        case "text":
+        case "email":
+        case "url":
+        case "tel":
+        case "phone":
+          return (
+            <Input
+              ref={inputRef}
+              value={editingCell.value || ""}
+              onChange={(e) => updateCellValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  saveCellEdit()
+                } else if (e.key === "Escape") {
+                  e.preventDefault()
+                  cancelCellEdit()
+                }
+              }}
+              onBlur={saveCellEdit}
+              className="h-7 text-xs border-2 border-blue-500 focus:border-blue-600 bg-white shadow-lg rounded-none"
+              type={field.type === "phone" ? "tel" : field.type}
+              placeholder={field.placeholder}
+              autoFocus
+            />
+          )
+
+        case "number":
+          return (
+            <Input
+              ref={inputRef}
+              value={editingCell.value || ""}
+              onChange={(e) => updateCellValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  saveCellEdit()
+                } else if (e.key === "Escape") {
+                  e.preventDefault()
+                  cancelCellEdit()
+                }
+              }}
+              onBlur={saveCellEdit}
+              className="h-7 text-xs border-2 border-blue-500 focus:border-blue-600 bg-white shadow-lg rounded-none"
+              type="number"
+              placeholder={field.placeholder}
+              autoFocus
+            />
+          )
+
+        case "textarea":
+          return (
+            <Textarea
+              ref={textareaRef}
+              value={editingCell.value || ""}
+              onChange={(e) => updateCellValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && e.ctrlKey) {
+                  e.preventDefault()
+                  saveCellEdit()
+                } else if (e.key === "Escape") {
+                  e.preventDefault()
+                  cancelCellEdit()
+                }
+              }}
+              onBlur={saveCellEdit}
+              className="min-h-[60px] text-xs border-2 border-blue-500 focus:border-blue-600 resize-none bg-white shadow-lg rounded-none"
+              rows={2}
+              placeholder={field.placeholder}
+              autoFocus
+            />
+          )
+
+        case "date":
+          return (
+            <Input
+              ref={inputRef}
+              value={editingCell.value || ""}
+              onChange={(e) => updateCellValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  saveCellEdit()
+                } else if (e.key === "Escape") {
+                  e.preventDefault()
+                  cancelCellEdit()
+                }
+              }}
+              onBlur={saveCellEdit}
+              className="h-7 text-xs border-2 border-blue-500 focus:border-blue-600 bg-white shadow-lg rounded-none"
+              type="date"
+              autoFocus
+            />
+          )
+
+        case "checkbox":
+        case "switch":
+          return (
+            <div className="flex items-center justify-center h-7">
+              <Checkbox
+                checked={Boolean(editingCell.value)}
+                onCheckedChange={(checked) => {
+                  updateCellValue(checked)
+                  setTimeout(saveCellEdit, 100)
+                }}
+              />
+            </div>
+          )
+
+        case "select":
+          const options = Array.isArray(editingCell.options) ? editingCell.options : []
+          return (
+            <Select
+              value={editingCell.value || ""}
+              onValueChange={(value) => {
+                updateCellValue(value)
+                setTimeout(saveCellEdit, 100)
+              }}
+            >
+              <SelectTrigger className="h-7 text-xs border-2 border-blue-500 focus:border-blue-600 bg-white shadow-lg rounded-none">
+                <SelectValue placeholder="Select..." />
+              </SelectTrigger>
+              <SelectContent>
+                {options.map((option: any) => (
+                  <SelectItem key={option.value || option.id} value={option.value || option.id}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )
+
+        default:
+          return (
+            <Input
+              ref={inputRef}
+              value={editingCell.value || ""}
+              onChange={(e) => updateCellValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  saveCellEdit()
+                } else if (e.key === "Escape") {
+                  e.preventDefault()
+                  cancelCellEdit()
+                }
+              }}
+              onBlur={saveCellEdit}
+              className="h-7 text-xs border-2 border-blue-500 focus:border-blue-600 bg-white shadow-lg rounded-none"
+              placeholder={field.placeholder}
+              autoFocus
+            />
+          )
+      }
+    }
+
+    // Normal display mode with Excel-like styling
+    return (
+      <div
+        className={cn(
+          "h-7 px-2 flex items-center text-xs font-normal border-r border-b border-gray-300 bg-white",
+          "cursor-cell select-none overflow-hidden whitespace-nowrap",
+          // Edit mode styling
+          editMode === "locked" && "cursor-default",
+          editMode === "single-click" && "hover:bg-blue-50",
+          editMode === "double-click" && "hover:bg-green-50",
+          // Change highlighting
+          hasChanged && "bg-yellow-100 text-yellow-800 font-medium",
+          // Click feedback
+          isBeingClicked && editMode === "double-click" && "bg-green-100",
+        )}
+        onClick={(e) => handleCellClick(record.id, field.id, currentValue, field.type, e)}
+        title={formatFieldValue(field.type, currentValue)}
+      >
+        {formatFieldValue(field.type, currentValue) || ""}
+        {hasChanged && <span className="ml-1 text-yellow-600 font-bold">*</span>}
+      </div>
+    )
+  }
+
+  // Get edit mode display info
+  const getEditModeInfo = () => {
+    switch (editMode) {
+      case "locked":
+        return {
+          icon: Lock,
+          label: "🔒 LOCKED",
+          description: "Read Only Mode",
+          color: "text-red-600 bg-red-50 border-red-300 hover:bg-red-100",
+        }
+      case "single-click":
+        return {
+          icon: MousePointer2,
+          label: "👆 SINGLE CLICK",
+          description: "Click any cell to edit",
+          color: "text-blue-600 bg-blue-50 border-blue-300 hover:bg-blue-100",
+        }
+      case "double-click":
+        return {
+          icon: Edit3,
+          label: "👆👆 DOUBLE CLICK",
+          description: "Double-click any cell to edit",
+          color: "text-green-600 bg-green-50 border-green-300 hover:bg-green-100",
+        }
+    }
+  }
+
   // Fetch form data with module information
   const fetchForm = async () => {
     try {
-      console.log("Fetching form data for:", formId)
       const response = await fetch(`/api/forms/${formId}`)
       if (!response.ok) {
         throw new Error(`Failed to fetch form: ${response.status}`)
       }
       const data = await response.json()
-
       if (!data.success || !data.data) {
         throw new Error("Invalid form data received")
       }
-
-      console.log("Form data received:", data.data.name, "with sections:", data.data.sections?.length)
       setForm(data.data)
 
-      // Extract all form fields
+      // Extract all form fields with section information
       const allFields: FormField[] = []
+      const fieldsWithSections: FormFieldWithSection[] = []
+
       if (data.data.sections) {
+        let fieldOrder = 0
         data.data.sections.forEach((section: any) => {
           if (section.fields) {
-            allFields.push(...section.fields)
+            section.fields.forEach((field: any) => {
+              allFields.push(field)
+              fieldsWithSections.push({
+                ...field,
+                order: field.order || fieldOrder++,
+                sectionTitle: section.title,
+                sectionId: section.id,
+              })
+            })
           }
         })
       }
+
       setAllFormFields(allFields)
-      console.log("All form fields extracted:", allFields.length)
+      setFormFieldsWithSections(fieldsWithSections)
 
       // Fetch module information if moduleId exists
       if (data.data.moduleId) {
         try {
-          console.log("Fetching module data for:", data.data.moduleId)
           const moduleResponse = await fetch(`/api/modules/${data.data.moduleId}`)
           if (moduleResponse.ok) {
             const moduleData = await moduleResponse.json()
             if (moduleData.success && moduleData.data) {
-              console.log("Module data received:", moduleData.data.name)
               setModule(moduleData.data)
             }
           }
@@ -362,7 +994,6 @@ export default function RecordsPage({}: RecordsPageProps) {
   // Fetch records with enhanced formatting
   const fetchRecords = async () => {
     try {
-      console.log("Fetching records for form:", formId)
       const params = new URLSearchParams({
         page: currentPage.toString(),
         limit: recordsPerPage.toString(),
@@ -378,19 +1009,15 @@ export default function RecordsPage({}: RecordsPageProps) {
         throw new Error(`Failed to fetch records: ${response.status}`)
       }
       const data = await response.json()
-
       if (!data.success) {
         throw new Error(data.error || "Failed to fetch records")
       }
 
-      console.log("Records data received:", data.records?.length || 0, "records")
-
       // Process records with field data
       const processedRecords = (data.records || []).map((record: FormRecord) =>
-        processRecordData(record, allFormFields),
+        processRecordData(record, formFieldsWithSections),
       )
 
-      console.log("Processed records:", processedRecords.length)
       setRecords(processedRecords)
       setTotalPages(Math.ceil((data.total || 0) / recordsPerPage))
 
@@ -416,11 +1043,9 @@ export default function RecordsPage({}: RecordsPageProps) {
   // Fetch enhanced lookup sources
   const fetchLookupSources = async () => {
     try {
-      console.log("Fetching enhanced lookup sources for form:", formId)
       const response = await fetch(`/api/forms/${formId}/lookup-sources`)
       if (response.ok) {
         const data = await response.json()
-        console.log("Enhanced lookup sources received:", data.sources?.length || 0)
         setLookupSources(data.sources || [])
       }
     } catch (err) {
@@ -432,11 +1057,9 @@ export default function RecordsPage({}: RecordsPageProps) {
   // Fetch enhanced linked records
   const fetchLinkedRecords = async () => {
     try {
-      console.log("Fetching enhanced linked records for form:", formId)
       const response = await fetch(`/api/forms/${formId}/linked-records`)
       if (response.ok) {
         const data = await response.json()
-        console.log("Enhanced linked records received:", data.linkedForms?.length || 0)
         setLinkedForms(data.linkedForms || [])
       }
     } catch (err) {
@@ -445,11 +1068,225 @@ export default function RecordsPage({}: RecordsPageProps) {
     }
   }
 
+  // CRUD Operations
+  const handleViewRecord = (record: EnhancedFormRecord) => {
+    setSelectedRecord(record)
+    setShowViewDialog(true)
+  }
+
+  const handleEditRecord = (record: EnhancedFormRecord) => {
+    setEditingRecord(record)
+
+    // Initialize edit form data with current record data
+    const initialData: Record<string, any> = {}
+    record.processedData.forEach((field) => {
+      initialData[field.fieldId] = field.value
+    })
+
+    setEditFormData(initialData)
+    setShowEditDialog(true)
+  }
+
+  const handleCreateRecord = () => {
+    setEditingRecord(null)
+    setEditFormData({})
+    setShowCreateDialog(true)
+  }
+
+  const handleDeleteRecord = (record: EnhancedFormRecord) => {
+    setDeleteRecord(record)
+    setShowDeleteDialog(true)
+  }
+
+  const handleSaveRecord = async () => {
+    if (!form) return
+
+    setSaving(true)
+    try {
+      const url = editingRecord ? `/api/forms/${formId}/records/${editingRecord.id}` : `/api/forms/${formId}/records`
+      const method = editingRecord ? "PUT" : "POST"
+
+      // Transform form data to match the expected structure
+      const structuredData: Record<string, any> = {}
+
+      form.sections.forEach((section) => {
+        section.fields.forEach((field) => {
+          const value = editFormData[field.id]
+          if (value !== undefined) {
+            structuredData[field.id] = {
+              fieldId: field.id,
+              label: field.label,
+              type: field.type,
+              value: value,
+              sectionId: section.id,
+              sectionTitle: section.title,
+            }
+          }
+        })
+      })
+
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recordData: structuredData,
+          submittedBy: "admin",
+          status: "submitted",
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!result.success) {
+        throw new Error(result.error)
+      }
+
+      toast({
+        title: "Success",
+        description: editingRecord ? "Record updated successfully" : "Record created successfully",
+      })
+
+      setShowEditDialog(false)
+      setShowCreateDialog(false)
+      fetchRecords()
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!deleteRecord) return
+
+    setDeleting(true)
+    try {
+      const response = await fetch(`/api/forms/${formId}/records/${deleteRecord.id}`, {
+        method: "DELETE",
+      })
+
+      const result = await response.json()
+
+      if (!result.success) {
+        throw new Error(result.error)
+      }
+
+      toast({
+        title: "Success",
+        description: "Record deleted successfully",
+      })
+
+      setShowDeleteDialog(false)
+      fetchRecords()
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      })
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  // Render field for editing
+  const renderEditField = (field: FormField) => {
+    const value = editFormData[field.id] || ""
+    const fieldProps = {
+      id: field.id,
+      value: value,
+      onChange: (newValue: any) => {
+        setEditFormData((prev) => ({ ...prev, [field.id]: newValue }))
+      },
+    }
+
+    switch (field.type) {
+      case "text":
+      case "email":
+      case "url":
+      case "tel":
+      case "phone":
+        return (
+          <Input
+            {...fieldProps}
+            type={field.type === "phone" ? "tel" : field.type}
+            placeholder={field.placeholder || ""}
+            onChange={(e) => fieldProps.onChange(e.target.value)}
+          />
+        )
+      case "number":
+        return (
+          <Input
+            {...fieldProps}
+            type="number"
+            placeholder={field.placeholder || ""}
+            onChange={(e) => fieldProps.onChange(e.target.value)}
+          />
+        )
+      case "textarea":
+        return (
+          <Textarea
+            {...fieldProps}
+            placeholder={field.placeholder || ""}
+            onChange={(e) => fieldProps.onChange(e.target.value)}
+            rows={3}
+          />
+        )
+      case "date":
+        return <Input {...fieldProps} type="date" onChange={(e) => fieldProps.onChange(e.target.value)} />
+      case "datetime":
+        return <Input {...fieldProps} type="datetime-local" onChange={(e) => fieldProps.onChange(e.target.value)} />
+      case "checkbox":
+        return <Checkbox checked={Boolean(value)} onCheckedChange={(checked) => fieldProps.onChange(checked)} />
+      case "switch":
+        return <Switch checked={Boolean(value)} onCheckedChange={(checked) => fieldProps.onChange(checked)} />
+      case "select":
+        const options = Array.isArray(field.options) ? field.options : []
+        return (
+          <Select value={value} onValueChange={fieldProps.onChange}>
+            <SelectTrigger>
+              <SelectValue placeholder={field.placeholder || "Select an option"} />
+            </SelectTrigger>
+            <SelectContent>
+              {options.map((option: any) => (
+                <SelectItem key={option.value || option.id} value={option.value || option.id}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )
+      case "radio":
+        const radioOptions = Array.isArray(field.options) ? field.options : []
+        return (
+          <RadioGroup value={value} onValueChange={fieldProps.onChange}>
+            {radioOptions.map((option: any) => (
+              <div key={option.value} className="flex items-center space-x-2">
+                <RadioGroupItem value={option.value} id={`${field.id}-${option.value}`} />
+                <Label htmlFor={`${field.id}-${option.value}`}>{option.label}</Label>
+              </div>
+            ))}
+          </RadioGroup>
+        )
+      default:
+        return (
+          <Input
+            {...fieldProps}
+            placeholder={field.placeholder || ""}
+            onChange={(e) => fieldProps.onChange(e.target.value)}
+          />
+        )
+    }
+  }
+
   // Load all data
   const loadData = async () => {
     setLoading(true)
     setError(null)
-
     try {
       await fetchForm()
     } catch (err) {
@@ -461,12 +1298,9 @@ export default function RecordsPage({}: RecordsPageProps) {
 
   // Load records and relationships after form is loaded
   const loadRecordsAndRelationships = async () => {
-    if (!form || allFormFields.length === 0) return
-
+    if (!form || formFieldsWithSections.length === 0) return
     try {
-      console.log("Loading records and relationships...")
       await Promise.all([fetchRecords(), fetchLookupSources(), fetchLinkedRecords()])
-      console.log("All data loaded successfully")
     } catch (err) {
       console.error("Error loading records and relationships:", err)
     } finally {
@@ -477,25 +1311,31 @@ export default function RecordsPage({}: RecordsPageProps) {
   // Effects
   useEffect(() => {
     if (formId) {
-      console.log("Starting data load for form:", formId)
       loadData()
     }
   }, [formId])
 
   useEffect(() => {
-    if (form && allFormFields.length > 0) {
-      console.log("Form and fields loaded, loading records and relationships...")
+    if (form && formFieldsWithSections.length > 0) {
       loadRecordsAndRelationships()
     }
-  }, [form, allFormFields])
+  }, [form, formFieldsWithSections])
 
   // Separate effect for pagination and filtering
   useEffect(() => {
-    if (form && allFormFields.length > 0 && !loading) {
-      console.log("Reloading records due to filter/pagination change")
+    if (form && formFieldsWithSections.length > 0 && !loading) {
       fetchRecords()
     }
   }, [currentPage, searchTerm, statusFilter, sortBy, sortOrder])
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (clickTimeout) {
+        clearTimeout(clickTimeout)
+      }
+    }
+  }, [clickTimeout])
 
   // Handlers
   const handleSort = (field: string) => {
@@ -512,7 +1352,6 @@ export default function RecordsPage({}: RecordsPageProps) {
     try {
       const response = await fetch(`/api/forms/${formId}/export?format=${format}`)
       if (!response.ok) throw new Error("Export failed")
-
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement("a")
@@ -558,15 +1397,25 @@ export default function RecordsPage({}: RecordsPageProps) {
     return sortOrder === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
   }
 
-  // Get all unique field labels for table headers
-  const getAllFieldLabels = () => {
-    const fieldLabels = new Set<string>()
-    records.forEach((record) => {
-      record.processedData.forEach((field) => {
-        fieldLabels.add(field.fieldLabel)
-      })
-    })
-    return Array.from(fieldLabels).sort()
+  // Get field labels from current form structure (not from submitted data)
+  const getFormFieldLabels = () => {
+    return formFieldsWithSections.map((field) => ({
+      id: field.id,
+      label: field.label,
+      type: field.type,
+      order: field.order,
+      sectionTitle: field.sectionTitle,
+    }))
+  }
+
+  // Generate Excel-like column letters (A, B, C, ..., Z, AA, AB, ...)
+  const getColumnLetter = (index: number): string => {
+    let result = ""
+    while (index >= 0) {
+      result = String.fromCharCode(65 + (index % 26)) + result
+      index = Math.floor(index / 26) - 1
+    }
+    return result
   }
 
   if (loading) {
@@ -580,7 +1429,6 @@ export default function RecordsPage({}: RecordsPageProps) {
           </div>
           <Skeleton className="h-10 w-32" />
         </div>
-
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
             <Card key={i}>
@@ -593,7 +1441,6 @@ export default function RecordsPage({}: RecordsPageProps) {
             </Card>
           ))}
         </div>
-
         <Card>
           <CardHeader>
             <Skeleton className="h-6 w-32" />
@@ -614,6 +1461,7 @@ export default function RecordsPage({}: RecordsPageProps) {
     return (
       <div className="container mx-auto p-6">
         <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
           <AlertDescription>{error}</AlertDescription>
         </Alert>
         <Button onClick={() => window.location.reload()} className="mt-4">
@@ -627,11 +1475,14 @@ export default function RecordsPage({}: RecordsPageProps) {
     return (
       <div className="container mx-auto p-6">
         <Alert>
-          <AlertDescription>Form not found or still loading...</AlertDescription>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>Form not found</AlertDescription>
         </Alert>
       </div>
     )
   }
+
+  const editModeInfo = getEditModeInfo()
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -657,16 +1508,9 @@ export default function RecordsPage({}: RecordsPageProps) {
             </>
           )}
           <BreadcrumbItem>
-            <BreadcrumbLink href={`/forms/${form.id}`} className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              {form.name}
-            </BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
             <BreadcrumbPage className="flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              Records
+              <FileText className="h-4 w-4" />
+              {form.name} Records
             </BreadcrumbPage>
           </BreadcrumbItem>
         </BreadcrumbList>
@@ -676,727 +1520,715 @@ export default function RecordsPage({}: RecordsPageProps) {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">{form.name} Records</h1>
-          <p className="text-muted-foreground">
-            Manage and view form submissions {module && `from ${module.name} module`}
-          </p>
+          <p className="text-muted-foreground">{form.description}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => handleExport("csv")}>
             <Download className="h-4 w-4 mr-2" />
             Export CSV
           </Button>
-          <Button variant="outline" onClick={() => handleExport("json")}>
-            <Download className="h-4 w-4 mr-2" />
-            Export JSON
+          <Button onClick={handleCreateRecord}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Record
           </Button>
         </div>
       </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="border-l-4 border-l-blue-500">
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Records</CardTitle>
-            <FileText className="h-4 w-4 text-blue-600" />
+            <Database className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{stats.totalRecords}</div>
-            <p className="text-xs text-muted-foreground">All time submissions</p>
+            <div className="text-2xl font-bold">{stats.totalRecords.toLocaleString()}</div>
           </CardContent>
         </Card>
-
-        <Card className="border-l-4 border-l-green-500">
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Today</CardTitle>
-            <Calendar className="h-4 w-4 text-green-600" />
+            <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{stats.todayRecords}</div>
-            <p className="text-xs text-muted-foreground">Submitted today</p>
+            <div className="text-2xl font-bold">{stats.todayRecords.toLocaleString()}</div>
           </CardContent>
         </Card>
-
-        <Card className="border-l-4 border-l-orange-500">
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">This Week</CardTitle>
-            <Clock className="h-4 w-4 text-orange-600" />
+            <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-orange-600">{stats.weekRecords}</div>
-            <p className="text-xs text-muted-foreground">Last 7 days</p>
+            <div className="text-2xl font-bold">{stats.weekRecords.toLocaleString()}</div>
           </CardContent>
         </Card>
-
-        <Card className="border-l-4 border-l-purple-500">
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">This Month</CardTitle>
-            <Users className="h-4 w-4 text-purple-600" />
+            <Timeline className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-purple-600">{stats.monthRecords}</div>
-            <p className="text-xs text-muted-foreground">Last 30 days</p>
+            <div className="text-2xl font-bold">{stats.monthRecords.toLocaleString()}</div>
           </CardContent>
         </Card>
       </div>
 
       {/* Main Content */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList>
           <TabsTrigger value="records" className="flex items-center gap-2">
-            <FileText className="h-4 w-4" />
+            <Database className="h-4 w-4" />
             Records ({stats.totalRecords})
           </TabsTrigger>
-          <TabsTrigger value="lookup-sources" className="flex items-center gap-2">
-            <Search className="h-4 w-4" />
+          <TabsTrigger value="lookup" className="flex items-center gap-2">
+            <Link className="h-4 w-4" />
             Lookup Sources ({lookupSources.length})
           </TabsTrigger>
-          <TabsTrigger value="linked-records" className="flex items-center gap-2">
-            <ExternalLink className="h-4 w-4" />
-            Linked Records ({linkedForms.length})
+          <TabsTrigger value="linked" className="flex items-center gap-2">
+            <Grid3X3 className="h-4 w-4" />
+            Linked Forms ({linkedForms.length})
           </TabsTrigger>
         </TabsList>
 
         {/* Records Tab */}
         <TabsContent value="records" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Form Records</CardTitle>
-                  <CardDescription>All submissions for this form</CardDescription>
-                </div>
+          {/* Enhanced Controls with Edit Mode Toggle */}
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center flex-1">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Input
+                  placeholder="Search records..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Filter by status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="submitted">Submitted</SelectItem>
+                  <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="processing">Processing</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* ENHANCED EDIT MODE CONTROLS */}
+            <div className="flex items-center gap-2">
+              {/* Edit Mode Toggle Button */}
+              <Button
+                variant="outline"
+                onClick={toggleEditMode}
+                className={cn("flex items-center gap-2 font-medium border-2 transition-all", editModeInfo.color)}
+              >
+                <editModeInfo.icon className="h-4 w-4" />
+                {editModeInfo.label}
+              </Button>
+
+              {/* Pending Changes Indicator */}
+              {pendingChanges.size > 0 && (
                 <div className="flex items-center gap-2">
+                  <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 border-yellow-300">
+                    {pendingChanges.size} changes
+                  </Badge>
                   <Button
-                    variant={viewMode === "excel" ? "default" : "outline"}
+                    onClick={saveAllPendingChanges}
+                    disabled={savingChanges}
+                    className="bg-green-600 hover:bg-green-700 text-white"
                     size="sm"
-                    onClick={() => setViewMode("excel")}
                   >
-                    <Grid3X3 className="h-4 w-4" />
-                    Excel View
+                    {savingChanges ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4 mr-2" />
+                        Save All Changes
+                      </>
+                    )}
                   </Button>
-                  <Button
-                    variant={viewMode === "table" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setViewMode("table")}
-                  >
-                    <TableIcon className="h-4 w-4" />
-                    Table
-                  </Button>
-                  <Button
-                    variant={viewMode === "timeline" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setViewMode("timeline")}
-                  >
-                    <Timeline className="h-4 w-4" />
-                    Timeline
+                  <Button onClick={discardAllPendingChanges} variant="outline" size="sm">
+                    <X className="h-4 w-4 mr-2" />
+                    Discard
                   </Button>
                 </div>
+              )}
+            </div>
+          </div>
+
+          {/* Edit Mode Help Text */}
+          <div className="text-sm text-muted-foreground bg-gray-50 p-3 rounded-lg border">
+            <div className="flex items-center gap-2">
+              <editModeInfo.icon className="h-4 w-4" />
+              <span className="font-medium">{editModeInfo.description}</span>
+            </div>
+            {editMode === "double-click" && (
+              <div className="mt-1 text-xs">
+                Double-click any cell to start editing. Press Enter to save, Escape to cancel.
               </div>
-
-              {/* Filters */}
-              <div className="flex items-center gap-4">
-                <div className="relative flex-1 max-w-sm">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search records..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-40">
-                    <SelectValue placeholder="Filter by status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="submitted">Submitted</SelectItem>
-                    <SelectItem value="draft">Draft</SelectItem>
-                    <SelectItem value="processing">Processing</SelectItem>
-                  </SelectContent>
-                </Select>
+            )}
+            {editMode === "single-click" && (
+              <div className="mt-1 text-xs">
+                Click any cell to start editing. Press Enter to save, Escape to cancel.
               </div>
-            </CardHeader>
+            )}
+            {editMode === "locked" && (
+              <div className="mt-1 text-xs">
+                Table is in read-only mode. Click the edit mode button to enable editing.
+              </div>
+            )}
+          </div>
 
-            <CardContent>
-              {viewMode === "excel" ? (
-                <div className="space-y-4">
-                  {/* Excel-like Table */}
-                  <div className="border rounded-lg overflow-hidden bg-white">
-                    <div className="overflow-x-auto">
-                      <table className="w-full border-collapse">
-                        <thead>
-                          <tr className="bg-gray-50 border-b">
-                            <th className="border-r border-gray-200 px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider min-w-[100px] sticky left-0 bg-gray-50 z-10">
-                              Record ID
-                            </th>
-                            <th className="border-r border-gray-200 px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider min-w-[120px]">
-                              Submitted At
-                            </th>
-                            <th className="border-r border-gray-200 px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider min-w-[100px]">
-                              Submitted By
-                            </th>
-                            <th className="border-r border-gray-200 px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider min-w-[80px]">
-                              Status
-                            </th>
-                            {getAllFieldLabels().map((fieldLabel) => (
-                              <th
-                                key={fieldLabel}
-                                className="border-r border-gray-200 px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider min-w-[150px]"
-                              >
-                                {fieldLabel}
-                              </th>
-                            ))}
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider min-w-[80px]">
-                              Actions
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {records.map((record, recordIndex) => {
-                            // Create a map of field values for this record
-                            const fieldValueMap = new Map<string, string>()
-                            record.processedData.forEach((field) => {
-                              fieldValueMap.set(field.fieldLabel, field.displayValue)
-                            })
+          {/* View Mode Tabs */}
+          <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as any)} className="w-full">
+            <TabsList>
+              <TabsTrigger value="excel" className="flex items-center gap-2">
+                <Grid3X3 className="h-4 w-4" />
+                Excel View
+              </TabsTrigger>
+              <TabsTrigger value="table" className="flex items-center gap-2">
+                <TableIcon className="h-4 w-4" />
+                Table View
+              </TabsTrigger>
+              <TabsTrigger value="timeline" className="flex items-center gap-2">
+                <Timeline className="h-4 w-4" />
+                Timeline View
+              </TabsTrigger>
+            </TabsList>
 
-                            return (
-                              <tr
-                                key={record.id}
-                                className={cn(
-                                  "border-b hover:bg-blue-50 transition-colors",
-                                  recordIndex % 2 === 0 ? "bg-white" : "bg-gray-50/30",
-                                )}
-                              >
-                                <td className="border-r border-gray-200 px-4 py-3 text-sm font-mono sticky left-0 bg-inherit z-10">
-                                  #{record.id.slice(-8)}
-                                </td>
-                                <td className="border-r border-gray-200 px-4 py-3 text-sm">
-                                  <div className="flex flex-col">
-                                    <span className="font-medium">
-                                      {new Date(record.submittedAt).toLocaleDateString()}
-                                    </span>
-                                    <span className="text-xs text-gray-500">
-                                      {new Date(record.submittedAt).toLocaleTimeString()}
-                                    </span>
-                                  </div>
-                                </td>
-                                <td className="border-r border-gray-200 px-4 py-3 text-sm">
-                                  <div className="flex items-center gap-2">
-                                    <User className="h-4 w-4 text-gray-400" />
-                                    <span className="font-medium">{record.submittedBy || "Anonymous"}</span>
-                                  </div>
-                                </td>
-                                <td className="border-r border-gray-200 px-4 py-3 text-sm">
-                                  <Badge className={cn("text-xs", getStatusColor(record.status || "submitted"))}>
-                                    {record.status || "submitted"}
-                                  </Badge>
-                                </td>
-                                {getAllFieldLabels().map((fieldLabel) => {
-                                  const value = fieldValueMap.get(fieldLabel) || ""
-                                  return (
-                                    <td
-                                      key={fieldLabel}
-                                      className="border-r border-gray-200 px-4 py-3 text-sm"
-                                      title={value}
-                                    >
-                                      <div className="max-w-[200px] truncate font-medium">
-                                        {value || <span className="text-gray-400 italic">—</span>}
-                                      </div>
-                                    </td>
-                                  )
-                                })}
-                                <td className="px-4 py-3 text-sm">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => setSelectedRecord(record)}
-                                    className="h-8 w-8 p-0 hover:bg-blue-100"
-                                  >
-                                    <Eye className="h-4 w-4" />
-                                  </Button>
-                                </td>
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  {records.length === 0 && (
-                    <div className="text-center py-12 text-muted-foreground">
-                      <Grid3X3 className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                      <h3 className="text-lg font-semibold mb-2">No records found</h3>
-                      <p>No form submissions match your current filters.</p>
-                    </div>
-                  )}
-                </div>
-              ) : viewMode === "table" ? (
-                <div className="space-y-4">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[100px]">
-                          <Button variant="ghost" onClick={() => handleSort("id")} className="h-auto p-0 font-semibold">
-                            Record {renderSortIcon("id")}
-                          </Button>
-                        </TableHead>
-                        <TableHead>
-                          <Button
-                            variant="ghost"
-                            onClick={() => handleSort("submittedAt")}
-                            className="h-auto p-0 font-semibold"
+            {/* EXCEL VIEW - EXACTLY LIKE MICROSOFT EXCEL */}
+            <TabsContent value="excel" className="space-y-4">
+              <Card className="p-0 border-0 shadow-none">
+                <CardContent className="p-0">
+                  {/* Excel-like spreadsheet container */}
+                  <div
+                    className="border border-gray-400 bg-white overflow-auto"
+                    style={{ fontFamily: "Calibri, sans-serif" }}
+                  >
+                    {/* Excel-like grid */}
+                    <div className="inline-block min-w-full">
+                      {/* Column Headers Row */}
+                      <div className="flex bg-gray-100 border-b border-gray-400 sticky top-0 z-20">
+                        {/* Row number column header */}
+                        <div className="w-12 h-7 border-r border-gray-400 bg-gray-200 flex items-center justify-center text-xs font-medium text-gray-700"></div>
+                        {/* Actions column */}
+                        <div className="w-24 h-7 border-r border-gray-400 bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-700">
+                          Actions
+                        </div>
+                        {/* Submitted column */}
+                        <div
+                          className="w-32 h-7 border-r border-gray-400 bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-700 cursor-pointer hover:bg-gray-300"
+                          onClick={() => handleSort("submittedAt")}
+                        >
+                          <div className="flex items-center gap-1">Submitted {renderSortIcon("submittedAt")}</div>
+                        </div>
+                        {/* Status column */}
+                        <div
+                          className="w-24 h-7 border-r border-gray-400 bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-700 cursor-pointer hover:bg-gray-300"
+                          onClick={() => handleSort("status")}
+                        >
+                          <div className="flex items-center gap-1">Status {renderSortIcon("status")}</div>
+                        </div>
+                        {/* Dynamic field columns */}
+                        {getFormFieldLabels().map((field, index) => (
+                          <div
+                            key={field.id}
+                            className="w-40 h-7 border-r border-gray-400 bg-gray-200 flex flex-col items-center justify-center text-xs font-bold text-gray-700 px-1"
+                            title={`${field.sectionTitle} - ${field.label} (${field.type})`}
                           >
-                            Submitted {renderSortIcon("submittedAt")}
-                          </Button>
-                        </TableHead>
-                        <TableHead>
-                          <Button
-                            variant="ghost"
-                            onClick={() => handleSort("submittedBy")}
-                            className="h-auto p-0 font-semibold"
-                          >
-                            Submitted By {renderSortIcon("submittedBy")}
-                          </Button>
-                        </TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Data Preview</TableHead>
-                        <TableHead className="w-[100px]">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {records.map((record) => (
-                        <TableRow key={record.id} className="cursor-pointer hover:bg-muted/50">
-                          <TableCell className="font-mono text-sm">#{record.id.slice(-8)}</TableCell>
-                          <TableCell>
-                            <div className="flex flex-col">
-                              <span>{new Date(record.submittedAt).toLocaleDateString()}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {new Date(record.submittedAt).toLocaleTimeString()}
-                              </span>
+                            <div className="flex flex-col items-center gap-0.5 truncate w-full">
+                              <div className="text-[10px] text-gray-500 font-normal truncate w-full text-center">
+                                {field.sectionTitle}
+                              </div>
+                              <div className="flex items-center gap-1 truncate w-full justify-center">
+                                {React.createElement(getFieldIcon(field.type), { className: "h-3 w-3 flex-shrink-0" })}
+                                <span className="truncate text-xs font-bold">{field.label}</span>
+                              </div>
                             </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <User className="h-4 w-4 text-muted-foreground" />
-                              {record.submittedBy || "Anonymous"}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge className={cn("border", getStatusColor(record.status || "submitted"))}>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Data Rows */}
+                      {records.map((record, rowIndex) => (
+                        <div key={record.id} className="flex hover:bg-blue-50">
+                          {/* Row number */}
+                          <div className="w-12 h-7 border-r border-b border-gray-300 bg-gray-100 flex items-center justify-center text-xs font-medium text-gray-600">
+                            {rowIndex + 1}
+                          </div>
+
+                          {/* Actions cell */}
+                          <div className="w-24 h-7 border-r border-b border-gray-300 bg-white flex items-center justify-center">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" className="h-5 w-5 p-0 hover:bg-gray-100">
+                                  <MoreHorizontal className="h-3 w-3" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-40">
+                                <DropdownMenuLabel className="text-xs">Actions</DropdownMenuLabel>
+                                <DropdownMenuItem onClick={() => handleViewRecord(record)} className="text-xs">
+                                  <Eye className="h-3 w-3 mr-2" />
+                                  View Details
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleEditRecord(record)} className="text-xs">
+                                  <Edit className="h-3 w-3 mr-2" />
+                                  Edit Record
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => handleDeleteRecord(record)}
+                                  className="text-xs text-red-600"
+                                >
+                                  <Trash2 className="h-3 w-3 mr-2" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+
+                          {/* Submitted date cell */}
+                          <div className="w-32 h-7 border-r border-b border-gray-300 bg-white flex items-center px-2 text-xs">
+                            {new Date(record.submittedAt).toLocaleDateString()}
+                          </div>
+
+                          {/* Status cell */}
+                          <div className="w-24 h-7 border-r border-b border-gray-300 bg-white flex items-center justify-center px-1">
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "text-xs px-1 py-0 h-4 border",
+                                getStatusColor(record.status || "submitted"),
+                              )}
+                            >
                               {record.status || "submitted"}
                             </Badge>
-                          </TableCell>
-                          <TableCell className="max-w-xs">
-                            <div className="space-y-1">
-                              {record.processedData.length > 0 ? (
-                                record.processedData.slice(0, 2).map((field, index) => (
-                                  <div key={index} className="flex items-center gap-2 text-sm">
-                                    <span className="font-medium text-muted-foreground truncate">
-                                      {field.fieldLabel}:
-                                    </span>
-                                    <span className="truncate font-medium">{field.displayValue}</span>
-                                  </div>
-                                ))
-                              ) : (
-                                <span className="text-muted-foreground text-sm">No data available</span>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setSelectedRecord(record)}
-                              className="h-8 w-8 p-0"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
+                          </div>
+
+                          {/* Dynamic field cells */}
+                          {getFormFieldLabels().map((fieldDef) => {
+                            const formField = formFieldsWithSections.find((f) => f.id === fieldDef.id)
+
+                            if (!formField) {
+                              return (
+                                <div
+                                  key={fieldDef.id}
+                                  className="w-40 h-7 border-r border-b border-gray-300 bg-white flex items-center px-2 text-xs text-gray-400"
+                                >
+                                  —
+                                </div>
+                              )
+                            }
+
+                            return (
+                              <div key={fieldDef.id} className="w-40">
+                                {renderEditableCell(record, formField, "")}
+                              </div>
+                            )
+                          })}
+                        </div>
                       ))}
-                    </TableBody>
-                  </Table>
 
-                  {records.length === 0 && (
-                    <div className="text-center py-12 text-muted-foreground">
-                      <FileText className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                      <h3 className="text-lg font-semibold mb-2">No records found</h3>
-                      <p>No form submissions match your current filters.</p>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {/* Timeline View */}
-                  <div className="relative">
-                    {records.map((record, index) => {
-                      const StatusIcon = getStatusIcon(record.status || "submitted")
-                      return (
-                        <div key={record.id} className="relative flex items-start space-x-6 pb-8">
-                          {/* Timeline line */}
-                          {index < records.length - 1 && (
-                            <div className="absolute left-6 top-12 w-0.5 h-full bg-gradient-to-b from-border to-transparent" />
-                          )}
-
-                          {/* Timeline dot with status */}
-                          <div className="relative z-10 flex flex-col items-center">
-                            <div
-                              className={cn(
-                                "flex h-12 w-12 items-center justify-center rounded-full border-2 bg-background shadow-sm",
-                                record.status === "submitted"
-                                  ? "border-green-500 text-green-500 bg-green-50"
-                                  : record.status === "draft"
-                                    ? "border-yellow-500 text-yellow-500 bg-yellow-50"
-                                    : "border-blue-500 text-blue-500 bg-blue-50",
-                              )}
-                            >
-                              <StatusIcon className="h-5 w-5" />
-                            </div>
-                            <div className="mt-2 text-xs text-muted-foreground font-medium">
-                              {new Date(record.submittedAt).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
+                      {/* Empty state */}
+                      {records.length === 0 && (
+                        <div className="flex">
+                          <div className="w-12 h-7 border-r border-b border-gray-300 bg-gray-100"></div>
+                          <div className="flex-1 h-20 border-b border-gray-300 bg-white flex items-center justify-center">
+                            <div className="text-center text-gray-500">
+                              <Database className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                              <p className="text-sm font-medium">No records found</p>
+                              <p className="text-xs">
+                                {searchTerm || statusFilter !== "all"
+                                  ? "Try adjusting your search or filter criteria."
+                                  : "No records have been submitted yet."}
+                              </p>
                             </div>
                           </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-                          {/* Timeline content */}
-                          <div className="flex-1 min-w-0">
-                            <Card className="cursor-pointer hover:shadow-lg transition-all duration-200 border-l-4 border-l-blue-500">
-                              <CardHeader className="pb-4">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-3">
-                                    <Badge className={cn("border", getStatusColor(record.status || "submitted"))}>
-                                      {record.status || "submitted"}
-                                    </Badge>
-                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                      <Calendar className="h-4 w-4" />
-                                      {new Date(record.submittedAt).toLocaleDateString()}
-                                    </div>
-                                  </div>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => setSelectedRecord(record)}
-                                    className="h-8 w-8 p-0 hover:bg-blue-100"
-                                  >
-                                    <Eye className="h-4 w-4" />
+            {/* Table View */}
+            <TabsContent value="table" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <TableIcon className="h-5 w-5" />
+                    Table View
+                  </CardTitle>
+                  <CardDescription>Compact table view of all records</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[100px]">Actions</TableHead>
+                          <TableHead
+                            className="cursor-pointer hover:bg-gray-50"
+                            onClick={() => handleSort("submittedAt")}
+                          >
+                            <div className="flex items-center gap-2">Submitted {renderSortIcon("submittedAt")}</div>
+                          </TableHead>
+                          <TableHead className="cursor-pointer hover:bg-gray-50" onClick={() => handleSort("status")}>
+                            <div className="flex items-center gap-2">Status {renderSortIcon("status")}</div>
+                          </TableHead>
+                          <TableHead>Summary</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {records.map((record) => (
+                          <TableRow key={record.id}>
+                            <TableCell>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" className="h-8 w-8 p-0">
+                                    <MoreHorizontal className="h-4 w-4" />
                                   </Button>
-                                </div>
-
-                                <div className="space-y-1">
-                                  <h3 className="font-semibold text-lg">Record #{record.id.slice(-8)}</h3>
-                                  <div className="flex items-center gap-2 text-muted-foreground">
-                                    <User className="h-4 w-4" />
-                                    <span>Submitted by {record.submittedBy || "Anonymous"}</span>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                  <DropdownMenuItem onClick={() => handleViewRecord(record)}>
+                                    <Eye className="h-4 w-4 mr-2" />
+                                    View Details
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleEditRecord(record)}>
+                                    <Edit className="h-4 w-4 mr-2" />
+                                    Edit Record
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem onClick={() => handleDeleteRecord(record)} className="text-red-600">
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Calendar className="h-4 w-4 text-gray-400" />
+                                {new Date(record.submittedAt).toLocaleDateString()}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant="outline"
+                                className={cn("border", getStatusColor(record.status || "submitted"))}
+                              >
+                                {React.createElement(getStatusIcon(record.status || "submitted"), {
+                                  className: "h-3 w-3 mr-1",
+                                })}
+                                {record.status || "submitted"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="space-y-1">
+                                {record.processedData.slice(0, 3).map((field) => (
+                                  <div key={field.fieldId} className="text-sm">
+                                    <span className="font-medium text-gray-600">{field.fieldLabel}:</span>{" "}
+                                    <span className="text-gray-900">{field.displayValue || "—"}</span>
                                   </div>
-                                </div>
-                              </CardHeader>
-
-                              <CardContent className="pt-0">
-                                {record.processedData.length > 0 ? (
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {record.processedData.slice(0, 4).map((field, fieldIndex) => {
-                                      const IconComponent = getFieldIcon(field.fieldType)
-                                      return (
-                                        <div
-                                          key={fieldIndex}
-                                          className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg"
-                                        >
-                                          <div className="flex-shrink-0">
-                                            <IconComponent className="h-4 w-4 text-muted-foreground" />
-                                          </div>
-                                          <div className="flex-1 min-w-0">
-                                            <div className="text-sm font-medium text-muted-foreground">
-                                              {field.fieldLabel}
-                                            </div>
-                                            <div className="text-sm truncate font-medium">{field.displayValue}</div>
-                                          </div>
-                                        </div>
-                                      )
-                                    })}
+                                ))}
+                                {record.processedData.length > 3 && (
+                                  <div className="text-xs text-gray-500">
+                                    +{record.processedData.length - 3} more fields
                                   </div>
-                                ) : (
-                                  <div className="text-center py-4 text-muted-foreground">
-                                    <p>No field data available</p>
-                                  </div>
-                                )}
-
-                                {record.processedData.length > 4 && (
-                                  <div className="mt-3 text-sm text-muted-foreground text-center">
-                                    +{record.processedData.length - 4} more fields
-                                  </div>
-                                )}
-                              </CardContent>
-                            </Card>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-
-                  {records.length === 0 && (
-                    <div className="text-center py-12 text-muted-foreground">
-                      <Timeline className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                      <h3 className="text-lg font-semibold mb-2">No records found</h3>
-                      <p>No form submissions match your current filters.</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between pt-6 border-t">
-                  <div className="text-sm text-muted-foreground">
-                    Page {currentPage} of {totalPages} • {stats.totalRecords} total records
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}>
-                      <ChevronsLeft className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(currentPage - 1)}
-                      disabled={currentPage === 1}
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(currentPage + 1)}
-                      disabled={currentPage === totalPages}
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(totalPages)}
-                      disabled={currentPage === totalPages}
-                    >
-                      <ChevronsRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Enhanced Lookup Sources Tab */}
-        <TabsContent value="lookup-sources" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Database className="h-5 w-5" />
-                Lookup Sources
-              </CardTitle>
-              <CardDescription>
-                Forms and modules that this form references through lookup fields with detailed information
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {lookupSources.length > 0 ? (
-                <div className="grid gap-6">
-                  {lookupSources.map((source) => (
-                    <Card
-                      key={`${source.type}-${source.id}`}
-                      className="hover:shadow-lg transition-all duration-200 border-l-4 border-l-blue-500"
-                    >
-                      <CardHeader className="pb-4">
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-start gap-4">
-                            <div
-                              className={cn(
-                                "h-14 w-14 rounded-xl flex items-center justify-center shadow-sm",
-                                source.type === "form" ? "bg-blue-100 text-blue-600" : "bg-purple-100 text-purple-600",
-                              )}
-                            >
-                              {source.type === "form" ? (
-                                <FileText className="h-7 w-7" />
-                              ) : (
-                                <Folder className="h-7 w-7" />
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-3 mb-2">
-                                <h3 className="font-bold text-xl text-gray-900">{source.name}</h3>
-                                {source.isPublished !== undefined && (
-                                  <Badge variant={source.isPublished ? "default" : "secondary"} className="text-xs">
-                                    {source.isPublished ? "Published" : "Draft"}
-                                  </Badge>
                                 )}
                               </div>
-                              <p className="text-sm text-muted-foreground font-medium mb-3">{source.breadcrumb}</p>
-                              {source.description && (
-                                <p className="text-sm text-gray-600 mb-3 leading-relaxed">{source.description}</p>
-                              )}
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                <div className="bg-gray-50 rounded-lg p-3">
-                                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Type</div>
-                                  <div className="text-sm font-semibold text-gray-900 capitalize">{source.type}</div>
-                                </div>
-                                <div className="bg-blue-50 rounded-lg p-3">
-                                  <div className="text-xs font-medium text-blue-600 uppercase tracking-wide">
-                                    Records
-                                  </div>
-                                  <div className="text-sm font-bold text-blue-700">
-                                    {source.recordCount.toLocaleString()}
-                                  </div>
-                                </div>
-                                {source.fieldCount !== undefined && (
-                                  <div className="bg-green-50 rounded-lg p-3">
-                                    <div className="text-xs font-medium text-green-600 uppercase tracking-wide">
-                                      Fields
-                                    </div>
-                                    <div className="text-sm font-bold text-green-700">{source.fieldCount}</div>
-                                  </div>
-                                )}
-                                <div className="bg-purple-50 rounded-lg p-3">
-                                  <div className="text-xs font-medium text-purple-600 uppercase tracking-wide">
-                                    Updated
-                                  </div>
-                                  <div className="text-sm font-semibold text-purple-700">
-                                    {new Date(source.updatedAt).toLocaleDateString()}
-                                  </div>
-                                </div>
-                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Timeline View */}
+            <TabsContent value="timeline" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Timeline className="h-5 w-5" />
+                    Timeline View
+                  </CardTitle>
+                  <CardDescription>Chronological view of record submissions</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-6">
+                    {records.map((record, index) => (
+                      <div key={record.id} className="flex gap-4">
+                        <div className="flex flex-col items-center">
+                          <div
+                            className={cn(
+                              "w-3 h-3 rounded-full border-2",
+                              getStatusColor(record.status || "submitted"),
+                            )}
+                          />
+                          {index < records.length - 1 && <div className="w-px h-16 bg-gray-200 mt-2" />}
+                        </div>
+                        <div className="flex-1 pb-8">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">Record #{record.id.slice(-8)}</span>
+                              <Badge
+                                variant="outline"
+                                className={cn("border", getStatusColor(record.status || "submitted"))}
+                              >
+                                {record.status || "submitted"}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-gray-500">
+                              <Calendar className="h-4 w-4" />
+                              {new Date(record.submittedAt).toLocaleString()}
                             </div>
                           </div>
-                          <Button variant="outline" size="sm" className="shrink-0 bg-transparent" asChild>
-                            <a
-                              href={source.type === "form" ? `/forms/${source.id}/records` : `/modules/${source.id}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-2"
-                            >
-                              <ExternalLink className="h-4 w-4" />
-                              View {source.type === "form" ? "Records" : "Module"}
-                            </a>
-                          </Button>
+                          <div className="bg-gray-50 rounded-lg p-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {record.processedData.slice(0, 6).map((field) => (
+                                <div key={field.fieldId} className="flex items-start gap-2">
+                                  {React.createElement(getFieldIcon(field.fieldType), {
+                                    className: "h-4 w-4 mt-0.5 text-gray-400",
+                                  })}
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-sm font-medium text-gray-600">{field.fieldLabel}</div>
+                                    <div className="text-sm text-gray-900 truncate">{field.displayValue || "—"}</div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            {record.processedData.length > 6 && (
+                              <div className="mt-4 pt-4 border-t border-gray-200">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleViewRecord(record)}
+                                  className="text-blue-600 hover:text-blue-700"
+                                >
+                                  <Eye className="h-4 w-4 mr-2" />
+                                  View all {record.processedData.length} fields
+                                </Button>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </CardHeader>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-16 text-muted-foreground">
-                  <Database className="h-20 w-20 mx-auto mb-6 opacity-40" />
-                  <h3 className="text-xl font-semibold mb-3">No lookup sources found</h3>
-                  <p className="text-base max-w-md mx-auto leading-relaxed">
-                    This form doesn't reference any other forms or modules through lookup fields.
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-muted-foreground">
+                Showing {(currentPage - 1) * recordsPerPage + 1} to{" "}
+                {Math.min(currentPage * recordsPerPage, stats.totalRecords)} of {stats.totalRecords} records
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}>
+                  <ChevronsLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm font-medium">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={currentPage === totalPages}
+                >
+                  <ChevronsRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </TabsContent>
 
-        {/* Enhanced Linked Records Tab */}
-        <TabsContent value="linked-records" className="space-y-4">
+        {/* Lookup Sources Tab */}
+        <TabsContent value="lookup" className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Link className="h-5 w-5" />
-                Linked Records
+                Lookup Data Sources
               </CardTitle>
-              <CardDescription>
-                Forms that have lookup fields pointing to this form with comprehensive details
-              </CardDescription>
+              <CardDescription>Forms and modules that provide lookup data for this form</CardDescription>
             </CardHeader>
             <CardContent>
-              {linkedForms.length > 0 ? (
-                <div className="grid gap-6">
-                  {linkedForms.map((linkedForm) => (
-                    <Card
-                      key={linkedForm.id}
-                      className="hover:shadow-lg transition-all duration-200 border-l-4 border-l-green-500"
-                    >
-                      <CardHeader className="pb-4">
+              {lookupSources.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {lookupSources.map((source) => (
+                    <Card key={source.id} className="hover:shadow-md transition-shadow">
+                      <CardHeader className="pb-3">
                         <div className="flex items-start justify-between">
-                          <div className="flex items-start gap-4">
-                            <div className="h-14 w-14 rounded-xl bg-green-100 text-green-600 flex items-center justify-center shadow-sm">
-                              <Link className="h-7 w-7" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-3 mb-2">
-                                <h3 className="font-bold text-xl text-gray-900">{linkedForm.name}</h3>
-                                {linkedForm.isPublished !== undefined && (
-                                  <Badge variant={linkedForm.isPublished ? "default" : "secondary"} className="text-xs">
-                                    {linkedForm.isPublished ? "Published" : "Draft"}
-                                  </Badge>
-                                )}
-                              </div>
-                              <p className="text-sm text-muted-foreground font-medium mb-3">{linkedForm.breadcrumb}</p>
-                              {linkedForm.description && (
-                                <p className="text-sm text-gray-600 mb-3 leading-relaxed">{linkedForm.description}</p>
+                          <div className="flex-1">
+                            <CardTitle className="text-base flex items-center gap-2">
+                              {source.type === "form" ? (
+                                <FileText className="h-4 w-4" />
+                              ) : (
+                                <Folder className="h-4 w-4" />
                               )}
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                <div className="bg-blue-50 rounded-lg p-3">
-                                  <div className="text-xs font-medium text-blue-600 uppercase tracking-wide">
-                                    Records
-                                  </div>
-                                  <div className="text-sm font-bold text-blue-700">
-                                    {linkedForm.recordCount.toLocaleString()}
-                                  </div>
-                                </div>
-                                {linkedForm.fieldCount !== undefined && (
-                                  <div className="bg-green-50 rounded-lg p-3">
-                                    <div className="text-xs font-medium text-green-600 uppercase tracking-wide">
-                                      Total Fields
-                                    </div>
-                                    <div className="text-sm font-bold text-green-700">{linkedForm.fieldCount}</div>
-                                  </div>
-                                )}
-                                {linkedForm.lookupFieldsCount !== undefined && (
-                                  <div className="bg-orange-50 rounded-lg p-3">
-                                    <div className="text-xs font-medium text-orange-600 uppercase tracking-wide">
-                                      Lookup Fields
-                                    </div>
-                                    <div className="text-sm font-bold text-orange-700">
-                                      {linkedForm.lookupFieldsCount}
-                                    </div>
-                                  </div>
-                                )}
-                                <div className="bg-purple-50 rounded-lg p-3">
-                                  <div className="text-xs font-medium text-purple-600 uppercase tracking-wide">
-                                    Updated
-                                  </div>
-                                  <div className="text-sm font-semibold text-purple-700">
-                                    {new Date(linkedForm.updatedAt).toLocaleDateString()}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
+                              {source.name}
+                            </CardTitle>
+                            <CardDescription className="text-sm mt-1">{source.breadcrumb}</CardDescription>
                           </div>
-                          <Button variant="outline" size="sm" className="shrink-0 bg-transparent" asChild>
-                            <a
-                              href={`/forms/${linkedForm.id}/records`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-2"
-                            >
-                              <ExternalLink className="h-4 w-4" />
-                              View Records
-                            </a>
-                          </Button>
+                          <Badge variant={source.type === "form" ? "default" : "secondary"}>{source.type}</Badge>
                         </div>
                       </CardHeader>
+                      <CardContent className="pt-0">
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Records:</span>
+                            <span className="font-medium">{source.recordCount.toLocaleString()}</span>
+                          </div>
+                          {source.fieldCount && (
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">Fields:</span>
+                              <span className="font-medium">{source.fieldCount}</span>
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Updated:</span>
+                            <span className="font-medium">{new Date(source.updatedAt).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 mt-4">
+                          <Button variant="outline" size="sm" asChild className="flex-1 bg-transparent">
+                            <a href={`/forms/${source.id}/records`}>
+                              <Eye className="h-4 w-4 mr-2" />
+                              View
+                            </a>
+                          </Button>
+                          {source.type === "form" && (
+                            <Button variant="outline" size="sm" asChild>
+                              <a href={`/form/${source.id}`} target="_blank" rel="noreferrer">
+                                <ExternalLink className="h-4 w-4" />
+                              </a>
+                            </Button>
+                          )}
+                        </div>
+                      </CardContent>
                     </Card>
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-16 text-muted-foreground">
-                  <Link className="h-20 w-20 mx-auto mb-6 opacity-40" />
-                  <h3 className="text-xl font-semibold mb-3">No linked records found</h3>
-                  <p className="text-base max-w-md mx-auto leading-relaxed">
-                    No other forms are referencing this form through lookup fields.
-                  </p>
+                <div className="text-center py-12">
+                  <Link className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+                  <h3 className="text-lg font-semibold mb-2">No lookup sources</h3>
+                  <p className="text-muted-foreground">This form doesn't use any lookup fields yet.</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Linked Forms Tab */}
+        <TabsContent value="linked" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Grid3X3 className="h-5 w-5" />
+                Linked Forms
+              </CardTitle>
+              <CardDescription>Forms that reference records from this form</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {linkedForms.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {linkedForms.map((linkedForm) => (
+                    <Card key={linkedForm.id} className="hover:shadow-md transition-shadow">
+                      <CardHeader className="pb-3">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <FileText className="h-4 w-4" />
+                              {linkedForm.name}
+                            </CardTitle>
+                            <CardDescription className="text-sm mt-1">{linkedForm.breadcrumb}</CardDescription>
+                          </div>
+                          <Badge variant={linkedForm.isPublished ? "default" : "secondary"}>
+                            {linkedForm.isPublished ? "Published" : "Draft"}
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="pt-0">
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Records:</span>
+                            <span className="font-medium">{linkedForm.recordCount.toLocaleString()}</span>
+                          </div>
+                          {linkedForm.fieldCount && (
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">Fields:</span>
+                              <span className="font-medium">{linkedForm.fieldCount}</span>
+                            </div>
+                          )}
+                          {linkedForm.lookupFieldsCount && (
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">Lookup Fields:</span>
+                              <span className="font-medium">{linkedForm.lookupFieldsCount}</span>
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Updated:</span>
+                            <span className="font-medium">{new Date(linkedForm.updatedAt).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 mt-4">
+                          <Button variant="outline" size="sm" asChild className="flex-1 bg-transparent">
+                            <a href={`/forms/${linkedForm.id}/records`}>
+                              <Eye className="h-4 w-4 mr-2" />
+                              View
+                            </a>
+                          </Button>
+                          {linkedForm.isPublished && (
+                            <Button variant="outline" size="sm" asChild>
+                              <a href={`/form/${linkedForm.id}`} target="_blank" rel="noreferrer">
+                                <ExternalLink className="h-4 w-4" />
+                              </a>
+                            </Button>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <Grid3X3 className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+                  <h3 className="text-lg font-semibold mb-2">No linked forms</h3>
+                  <p className="text-muted-foreground">No other forms are currently linking to this form's data.</p>
                 </div>
               )}
             </CardContent>
@@ -1404,141 +2236,194 @@ export default function RecordsPage({}: RecordsPageProps) {
         </TabsContent>
       </Tabs>
 
-      {/* Enhanced Record Detail Modal */}
-      <Dialog open={!!selectedRecord} onOpenChange={() => setSelectedRecord(null)}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+      {/* View Record Dialog */}
+      <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
+              <Eye className="h-5 w-5" />
               Record Details
             </DialogTitle>
             <DialogDescription>
-              Record #{selectedRecord?.id.slice(-8)} • Submitted{" "}
-              {selectedRecord && new Date(selectedRecord.submittedAt).toLocaleDateString()}
+              Submitted on {selectedRecord && new Date(selectedRecord.submittedAt).toLocaleString()}
             </DialogDescription>
           </DialogHeader>
-
           {selectedRecord && (
             <div className="space-y-6">
-              {/* Record Metadata */}
-              <div className="grid grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Record ID</label>
-                  <p className="font-mono text-sm">{selectedRecord.id}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Status</label>
-                  <div className="mt-1">
-                    <Badge className={cn("border", getStatusColor(selectedRecord.status || "submitted"))}>
-                      {selectedRecord.status || "submitted"}
-                    </Badge>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Submitted By</label>
-                  <div className="flex items-center gap-2 mt-1">
-                    <User className="h-4 w-4 text-muted-foreground" />
-                    {selectedRecord.submittedBy || "Anonymous"}
-                  </div>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Submitted At</label>
-                  <p>{new Date(selectedRecord.submittedAt).toLocaleString()}</p>
-                </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className={cn("border", getStatusColor(selectedRecord.status || "submitted"))}>
+                  {React.createElement(getStatusIcon(selectedRecord.status || "submitted"), {
+                    className: "h-3 w-3 mr-1",
+                  })}
+                  {selectedRecord.status || "submitted"}
+                </Badge>
+                <span className="text-sm text-muted-foreground">Record ID: {selectedRecord.id}</span>
               </div>
-
-              {/* Enhanced Record Data in Excel-like Table */}
-              <div>
-                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                  <Grid3X3 className="h-5 w-5" />
-                  Form Data ({selectedRecord.processedData.length} fields)
-                </h3>
-
-                {selectedRecord.processedData.length > 0 ? (
-                  <div className="border rounded-lg overflow-hidden bg-white">
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr className="bg-gray-50 border-b">
-                          <th className="border-r border-gray-200 px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-[200px]">
-                            Field Name
-                          </th>
-                          <th className="border-r border-gray-200 px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-[100px]">
-                            Type
-                          </th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                            Value
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedRecord.processedData.map((field, index) => {
-                          const IconComponent = getFieldIcon(field.fieldType)
-                          return (
-                            <tr
-                              key={index}
-                              className={cn(
-                                "border-b hover:bg-blue-50 transition-colors",
-                                index % 2 === 0 ? "bg-white" : "bg-gray-50/30",
-                              )}
-                            >
-                              <td className="border-r border-gray-200 px-4 py-3 text-sm">
-                                <div className="flex items-center gap-2">
-                                  <IconComponent className="h-4 w-4 text-muted-foreground" />
-                                  <span className="font-medium">{field.fieldLabel}</span>
-                                </div>
-                              </td>
-                              <td className="border-r border-gray-200 px-4 py-3 text-sm">
-                                <Badge variant="outline" className="text-xs capitalize">
-                                  {field.fieldType}
-                                </Badge>
-                              </td>
-                              <td className="px-4 py-3 text-sm">
-                                <div className="max-w-md">
-                                  {field.fieldType === "file" && typeof field.value === "object" ? (
-                                    <div className="text-sm bg-muted p-2 rounded">
-                                      <pre className="text-xs overflow-auto">
-                                        {JSON.stringify(field.value, null, 2)}
-                                      </pre>
-                                    </div>
-                                  ) : field.fieldType === "lookup" ? (
-                                    <div className="text-sm bg-blue-50 p-2 rounded border border-blue-200">
-                                      <div className="font-medium">{field.displayValue}</div>
-                                      <div className="text-xs text-muted-foreground mt-1">
-                                        Raw: {JSON.stringify(field.value)}
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <span className="font-medium break-words">{field.displayValue}</span>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {selectedRecord.processedData.map((field) => (
+                  <div key={field.fieldId} className="space-y-2">
+                    <Label className="flex items-center gap-2 font-medium">
+                      {React.createElement(getFieldIcon(field.fieldType), { className: "h-4 w-4" })}
+                      {field.fieldLabel}
+                    </Label>
+                    <div className="p-3 bg-gray-50 rounded-md border">
+                      {field.displayValue || <span className="text-gray-400 italic">No value</span>}
+                    </div>
                   </div>
-                ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>No field data available for this record</p>
-                  </div>
-                )}
+                ))}
               </div>
-
-              {/* Raw Data Debug (Development only) */}
-              {process.env.NODE_ENV === "development" && (
-                <div>
-                  <h3 className="text-lg font-semibold mb-4">Raw Record Data (Debug)</h3>
-                  <div className="bg-muted p-4 rounded-lg">
-                    <pre className="text-xs overflow-auto">{JSON.stringify(selectedRecord.recordData, null, 2)}</pre>
-                  </div>
-                </div>
-              )}
             </div>
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Edit Record Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit className="h-5 w-5" />
+              Edit Record
+            </DialogTitle>
+            <DialogDescription>Make changes to the record data</DialogDescription>
+          </DialogHeader>
+          {form && (
+            <div className="space-y-6">
+              {form.sections.map((section) => (
+                <div key={section.id} className="space-y-4">
+                  <h3 className="text-lg font-semibold border-b pb-2">{section.title}</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {section.fields.map((field) => (
+                      <div key={field.id} className="space-y-2">
+                        <Label htmlFor={field.id} className="flex items-center gap-2">
+                          {React.createElement(getFieldIcon(field.type), { className: "h-4 w-4" })}
+                          {field.label}
+                          {field.validation?.required && <span className="text-red-500">*</span>}
+                        </Label>
+                        {renderEditField(field)}
+                        {field.description && <p className="text-sm text-muted-foreground">{field.description}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveRecord} disabled={saving}>
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Save Changes
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Record Dialog */}
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="h-5 w-5" />
+              Create New Record
+            </DialogTitle>
+            <DialogDescription>Add a new record to this form</DialogDescription>
+          </DialogHeader>
+          {form && (
+            <div className="space-y-6">
+              {form.sections.map((section) => (
+                <div key={section.id} className="space-y-4">
+                  <h3 className="text-lg font-semibold border-b pb-2">{section.title}</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {section.fields.map((field) => (
+                      <div key={field.id} className="space-y-2">
+                        <Label htmlFor={field.id} className="flex items-center gap-2">
+                          {React.createElement(getFieldIcon(field.type), { className: "h-4 w-4" })}
+                          {field.label}
+                          {field.validation?.required && <span className="text-red-500">*</span>}
+                        </Label>
+                        {renderEditField(field)}
+                        {field.description && <p className="text-sm text-muted-foreground">{field.description}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveRecord} disabled={saving}>
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Record
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-red-500" />
+              Delete Record
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this record? This action cannot be undone.
+              {deleteRecord && (
+                <div className="mt-2 p-2 bg-gray-50 rounded text-sm">
+                  <strong>Record ID:</strong> {deleteRecord.id}
+                  <br />
+                  <strong>Submitted:</strong> {new Date(deleteRecord.submittedAt).toLocaleString()}
+                </div>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              disabled={deleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Record
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
