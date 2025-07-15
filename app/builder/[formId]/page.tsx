@@ -715,8 +715,8 @@ export default function FormBuilderPage() {
                 <SectionComponent
                   section={activeItem as FormSection}
                   isOverlay
-                  onUpdateSection={() => {}}
-                  onDeleteSection={() => {}}
+                  onUpdateSection={() => { }}
+                  onDeleteSection={() => { }}
                   onUpdateField={handleUpdateField}
                   onDeleteField={handleDeleteField}
                 />
@@ -724,7 +724,7 @@ export default function FormBuilderPage() {
             )}
             {activeItem && !activeItem.hasOwnProperty("fields") && (
               <div style={{ zIndex: 10000 }}>
-                <FieldComponent field={activeItem as FormField} isOverlay onUpdate={() => {}} onDelete={() => {}} />
+                <FieldComponent field={activeItem as FormField} isOverlay onUpdate={() => { }} onDelete={() => { }} />
               </div>
             )}
           </DragOverlay>,

@@ -1,8 +1,7 @@
 "use client"
 import type React from "react"
 import { useState, useEffect } from "react"
-import { useParams } from "next/navigation"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -16,28 +15,38 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Progress } from "@/components/ui/progress"
 import { useToast } from "@/hooks/use-toast"
-import { CheckCircle, AlertCircle, Loader2, Send, Eye, Calendar, Star } from "lucide-react"
+import { CheckCircle, AlertCircle, Loader2, Send, Eye, Star } from "lucide-react"
 import type { Form, FormField } from "@/types/form-builder"
 import { LookupField } from "@/components/lookup-field"
 
-export default function PublicFormPage() {
-  const params = useParams()
+interface PublicFormDialogProps {
+  formId: string | null
+  isOpen: boolean
+  onClose: () => void
+}
+
+interface FormSection {
+  id: string
+  title: string
+  fields: FormField[]
+}
+
+export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogProps) {
   const { toast } = useToast()
-  const formId = params.formId as string
   const [form, setForm] = useState<Form | null>(null)
   const [formData, setFormData] = useState<Record<string, any>>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [completionPercentage, setCompletionPercentage] = useState(0)
 
   useEffect(() => {
-    if (formId) {
+    if (formId && isOpen) {
       fetchForm()
       trackFormView()
     }
-  }, [formId])
+  }, [formId, isOpen])
 
   useEffect(() => {
     calculateCompletion()
@@ -47,7 +56,20 @@ export default function PublicFormPage() {
     console.log("Form data changed:", formData)
   }, [formData])
 
+  // Reset form when dialog closes
+  useEffect(() => {
+    if (!isOpen) {
+      setForm(null)
+      setFormData({})
+      setErrors({})
+      setSubmitted(false)
+      setCompletionPercentage(0)
+    }
+  }, [isOpen])
+
   const fetchForm = async () => {
+    if (!formId) return
+
     try {
       setLoading(true)
       const response = await fetch(`/api/forms/${formId}`)
@@ -82,6 +104,8 @@ export default function PublicFormPage() {
   }
 
   const trackFormView = async () => {
+    if (!formId) return
+
     try {
       await fetch(`/api/forms/${formId}/events`, {
         method: "POST",
@@ -500,173 +524,145 @@ export default function PublicFormPage() {
     }
   }
 
-  if (loading) {
+  if (submitted) {
     return (
-      <div className="min-h-screen bg-gray-50 py-8">
-        <div className="container mx-auto max-w-2xl">
-          <Card>
-            <CardHeader>
-              <Skeleton className="h-8 w-3/4" />
-              <Skeleton className="h-4 w-1/2" />
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="space-y-2">
-                  <Skeleton className="h-4 w-1/3" />
-                  <Skeleton className="h-10 w-full" />
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="max-w-md">
+          <div className="text-center py-6">
+            <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
+            <h2 className="text-xl font-semibold mb-2">Thank You!</h2>
+            <p className="text-muted-foreground mb-4">
+              {form?.submissionMessage || "Your form has been submitted successfully."}
+            </p>
+            <div className="flex gap-2 justify-center">
+              <Button
+                onClick={() => {
+                  setSubmitted(false)
+                  setFormData({})
+                  setErrors({})
+                }}
+                variant="outline"
+              >
+                Submit Another Response
+              </Button>
+              <Button onClick={onClose}>Close</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     )
   }
 
-  if (!form) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Card className="max-w-md">
-          <CardContent className="pt-6">
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        {loading ? (
+          <div className="py-8">
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <Skeleton className="h-8 w-3/4" />
+                <Skeleton className="h-4 w-1/2" />
+              </div>
+              <div className="space-y-6">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="space-y-2">
+                    <Skeleton className="h-4 w-1/3" />
+                    <Skeleton className="h-10 w-full" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : !form ? (
+          <div className="py-8">
             <div className="text-center">
               <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
               <h2 className="text-xl font-semibold mb-2">Form Not Found</h2>
               <p className="text-muted-foreground">This form may have been removed or is not published.</p>
             </div>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  if (submitted) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Card className="max-w-md">
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
-              <h2 className="text-xl font-semibold mb-2">Thank You!</h2>
-              <p className="text-muted-foreground mb-4">
-                {form.submissionMessage || "Your form has been submitted successfully."}
-              </p>
-              <Button onClick={() => window.location.reload()} variant="outline">
-                Submit Another Response
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="container mx-auto max-w-2xl">
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-2xl">{form.name}</CardTitle>
-                {form.description && <CardDescription className="mt-2">{form.description}</CardDescription>}
-              </div>
-              <Badge variant="secondary" className="flex items-center gap-1">
-                <Eye className="h-3 w-3" />
-                Public
-              </Badge>
-            </div>
-            {/* Progress Bar */}
-            <div className="mt-4">
-              <div className="flex justify-between text-sm text-muted-foreground mb-2">
-                <span>Progress</span>
-                <span>{completionPercentage}% complete</span>
-              </div>
-              <Progress value={completionPercentage} className="h-2" />
-            </div>
-          </CardHeader>
-          <form onSubmit={handleSubmit}>
-            <CardContent className="space-y-8">
-              {form.sections.map((section) => (
-                <div key={section.id} className="space-y-6">
-                  {/* Section Header */}
-                  <div className="border-b pb-4">
-                    <h3 className="text-lg font-semibold">{section.title}</h3>
-                    {section.description && <p className="text-sm text-muted-foreground mt-1">{section.description}</p>}
-                  </div>
-                  {/* Section Fields */}
-                  <div className={`grid gap-6 ${section.columns > 1 ? `md:grid-cols-${section.columns}` : ""}`}>
-                    {section.fields.map((field) => (
-                      <div key={field.id} className="space-y-2">
-                        {field.type !== "checkbox" && field.type !== "switch" && field.type !== "hidden" && (
-                          <Label htmlFor={field.id} className="text-sm font-medium">
-                            {field.label}
-                            {field.validation?.required && <span className="text-red-500 ml-1">*</span>}
-                          </Label>
-                        )}
-                        {field.description && field.type !== "hidden" && (
-                          <p className="text-xs text-muted-foreground">{field.description}</p>
-                        )}
-                        {renderField(field)}
-                        {errors[field.id] && (
-                          <p className="text-sm text-red-500 flex items-center gap-1">
-                            <AlertCircle className="h-3 w-3" />
-                            {errors[field.id]}
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+          </div>
+        ) : (
+          <>
+            <DialogHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <DialogTitle className="text-2xl">{form.name}</DialogTitle>
+                  {form.description && <p className="text-muted-foreground mt-2">{form.description}</p>}
                 </div>
-              ))}
-              {/* Submit Button */}
-              <div className="pt-6 border-t">
-                <Button type="submit" className="w-full" disabled={submitting} size="lg">
-                  {submitting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Submitting...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="h-4 w-4 mr-2" />
-                      Submit Form
-                    </>
-                  )}
-                </Button>
+                <Badge variant="secondary" className="flex items-center gap-1">
+                  <Eye className="h-3 w-3" />
+                  Public
+                </Badge>
               </div>
-            </CardContent>
-          </form>
-        </Card>
-        {/* Debug Panel - Only in development */}
-        {process.env.NODE_ENV === "development" && (
-          <Card className="mt-4">
-            <CardHeader>
-              <CardTitle className="text-sm">Debug: Form Data (Field IDs as Keys)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <pre className="text-xs bg-gray-100 p-2 rounded overflow-auto">{JSON.stringify(formData, null, 2)}</pre>
-              <div className="mt-2">
-                <strong>Field ID to Label Mapping:</strong>
-                <pre className="text-xs bg-blue-50 p-2 rounded overflow-auto mt-1">
-                  {form &&
-                    JSON.stringify(
-                      form.sections.flatMap((s) => s.fields.map((f) => ({ id: f.id, label: f.label }))),
-                      null,
-                      2,
+              {/* Progress Bar */}
+              <div className="mt-4">
+                <div className="flex justify-between text-sm text-muted-foreground mb-2">
+                  <span>Progress</span>
+                  <span>{completionPercentage}% complete</span>
+                </div>
+                <Progress value={completionPercentage} className="h-2" />
+              </div>
+            </DialogHeader>
+            <form onSubmit={handleSubmit}>
+              <div className="space-y-8 py-4">
+                {form.sections.map((section) => (
+                  <div key={section.id} className="space-y-6">
+                    {/* Section Header */}
+                    <div className="border-b pb-4">
+                      <h3 className="text-lg font-semibold">{section.title}</h3>
+                      {section.description && (
+                        <p className="text-sm text-muted-foreground mt-1">{section.description}</p>
+                      )}
+                    </div>
+                    {/* Section Fields */}
+                    <div className={`grid gap-6 ${section.columns > 1 ? `md:grid-cols-${section.columns}` : ""}`}>
+                      {section.fields.map((field) => (
+                        <div key={field.id} className="space-y-2">
+                          {field.type !== "checkbox" && field.type !== "switch" && field.type !== "hidden" && (
+                            <Label htmlFor={field.id} className="text-sm font-medium">
+                              {field.label}
+                              {field.validation?.required && <span className="text-red-500 ml-1">*</span>}
+                            </Label>
+                          )}
+                          {field.description && field.type !== "hidden" && (
+                            <p className="text-xs text-muted-foreground">{field.description}</p>
+                          )}
+                          {renderField(field)}
+                          {errors[field.id] && (
+                            <p className="text-sm text-red-500 flex items-center gap-1">
+                              <AlertCircle className="h-3 w-3" />
+                              {errors[field.id]}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                {/* Submit Button */}
+                <div className="pt-6 border-t flex gap-2 justify-end">
+                  <Button type="button" variant="outline" onClick={onClose}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={submitting}>
+                    {submitting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Submitting...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="h-4 w-4 mr-2" />
+                        Submit Form
+                      </>
                     )}
-                </pre>
+                  </Button>
+                </div>
               </div>
-            </CardContent>
-          </Card>
+            </form>
+          </>
         )}
-        {/* Form Info */}
-        <div className="mt-4 text-center text-xs text-muted-foreground">
-          <p className="flex items-center justify-center gap-1">
-            <Calendar className="h-3 w-3" />
-            Form created with Advanced Form Builder
-          </p>
-        </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
