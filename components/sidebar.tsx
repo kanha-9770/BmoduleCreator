@@ -134,7 +134,9 @@ function SidebarContent({
   return (
     <div className="flex flex-col h-full">
       <div className="p-4 border-b border-gray-200">
-        <h1 className="text-lg sm:text-xl font-bold text-gray-900">ERP System</h1>
+        <h1 className="text-lg sm:text-xl font-bold text-gray-900">
+          ERP System
+        </h1>
         <p className="text-xs text-gray-500 mt-1">
           {mockUser.name} ({menuData?.userRole || "User"})
         </p>
@@ -175,9 +177,8 @@ function SidebarContent({
                     {expandedItems.includes(item.title) && (
                       <div className="ml-6 mt-1 space-y-1">
                         {item.children.map((child) => {
-                          if (!child.hasPermission) return null;
-
-                          return child.href ? (
+                          if (!child.hasPermission || !child.href) return null;
+                          return (
                             <Link
                               key={child.href}
                               href={child.href}
@@ -197,20 +198,6 @@ function SidebarContent({
                                 </span>
                               </Button>
                             </Link>
-                          ) : (
-                            <Button
-                              key={child.id}
-                              variant="ghost"
-                              className={cn(
-                                "w-full justify-start h-8 text-sm",
-                                "text-gray-500 cursor-default hover:bg-transparent"
-                              )}
-                              disabled
-                            >
-                              <span className="flex-1 text-left truncate">
-                                {child.title}
-                              </span>
-                            </Button>
                           );
                         })}
                       </div>
@@ -244,7 +231,9 @@ function SidebarContent({
                     disabled
                   >
                     <IconComponent className="h-4 w-4 flex-shrink-0" />
-                    <span className="flex-1 text-left truncate">{item.title}</span>
+                    <span className="flex-1 text-left truncate">
+                      {item.title}
+                    </span>
                     {getPermissionBadge(item.permissionLevel)}
                   </Button>
                 )}
@@ -293,7 +282,9 @@ export function DynamicSidebar() {
         });
       } catch (error) {
         console.error("Error fetching menu data:", error);
-        setError(error instanceof Error ? error.message : "Failed to load menu");
+        setError(
+          error instanceof Error ? error.message : "Failed to load menu"
+        );
         setMenuData({
           modules: [],
           userRole: mockUser.role || "user",
@@ -310,8 +301,13 @@ export function DynamicSidebar() {
   const transformMenuData = (modules: Module[]): MenuItem[] => {
     const baseMenuItems: MenuItem[] = [];
 
-    const createMenuItem = (module: Module, parentPath: string = ""): MenuItem => {
-      const modulePath = parentPath ? `${parentPath}/${module.path}` : module.path;
+    const createMenuItem = (
+      module: Module,
+      parentPath: string = ""
+    ): MenuItem => {
+      const modulePath = parentPath
+        ? `${parentPath}/${module.path}`
+        : module.path;
       const isMasterOrStandard =
         module.moduleType === "master" || module.moduleType === "standard";
 
@@ -343,7 +339,11 @@ export function DynamicSidebar() {
       return {
         id: module.id,
         title: module.name,
-        href: isMasterOrStandard ? `/${modulePath}` : allChildren.length === 0 ? `/${modulePath}` : undefined,
+        href: isMasterOrStandard
+          ? `/${modulePath}`
+          : allChildren.length === 0
+          ? `/${modulePath}`
+          : undefined,
         icon: module.icon || "Package",
         hasPermission: true,
         permissionLevel: defaultPermissions,
@@ -401,7 +401,11 @@ export function DynamicSidebar() {
       <div className="lg:hidden fixed top-4 left-4 z-50">
         <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
           <SheetTrigger asChild>
-            <Button variant="outline" size="icon" className="bg-white shadow-md">
+            <Button
+              variant="outline"
+              size="icon"
+              className="bg-white shadow-md"
+            >
               <Menu className="h-4 w-4" />
               <span className="sr-only">Open menu</span>
             </Button>
