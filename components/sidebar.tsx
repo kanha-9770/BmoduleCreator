@@ -26,7 +26,6 @@ import {
   BarChart3,
   Menu,
 } from "lucide-react";
-
 // Icon mapping for modules
 const iconMap = {
   LayoutDashboard,
@@ -43,7 +42,6 @@ const iconMap = {
   Database,
   BarChart3,
 };
-
 interface Form {
   id: string;
   moduleId: string;
@@ -181,7 +179,7 @@ function SidebarContent({
                           return (
                             <Link
                               key={child.href}
-                              href={child.href}
+                              href={`${child.href}?id=${child.id}`}
                               onClick={onItemClick}
                             >
                               <Button
@@ -342,8 +340,8 @@ export function DynamicSidebar() {
         href: isMasterOrStandard
           ? `/${modulePath}`
           : allChildren.length === 0
-          ? `/${modulePath}`
-          : undefined,
+            ? `/${modulePath}`
+            : undefined,
         icon: module.icon || "Package",
         hasPermission: true,
         permissionLevel: defaultPermissions,

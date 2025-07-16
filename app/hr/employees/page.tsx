@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Download, Plus } from "lucide-react";
+import { Download, Plus, ExternalLink } from "lucide-react";
 import { EmployeeStats } from "@/components/hr/employee-stats";
 import { EmployeeTable } from "@/components/hr/employee-table";
 import {
@@ -20,7 +20,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { PublicFormDialog } from "@/components/public-form-dialog";
 
 interface FormData {
   id: string;
@@ -62,7 +65,14 @@ interface FormData {
   overTime: string;
   extra1Hour: string;
   companySim: string;
-  deleted?: string; 
+  deleted?: string;
+}
+
+interface Form {
+  id: string;
+  name: string;
+  isPublished: boolean;
+  publishedUrl?: string;
 }
 
 export default function EmployeesPage() {
@@ -110,6 +120,45 @@ export default function EmployeesPage() {
   });
   const [isEditMode, setIsEditMode] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [forms, setForms] = useState<Form[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const searchParams = useSearchParams();
+  const id = searchParams.get("id");
+
+  // State for form dialog (for form links)
+  const [selectedFormForFilling, setSelectedFormForFilling] = useState<string | null>(null);
+  const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
+
+  useEffect(() => {
+    async function fetchForms() {
+      if (!id) {
+        setError("Module ID is missing");
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const response = await fetch(`/api/modules/${id}`);
+        const result = await response.json();
+        console.log("Fetched module data:", result);
+
+        if (result.success && result.data && Array.isArray(result.data.forms)) {
+          setForms(result.data.forms);
+          setError(null);
+        } else {
+          setError(result.error || "No forms found for this module");
+          setForms([]);
+        }
+      } catch (err) {
+        setError("Failed to fetch forms");
+        setForms([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchForms();
+  }, [id]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target;
@@ -121,7 +170,7 @@ export default function EmployeesPage() {
   };
 
   const handleEditEmployee = (employee: FormData) => {
-    setFormData({ ...employee, deleted: "" }); 
+    setFormData({ ...employee, deleted: "" });
     setIsEditMode(true);
     setIsDialogOpen(true);
   };
@@ -189,7 +238,6 @@ export default function EmployeesPage() {
             : "Employee added successfully!"
         );
         resetForm();
-        // Trigger a refresh of the employee table
         window.location.reload();
       } else {
         alert(
@@ -202,19 +250,38 @@ export default function EmployeesPage() {
     }
   };
 
+  // Generate published URL if not provided by the API
+  const generatePublishedUrl = (formId: string) => {
+    return `${window.location.origin}/forms/${formId}`;
+  };
+
+  // Open form dialog
+  const openFormDialog = (formId: string) => {
+    setSelectedFormForFilling(formId);
+    setIsFormDialogOpen(true);
+  };
+
+  // Close form dialog
+  const closeFormDialog = () => {
+    setIsFormDialogOpen(false);
+    setSelectedFormForFilling(null);
+  };
+
+  // Open employee dialog
+  const openEmployeeDialog = () => {
+    resetForm(); // Reset form to ensure fresh state
+    setIsEditMode(false);
+    setIsDialogOpen(true);
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Employee Management</h1>
         <div className="flex gap-2">
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button
-                onClick={() => {
-                  setIsEditMode(false);
-                  resetForm();
-                }}
-              >
+              <Button onClick={openEmployeeDialog}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Employee
               </Button>
@@ -269,9 +336,7 @@ export default function EmployeesPage() {
                   <Label htmlFor="department">Department</Label>
                   <Select
                     value={formData.department}
-                    onValueChange={(value) =>
-                      handleSelectChange("department", value)
-                    }
+                    onValueChange={(value) => handleSelectChange("department", value)}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select department" />
@@ -465,9 +530,7 @@ export default function EmployeesPage() {
                   <Label htmlFor="status">Status</Label>
                   <Select
                     value={formData.status}
-                    onValueChange={(value) =>
-                      handleSelectChange("status", value)
-                    }
+                    onValueChange={(value) => handleSelectChange("status", value)}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select status" />
@@ -483,9 +546,7 @@ export default function EmployeesPage() {
                   <Label htmlFor="shiftType">Shift Type</Label>
                   <Select
                     value={formData.shiftType}
-                    onValueChange={(value) =>
-                      handleSelectChange("shiftType", value)
-                    }
+                    onValueChange={(value) => handleSelectChange("shiftType", value)}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select shift type" />
@@ -655,7 +716,73 @@ export default function EmployeesPage() {
 
       <EmployeeStats />
 
+      {/* Display Forms in Tabular Format */}
+      {error && <div className="text-red-500">{error}</div>}
+      {loading ? (
+        <div className="text-gray-500">Loading forms...</div>
+      ) : (
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold">Forms in Module</h2>
+          {forms.length > 0 ? (
+            <div className="border rounded-lg overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="font-semibold">Form ID</TableHead>
+                    <TableHead className="font-semibold">Form Name</TableHead>
+                    <TableHead className="font-semibold">Status</TableHead>
+                    <TableHead className="font-semibold">Published URL</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {forms.map((form) => (
+                    <TableRow key={form.id}>
+                      <TableCell>{form.id}</TableCell>
+                      <TableCell>{form.name}</TableCell>
+                      <TableCell>
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs ${
+                            form.isPublished
+                              ? "bg-green-100 text-green-800"
+                              : "bg-gray-100 text-gray-800"
+                          }`}
+                        >
+                          {form.isPublished ? "Published" : "Draft"}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        {form.isPublished ? (
+                          <Button
+                            variant="link"
+                            className="text-blue-500 hover:underline flex items-center gap-1"
+                            onClick={() => openFormDialog(form.id)}
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                            {form.publishedUrl || generatePublishedUrl(form.id)}
+                          </Button>
+                        ) : (
+                          <span className="text-gray-500">Not Published</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <div className="text-gray-500">No forms found in this module.</div>
+          )}
+        </div>
+      )}
+
       <EmployeeTable onEdit={handleEditEmployee} />
+
+      {/* Form Dialog for Published URLs */}
+      <PublicFormDialog
+        formId={selectedFormForFilling}
+        isOpen={isFormDialogOpen}
+        onClose={closeFormDialog}
+      />
     </div>
   );
 }

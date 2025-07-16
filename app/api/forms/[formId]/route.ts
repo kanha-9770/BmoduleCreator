@@ -4,7 +4,6 @@ import { DatabaseService } from "@/lib/database-service"
 export async function GET(request: NextRequest, { params }: { params: { formId: string } }) {
   try {
     console.log("API: Fetching form:", params.formId)
-
     const form = await DatabaseService.getForm(params.formId)
 
     if (!form) {
