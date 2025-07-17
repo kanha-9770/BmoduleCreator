@@ -1,176 +1,258 @@
-"use client";
-import { useState } from "react";
-import { signIn, getSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { toast } from "@/components/ui/use-toast";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+"use client"
 
-interface LoginFormData {
-  email: string;
-  password: string;
-}
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Loader2, Eye, EyeOff, Mail, Lock, LogIn, ArrowLeft } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
 
-export default function oginForm() {
-  const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const router = useRouter();
+export default function LoginPage() {
+  const router = useRouter()
+  const { toast } = useToast()
+  
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+  })
+  const [loading, setLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [errors, setErrors] = useState<Record<string, string>>({})
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<LoginFormData>({
-    defaultValues: {
-      email: "",
-      password: "",
-    },
-  });
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {}
 
-  const onSubmit = async (data: LoginFormData) => {
-    setIsLoading(true);
-    const session = await getSession();
+    // Email validation
+    if (!formData.email) {
+      newErrors.email = "Email is required"
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      newErrors.email = "Please enter a valid email address"
+    }
+
+    // Password validation
+    if (!formData.password) {
+      newErrors.password = "Password is required"
+    } else if (formData.password.length < 6) {
+      newErrors.password = "Password must be at least 6 characters"
+    }
+
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target
+    setFormData(prev => ({ ...prev, [name]: value }))
+    
+    // Clear error when user starts typing
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: "" }))
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!validateForm()) {
+      return
+    }
+
+    setLoading(true)
 
     try {
-      const result = await signIn("credentials", {
-        email: data.email,
-        password: data.password,
-        redirect: false,
-      });
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      })
 
-      if (result?.error) {
-        toast({
-          title: "Login Failed",
-          description: "Invalid email or password. Please try again.",
-          variant: "destructive",
-        });
-      } else if (result?.ok) {
-        // Get the session to access user data
-        const session = await getSession();
+      const result = await response.json()
 
-        toast({
-          title: "Login Successful",
-          description: `Welcome back, ${session?.user?.id || "User"}!`,
-        });
-
-        // Redirect based on user role or to dashboard
-        if (session?.user?.role === "Admin") {
-          router.push("/hr/attendance");
-        } else {
-          router.push("/hr/attendance");
-        }
+      if (!response.ok) {
+        throw new Error(result.error || "Login failed")
       }
-    } catch (error) {
+
+      if (result.success) {
+        toast({
+          title: "Success",
+          description: "Login successful! Redirecting...",
+        })
+
+        // Store user session/token if needed
+        if (result.token) {
+          localStorage.setItem("authToken", result.token)
+        }
+
+        // Redirect to dashboard or intended page
+        const redirectTo = new URLSearchParams(window.location.search).get("redirect") || "/dashboard"
+        router.push(redirectTo)
+      } else {
+        throw new Error(result.error || "Login failed")
+      }
+    } catch (error: any) {
+      console.error("Login error:", error)
       toast({
         title: "Error",
-        description: "Something went wrong. Please try again.",
+        description: error.message || "Login failed. Please try again.",
         variant: "destructive",
-      });
+      })
     } finally {
-      setIsLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">
-            Sign In
-          </CardTitle>
-          <CardDescription className="text-center">
-            Enter your email and password to access your account
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email Address</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="john.smith@company.com"
-                {...register("email", {
-                  required: "Email is required",
-                  pattern: {
-                    value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-                    message: "Please enter a valid email address",
-                  },
-                })}
-                className={errors.email ? "border-red-500" : ""}
-              />
-              {errors.email && (
-                <p className="text-red-600 text-sm">{errors.email.message}</p>
-              )}
-            </div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        {/* Back to Home Link */}
+        <div className="mb-6">
+          <Link href="/" className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 transition-colors">
+            <ArrowLeft className="w-4 h-4 mr-1" />
+            Back to Home
+          </Link>
+        </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  placeholder="Enter your password"
-                  {...register("password", {
-                    required: "Password is required",
-                    minLength: {
-                      value: 6,
-                      message: "Password must be at least 6 characters",
-                    },
-                  })}
-                  className={errors.password ? "border-red-500 pr-10" : "pr-10"}
-                />
-                <button
-                  type="button"
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                  onClick={() => setShowPassword(!showPassword)}
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-4 w-4 text-gray-400" />
-                  ) : (
-                    <Eye className="h-4 w-4 text-gray-400" />
-                  )}
-                </button>
+        <Card className="shadow-xl border-0 bg-white/80 backdrop-blur-sm">
+          <CardHeader className="space-y-1 text-center">
+            <div className="mx-auto w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center mb-4">
+              <LogIn className="w-6 h-6 text-white" />
+            </div>
+            <CardTitle className="text-2xl font-bold text-gray-900">Welcome Back</CardTitle>
+            <CardDescription className="text-gray-600">
+              Sign in to your account to continue
+            </CardDescription>
+          </CardHeader>
+
+          <form onSubmit={handleSubmit}>
+            <CardContent className="space-y-4">
+              {/* Email Field */}
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-sm font-medium text-gray-700">
+                  Email Address
+                </Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    placeholder="Enter your email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    className={`pl-10 ${errors.email ? "border-red-500 focus:border-red-500" : ""}`}
+                    disabled={loading}
+                    autoComplete="email"
+                  />
+                </div>
+                {errors.email && (
+                  <p className="text-sm text-red-600">{errors.email}</p>
+                )}
               </div>
-              {errors.password && (
-                <p className="text-red-600 text-sm">
-                  {errors.password.message}
-                </p>
-              )}
-            </div>
 
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Signing in...
-                </>
-              ) : (
-                "Sign In"
-              )}
-            </Button>
+              {/* Password Field */}
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-sm font-medium text-gray-700">
+                  Password
+                </Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <Input
+                    id="password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Enter your password"
+                    value={formData.password}
+                    onChange={handleInputChange}
+                    className={`pl-10 pr-10 ${errors.password ? "border-red-500 focus:border-red-500" : ""}`}
+                    disabled={loading}
+                    autoComplete="current-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    disabled={loading}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {errors.password && (
+                  <p className="text-sm text-red-600">{errors.password}</p>
+                )}
+              </div>
+
+              {/* Remember Me & Forgot Password */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <input
+                    id="remember"
+                    type="checkbox"
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <Label htmlFor="remember" className="text-sm text-gray-600">
+                    Remember me
+                  </Label>
+                </div>
+                <Link
+                  href="/forgot-password"
+                  className="text-sm text-blue-600 hover:text-blue-800 transition-colors"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+            </CardContent>
+
+            <CardFooter className="flex flex-col space-y-4">
+              <Button
+                type="submit"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5"
+                disabled={loading}
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Signing in...
+                  </>
+                ) : (
+                  <>
+                    <LogIn className="w-4 h-4 mr-2" />
+                    Sign In
+                  </>
+                )}
+              </Button>
+
+              <div className="text-center text-sm text-gray-600">
+                Don't have an account?{" "}
+                <Link
+                  href="/register"
+                  className="text-blue-600 hover:text-blue-800 font-medium transition-colors"
+                >
+                  Sign up
+                </Link>
+              </div>
+            </CardFooter>
           </form>
+        </Card>
 
-          <div className="mt-6 text-center">
-            <p className="text-sm text-gray-600">
-              Don't have an account?{" "}
-              <span className="text-blue-600 hover:text-blue-500 cursor-pointer">
-                Contact your administrator
-              </span>
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+        {/* Demo Credentials */}
+        <Card className="mt-4 bg-gray-50 border border-gray-200">
+          <CardContent className="pt-4">
+            <div className="text-center">
+              <p className="text-sm font-medium text-gray-700 mb-2">Demo Credentials</p>
+              <div className="space-y-1 text-xs text-gray-600">
+                <p><strong>Admin:</strong> admin@example.com / password123</p>
+                <p><strong>User:</strong> user@example.com / password123</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
-  );
+  )
 }

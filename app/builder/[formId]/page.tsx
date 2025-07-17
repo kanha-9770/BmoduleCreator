@@ -22,12 +22,14 @@ import FormCanvas from "@/components/form-canvas"
 import FieldPalette, { PaletteItemDragOverlay, fieldTypes } from "@/components/field-palette"
 import PublishFormDialog from "@/components/publish-form-dialog"
 import LookupConfigurationDialog from "@/components/lookup-configuration-dialog"
+import UserFormSettingsDialog from "@/components/user-form-settings-dialog"
 import type { Form, FormSection, FormField } from "@/types/form-builder"
-import { Save, Eye, ArrowLeft, Loader2, Share2 } from "lucide-react"
+import { Save, Eye, ArrowLeft, Loader2, Share2, Users, Settings } from "lucide-react"
 import Link from "next/link"
 import { v4 as uuidv4 } from "uuid"
 import FieldComponent from "@/components/field-component"
 import SectionComponent from "@/components/section-component"
+import { Badge } from "@/components/ui/badge"
 
 export default function FormBuilderPage() {
   const params = useParams()
@@ -39,6 +41,7 @@ export default function FormBuilderPage() {
   const [saving, setSaving] = useState(false)
   const [isPublishDialogOpen, setIsPublishDialogOpen] = useState(false)
   const [isLookupDialogOpen, setIsLookupDialogOpen] = useState(false)
+  const [isUserFormSettingsOpen, setIsUserFormSettingsOpen] = useState(false)
   const [pendingLookupSectionId, setPendingLookupSectionId] = useState<string | null>(null)
 
   const [activeItem, setActiveItem] = useState<FormField | FormSection | null>(null)
@@ -82,6 +85,41 @@ export default function FormBuilderPage() {
 
   const handleFormPublished = (updatedForm: Form) => {
     setForm(updatedForm)
+  }
+
+  const handleUserFormSettingsUpdate = async (isUserForm: boolean) => {
+    if (!form) return
+
+    try {
+      const response = await fetch(`/api/forms/${formId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...form,
+          isUserForm,
+        }),
+      })
+
+      if (!response.ok) throw new Error("Failed to update form settings")
+
+      const result = await response.json()
+      if (result.success) {
+        setForm(result.data)
+        toast({
+          title: "Success",
+          description: `Form ${isUserForm ? "marked as user form" : "unmarked as user form"}`,
+        })
+      } else {
+        throw new Error(result.error || "Failed to update form settings")
+      }
+    } catch (error: any) {
+      console.error("Error updating user form settings:", error)
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      })
+    }
   }
 
   const handleUpdateField = async (field: FormField) => {
@@ -601,6 +639,7 @@ export default function FormBuilderPage() {
         name: form.name,
         description: form.description,
         settings: form.settings,
+        isUserForm: form.isUserForm,
       }
 
       const response = await fetch(`/api/forms/${formId}`, {
@@ -674,12 +713,31 @@ export default function FormBuilderPage() {
                   <ArrowLeft className="h-5 w-5" />
                 </Button>
               </Link>
-              <div>
-                <h1 className="text-lg font-semibold">{form.name}</h1>
-                <p className="text-sm text-muted-foreground">Form Builder</p>
+              <div className="flex items-center gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-lg font-semibold">{form.name}</h1>
+                    {form.isUserForm && (
+                      <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200">
+                        <Users className="w-3 h-3 mr-1" />
+                        User Form
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted-foreground">Form Builder</p>
+                </div>
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsUserFormSettingsOpen(true)}
+                className="text-xs"
+              >
+                <Settings className="mr-2 h-3 w-3" />
+                Form Settings
+              </Button>
               <Link href={`/preview/${form.id}`} target="_blank">
                 <Button variant="outline">
                   <Eye className="mr-2 h-4 w-4" /> Preview
@@ -743,6 +801,13 @@ export default function FormBuilderPage() {
         onOpenChange={setIsLookupDialogOpen}
         onConfirm={handleLookupFieldsConfirm}
         sectionId={pendingLookupSectionId || ""}
+      />
+
+      <UserFormSettingsDialog
+        form={form}
+        open={isUserFormSettingsOpen}
+        onOpenChange={setIsUserFormSettingsOpen}
+        onUpdate={handleUserFormSettingsUpdate}
       />
     </DndContext>
   )

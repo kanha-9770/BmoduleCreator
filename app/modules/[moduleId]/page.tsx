@@ -23,20 +23,17 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Progress } from "@/components/ui/progress"
 import { useToast } from "@/hooks/use-toast"
-import { 
-  Plus, 
-  MoreHorizontal, 
-  Edit, 
-  Trash2, 
-  FileText, 
-  Loader2, 
-  ArrowLeft, 
-  Globe, 
-  Eye, 
+import {
+  Plus,
+  MoreHorizontal,
+  Edit,
+  Trash2,
+  FileText,
+  Loader2,
+  ArrowLeft,
+  Globe,
   BarChart3,
   Settings,
-  Users,
-  Calendar,
   Clock,
   TrendingUp,
   Activity,
@@ -51,7 +48,6 @@ import {
   Grid,
   List,
   FolderPlus,
-  Star,
   Archive,
   Download,
   Upload,
@@ -62,19 +58,12 @@ import {
   Zap,
   Target,
   Award,
-  Bookmark,
-  Heart,
-  MessageSquare,
   Bell,
-  Shield,
   Lock,
-  Unlock,
-  Info,
-  HelpCircle,
+
   ChevronDown,
-  ChevronRight,
+
   Folder,
-  FolderOpen
 } from "lucide-react"
 import Link from "next/link"
 import type { FormModule, Form } from "@/types/form-builder"
@@ -159,7 +148,7 @@ export default function ModulePage() {
       setStatsLoading(true)
       // Simulate API call for stats
       await new Promise(resolve => setTimeout(resolve, 1000))
-      
+
       // Mock data - replace with actual API call
       const mockStats: ModuleStats = {
         totalForms: module?.forms?.length || 0,
@@ -173,9 +162,9 @@ export default function ModulePage() {
         lastActivity: new Date(),
         topPerformingForm: module?.forms?.[0] || null
       }
-      
+
       setModuleStats(mockStats)
-      
+
       // Mock form analytics
       const mockAnalytics: FormAnalytics[] = module?.forms?.map(form => ({
         formId: form.id,
@@ -186,7 +175,7 @@ export default function ModulePage() {
         lastSubmission: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000),
         status: form.isPublished ? "active" : "inactive"
       })) || []
-      
+
       setFormAnalytics(mockAnalytics)
     } catch (error: any) {
       console.error("Error fetching stats:", error)
@@ -219,9 +208,9 @@ export default function ModulePage() {
         setModule((prev: FormModule | null) =>
           prev
             ? {
-                ...prev,
-                forms: [data.data, ...prev.forms],
-              }
+              ...prev,
+              forms: [data.data, ...prev.forms],
+            }
             : null,
         )
         setIsCreateDialogOpen(false)
@@ -270,9 +259,9 @@ export default function ModulePage() {
         setModule((prev: FormModule | null) =>
           prev
             ? {
-                ...prev,
-                forms: prev.forms.map((f: Form) => (f.id === editingForm.id ? data.data : f)),
-              }
+              ...prev,
+              forms: prev.forms.map((f: Form) => (f.id === editingForm.id ? data.data : f)),
+            }
             : null,
         )
         setIsEditDialogOpen(false)
@@ -313,9 +302,9 @@ export default function ModulePage() {
         setModule((prev: FormModule | null) =>
           prev
             ? {
-                ...prev,
-                forms: prev.forms.filter((f: Form) => f.id !== formId),
-              }
+              ...prev,
+              forms: prev.forms.filter((f: Form) => f.id !== formId),
+            }
             : null,
         )
         toast({
@@ -350,11 +339,11 @@ export default function ModulePage() {
         setModule((prev: FormModule | null) =>
           prev
             ? {
-                ...prev,
-                forms: prev.forms.map((f: Form) => 
-                  f.id === form.id ? { ...f, isPublished: !f.isPublished } : f
-                ),
-              }
+              ...prev,
+              forms: prev.forms.map((f: Form) =>
+                f.id === form.id ? { ...f, isPublished: !f.isPublished } : f
+              ),
+            }
             : null,
         )
         toast({
@@ -397,19 +386,19 @@ export default function ModulePage() {
 
   const getFilteredAndSortedForms = () => {
     if (!module?.forms) return []
-    
+
     let filtered = module.forms.filter(form => {
       const matchesSearch = form.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           (form.description || "").toLowerCase().includes(searchQuery.toLowerCase())
-      const matchesStatus = filterStatus === "all" || 
-                           (filterStatus === "published" && form.isPublished) ||
-                           (filterStatus === "draft" && !form.isPublished)
+        (form.description || "").toLowerCase().includes(searchQuery.toLowerCase())
+      const matchesStatus = filterStatus === "all" ||
+        (filterStatus === "published" && form.isPublished) ||
+        (filterStatus === "draft" && !form.isPublished)
       return matchesSearch && matchesStatus
     })
 
     return filtered.sort((a, b) => {
       let aValue: any, bValue: any
-      
+
       switch (sortBy) {
         case "name":
           aValue = a.name.toLowerCase()
@@ -542,7 +531,7 @@ export default function ModulePage() {
                 </div>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-3">
               <Button variant="outline" size="sm">
                 <RefreshCw className="mr-2 h-4 w-4" />
@@ -660,8 +649,8 @@ export default function ModulePage() {
                   <CardDescription>Common tasks for this module</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <Button 
-                    className="w-full justify-start" 
+                  <Button
+                    className="w-full justify-start"
                     variant="outline"
                     onClick={() => setIsCreateDialogOpen(true)}
                   >
@@ -746,13 +735,13 @@ export default function ModulePage() {
                         className="pl-10"
                       />
                     </div>
-                    
+
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="outline" size="sm">
                           <Filter className="mr-2 h-4 w-4" />
-                          {filterStatus === "all" ? "All Forms" : 
-                           filterStatus === "published" ? "Published" : "Drafts"}
+                          {filterStatus === "all" ? "All Forms" :
+                            filterStatus === "published" ? "Published" : "Drafts"}
                           <ChevronDown className="ml-2 h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -829,13 +818,13 @@ export default function ModulePage() {
                     {searchQuery || filterStatus !== "all" ? "No forms found" : "No forms yet"}
                   </h3>
                   <p className="text-gray-600 mb-6 max-w-md mx-auto">
-                    {searchQuery || filterStatus !== "all" 
+                    {searchQuery || filterStatus !== "all"
                       ? "Try adjusting your search or filter criteria."
                       : "Get started by creating your first form in this module."
                     }
                   </p>
                   {!searchQuery && filterStatus === "all" && (
-                    <Button 
+                    <Button
                       onClick={() => setIsCreateDialogOpen(true)}
                       className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
                     >
@@ -846,13 +835,13 @@ export default function ModulePage() {
                 </CardContent>
               </Card>
             ) : (
-              <div className={viewMode === "grid" 
-                ? "grid gap-6 md:grid-cols-2 lg:grid-cols-3" 
+              <div className={viewMode === "grid"
+                ? "grid gap-6 md:grid-cols-2 lg:grid-cols-3"
                 : "space-y-4"
               }>
                 {filteredForms.map((form: Form) => {
                   const analytics = formAnalytics.find(a => a.formId === form.id)
-                  
+
                   return viewMode === "grid" ? (
                     <Card key={form.id} className="group hover:shadow-xl transition-all duration-300 border-0 shadow-md bg-white">
                       <CardHeader className="pb-3">
@@ -1127,7 +1116,7 @@ export default function ModulePage() {
                       .map((analytics, index) => {
                         const form = module.forms.find(f => f.id === analytics.formId)
                         if (!form) return null
-                        
+
                         return (
                           <div key={form.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                             <div className="flex items-center gap-3">
@@ -1187,7 +1176,7 @@ export default function ModulePage() {
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="space-y-4">
                     <h4 className="font-medium">Notifications</h4>
                     <div className="space-y-3">

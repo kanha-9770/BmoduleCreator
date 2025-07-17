@@ -123,9 +123,9 @@ export class DatabaseService {
       fields: rawSubform.fields ? rawSubform.fields.map((f: any) => this.transformField(f)) : [],
       records: rawSubform.records
         ? rawSubform.records.map((r: any) => ({
-            ...r,
-            recordData: (r.data || {}) as Record<string, any>,
-          }))
+          ...r,
+          recordData: (r.data || {}) as Record<string, any>,
+        }))
         : [],
     }
   }
@@ -147,17 +147,54 @@ export class DatabaseService {
 
   // Get the appropriate record table for a form
   static async getFormRecordTable(formId: string): Promise<string> {
+    // First check if the form is a user form
+    const form = await prisma.form.findUnique({
+      where: { id: formId },
+      select: { isUserForm: true },
+    })
+
+    // If it's a user form, always use form_records_15
+    if (form?.isUserForm === true) {
+      console.log(`Form ${formId} is a user form, using form_records_15`)
+      
+      // Ensure mapping exists for user forms
+      const mapping = await prisma.formTableMapping.findUnique({
+        where: { formId },
+      })
+
+      if (!mapping) {
+        await prisma.formTableMapping.create({
+          data: {
+            formId,
+            storageTable: "form_records_15",
+          },
+        })
+        console.log(`Created table mapping for user form ${formId} -> form_records_15`)
+      } else if (mapping.storageTable !== "form_records_15") {
+        // Update existing mapping to point to form_records_15 for user forms
+        await prisma.formTableMapping.update({
+          where: { formId },
+          data: { storageTable: "form_records_15" },
+        })
+        console.log(`Updated table mapping for user form ${formId} -> form_records_15`)
+      }
+
+      return "form_records_15"
+    }
+
+    // For non-user forms, use existing logic
     // Check if form has a mapping
     const mapping = await prisma.formTableMapping.findUnique({
       where: { formId },
     })
 
-    if (mapping) {
+    if (mapping && mapping.storageTable !== "form_records_15") {
+      // Ensure non-user forms don't use form_records_15
       return mapping.storageTable
     }
 
-    // If no mapping exists, find the next available table
-    for (let i = 1; i <= 15; i++) {
+    // If no mapping exists, find the next available table (excluding table 15 for user forms)
+    for (let i = 1; i <= 14; i++) {
       const tableName = `form_records_${i}`
 
       // Check if this table is already assigned to another form
@@ -173,11 +210,13 @@ export class DatabaseService {
             storageTable: tableName,
           },
         })
+        console.log(`Created table mapping for regular form ${formId} -> ${tableName}`)
         return tableName
       }
     }
 
-    // If all tables are taken, use table 1 (this should be handled better in production)
+    // If all tables 1-14 are taken, use table 1 (this should be handled better in production)
+    console.warn(`All tables 1-14 are taken, using form_records_1 for form ${formId}`)
     return "form_records_1"
   }
 
@@ -588,7 +627,7 @@ export class DatabaseService {
   }
 
   // Form operations
-  static async createForm(data: { moduleId: string; name: string; description?: string }): Promise<Form> {
+  static async createForm(data: { moduleId: string; name: string; description?: string; isUserForm?: boolean }): Promise<Form> {
     try {
       const form = await prisma.form.create({
         data: {
@@ -600,6 +639,7 @@ export class DatabaseService {
           allowAnonymous: true,
           requireLogin: false,
           submissionMessage: "Thank you for your submission!",
+          isUserForm: data.isUserForm || false,
         },
         include: {
           tableMapping: true,
@@ -745,6 +785,42 @@ export class DatabaseService {
 
   static async updateForm(id: string, data: Partial<Form>): Promise<Form> {
     try {
+      // Handle isUserForm changes and update table mapping accordingly
+      if (data.isUserForm !== undefined) {
+        const currentForm = await prisma.form.findUnique({
+          where: { id },
+          select: { isUserForm: true },
+        })
+
+        // If isUserForm status is changing, update table mapping
+        if (currentForm && currentForm.isUserForm !== data.isUserForm) {
+          const targetTable = data.isUserForm ? "form_records_15" : null
+          
+          if (targetTable) {
+            // Update or create mapping for user form
+            await prisma.formTableMapping.upsert({
+              where: { formId: id },
+              update: { storageTable: targetTable },
+              create: { formId: id, storageTable: targetTable },
+            })
+            console.log(`Updated table mapping for form ${id} -> ${targetTable} (isUserForm: ${data.isUserForm})`)
+          } else {
+            // For non-user forms, let getFormRecordTable handle the assignment
+            const existingMapping = await prisma.formTableMapping.findUnique({
+              where: { formId: id },
+            })
+            
+            if (existingMapping && existingMapping.storageTable === "form_records_15") {
+              // Remove the mapping so it can be reassigned to a regular table
+              await prisma.formTableMapping.delete({
+                where: { formId: id },
+              })
+              console.log(`Removed user form table mapping for form ${id}`)
+            }
+          }
+        }
+      }
+
       const form = await prisma.form.update({
         where: { id },
         data: {
@@ -758,8 +834,9 @@ export class DatabaseService {
           requireLogin: data.requireLogin,
           maxSubmissions: data.maxSubmissions,
           submissionMessage: data.submissionMessage,
-          conditional: data.conditional,
-          styling: data.styling,
+          conditional: data.conditional ?? undefined,
+          styling: data.styling === null ? undefined : data.styling,
+          isUserForm: data.isUserForm,
         },
         include: {
           tableMapping: true,
@@ -1339,7 +1416,7 @@ export class DatabaseService {
         throw new Error("Record data must be a valid object")
       }
 
-      // Get the appropriate table for this form
+      // Get the appropriate table for this form (now considers isUserForm)
       const tableName = await this.getFormRecordTable(formId)
       console.log(`Using table ${tableName} for form ${formId}`)
 

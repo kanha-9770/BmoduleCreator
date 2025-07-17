@@ -41,6 +41,7 @@ export interface Form {
   createdAt: Date
   updatedAt: Date
   records?: FormRecord[]
+  isUserForm?: boolean // Indicates if this is a user-specific form
 }
 
 export interface FormSection {

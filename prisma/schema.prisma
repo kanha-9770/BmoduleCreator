@@ -78,7 +78,7 @@ model Form {
 
   // Lookup relations
   lookupSources     LookupSource[]
-
+  isUserForm        Boolean? @default(false)
   @@map("forms")
   @@index([moduleId])
   @@index([isPublished])

@@ -1,9 +1,13 @@
 "use client"
 
-import type React from "react"
-
-import { SessionProvider } from "next-auth/react"
+import { Toaster } from "@/components/ui/toaster"
+import { AuthProvider } from "./context/AuthContext"
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  return <SessionProvider>{children}</SessionProvider>
+  return (
+    <AuthProvider>
+      {children}
+      <Toaster />
+    </AuthProvider>
+  )
 }
