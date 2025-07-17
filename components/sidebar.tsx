@@ -26,6 +26,7 @@ import {
   BarChart3,
   Menu,
 } from "lucide-react";
+
 // Icon mapping for modules
 const iconMap = {
   LayoutDashboard,
@@ -42,6 +43,7 @@ const iconMap = {
   Database,
   BarChart3,
 };
+
 interface Form {
   id: string;
   moduleId: string;
@@ -150,7 +152,7 @@ function SidebarContent({
 
             return (
               <div key={item.id} className="flex flex-col">
-                {item.children ? (
+                {item.children && item.children.length > 0 ? (
                   <div>
                     <Button
                       variant="ghost"
@@ -175,11 +177,12 @@ function SidebarContent({
                     {expandedItems.includes(item.title) && (
                       <div className="ml-6 mt-1 space-y-1">
                         {item.children.map((child) => {
-                          if (!child.hasPermission || !child.href) return null;
+                          if (!child.hasPermission) return null;
+
                           return (
                             <Link
                               key={child.href}
-                              href={`${child.href}?id=${child.id}`}
+                              href={child.href!}
                               onClick={onItemClick}
                             >
                               <Button
@@ -201,8 +204,8 @@ function SidebarContent({
                       </div>
                     )}
                   </div>
-                ) : item.href ? (
-                  <Link href={item.href} onClick={onItemClick}>
+                ) : (
+                  <Link href={item.href!} onClick={onItemClick}>
                     <Button
                       variant="ghost"
                       className={cn(
@@ -219,21 +222,6 @@ function SidebarContent({
                       {getPermissionBadge(item.permissionLevel)}
                     </Button>
                   </Link>
-                ) : (
-                  <Button
-                    variant="ghost"
-                    className={cn(
-                      "w-full justify-start gap-2 h-9",
-                      "text-gray-500 cursor-default hover:bg-transparent"
-                    )}
-                    disabled
-                  >
-                    <IconComponent className="h-4 w-4 flex-shrink-0" />
-                    <span className="flex-1 text-left truncate">
-                      {item.title}
-                    </span>
-                    {getPermissionBadge(item.permissionLevel)}
-                  </Button>
                 )}
               </div>
             );
@@ -306,10 +294,8 @@ export function DynamicSidebar() {
       const modulePath = parentPath
         ? `${parentPath}/${module.path}`
         : module.path;
-      const isMasterOrStandard =
-        module.moduleType === "master" || module.moduleType === "standard";
 
-      // Default permissions (since API doesn't provide them)
+      // Default permissions
       const defaultPermissions = {
         view: true,
         add: mockUser.role.toLowerCase().includes("admin"),
@@ -317,35 +303,19 @@ export function DynamicSidebar() {
         delete: mockUser.role.toLowerCase().includes("admin"),
       };
 
-      // Create children from forms and nested modules
-      const formChildren: MenuItem[] = (module.forms || [])
-        .filter((form) => form.isPublished)
-        .map((form) => ({
-          id: `form-${form.id}`,
-          title: form.name,
-          href: form.formUrl || `/form/${form.id}`,
-          hasPermission: true,
-          permissionLevel: defaultPermissions,
-        }));
-
+      // Create children from nested modules only (exclude forms)
       const moduleChildren: MenuItem[] = (module.children || []).map((child) =>
         createMenuItem(child, modulePath)
       );
 
-      const allChildren = [...formChildren, ...moduleChildren];
-
       return {
         id: module.id,
         title: module.name,
-        href: isMasterOrStandard
-          ? `/${modulePath}`
-          : allChildren.length === 0
-            ? `/${modulePath}`
-            : undefined,
+        href: `/${modulePath}`,
         icon: module.icon || "Package",
         hasPermission: true,
         permissionLevel: defaultPermissions,
-        children: allChildren.length > 0 ? allChildren : undefined,
+        children: moduleChildren.length > 0 ? moduleChildren : undefined,
       };
     };
 
