@@ -220,6 +220,198 @@ export class DatabaseService {
     return "form_records_1"
   }
 
+  // User authentication methods for form_records_15
+  static async getUserRecords(email: string): Promise<FormRecord[]> {
+    try {
+      console.log("[DatabaseService] Getting user records from form_records_15")
+      console.log("[DatabaseService] Searching for email:", email)
+
+      // Get ALL records from form_records_15 first, then filter in JavaScript
+      // This is necessary because your JSONB structure uses dynamic field IDs as keys
+      const allRecords = await prisma.formRecord15.findMany({
+        orderBy: { createdAt: "desc" },
+      })
+
+      console.log(`[DatabaseService] Found ${allRecords.length} total records in form_records_15`)
+
+      // Filter records in JavaScript to find matching email
+      const matchingRecords = allRecords.filter(record => {
+        const recordData = record.recordData as any
+        
+        if (!recordData || typeof recordData !== 'object') {
+          return false
+        }
+
+        // Search through all field IDs in the JSONB structure
+        for (const fieldId in recordData) {
+          const field = recordData[fieldId]
+          
+          if (!field || typeof field !== 'object') {
+            continue
+          }
+
+          // Check if this field is an email field and matches the login email
+          const isEmailField = (
+            field.type === 'email' || 
+            (field.label && field.label.toLowerCase().includes('email')) ||
+            (field.fieldId && field.fieldId.toLowerCase().includes('email'))
+          )
+
+          if (isEmailField && field.value && 
+              field.value.toLowerCase() === email.toLowerCase()) {
+            console.log(`[DatabaseService] Found matching email in field ${fieldId}:`, field.value)
+            return true
+          }
+        }
+        
+        return false
+      })
+
+      console.log(`[DatabaseService] Found ${matchingRecords.length} matching user records`)
+
+      // Transform records
+      return matchingRecords.map((record) => this.transformRecord(record))
+    } catch (error: any) {
+      console.error("Database error fetching user records:", error)
+      throw new Error(`Failed to fetch user records: ${error?.message}`)
+    }
+  }
+
+  static async updateUserLastLogin(recordId: string): Promise<void> {
+    try {
+      console.log("[DatabaseService] Updating last login for user:", recordId)
+
+      // Find the record in form_records_15
+      const existingRecord = await prisma.formRecord15.findUnique({
+        where: { id: recordId }
+      })
+
+      if (!existingRecord) {
+        throw new Error(`User record not found: ${recordId}`)
+      }
+
+      // Update the record with last login timestamp
+      const updatedRecordData = {
+        ...(existingRecord.recordData as any),
+        lastLogin: new Date().toISOString(),
+        lastLoginDate: new Date().toISOString()
+      }
+
+      await prisma.formRecord15.update({
+        where: { id: recordId },
+        data: {
+          recordData: updatedRecordData,
+          updatedAt: new Date()
+        }
+      })
+
+      console.log("[DatabaseService] Successfully updated last login")
+    } catch (error: any) {
+      console.error("Database error updating last login:", error)
+      throw new Error(`Failed to update last login: ${error?.message}`)
+    }
+  }
+
+  static async createUser(userData: {
+    email: string
+    password: string
+    name: string
+    role?: string
+    department?: string
+    phone?: string
+    status?: string
+  }): Promise<FormRecord> {
+    try {
+      console.log("[DatabaseService] Creating new user record")
+
+      // Hash password before storing
+      const hashedPassword = await bcrypt.hash(userData.password, 12)
+
+      const recordData = {
+        email: userData.email,
+        password: hashedPassword,
+        name: userData.name,
+        fullName: userData.name,
+        role: userData.role || 'user',
+        department: userData.department || '',
+        phone: userData.phone || '',
+        status: userData.status || 'active',
+        createdDate: new Date().toISOString(),
+        lastLogin: null
+      }
+
+      // Create user record in form_records_15
+      const record = await prisma.formRecord15.create({
+        data: {
+          id: uuidv4(),
+          formId: 'user-management-form', // You might want to create a specific user management form
+          recordData,
+          submittedBy: 'system',
+          status: 'active',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }
+      })
+
+      console.log("[DatabaseService] User record created successfully:", record.id)
+      return this.transformRecord(record)
+    } catch (error: any) {
+      console.error("Database error creating user:", error)
+      throw new Error(`Failed to create user: ${error?.message}`)
+    }
+  }
+
+  static async getUserById(userId: string): Promise<FormRecord | null> {
+    try {
+      const record = await prisma.formRecord15.findUnique({
+        where: { id: userId }
+      })
+
+      if (!record) return null
+      return this.transformRecord(record)
+    } catch (error: any) {
+      console.error("Database error fetching user by ID:", error)
+      throw new Error(`Failed to fetch user: ${error?.message}`)
+    }
+  }
+
+  static async updateUserProfile(userId: string, updateData: {
+    name?: string
+    department?: string
+    phone?: string
+    role?: string
+    status?: string
+  }): Promise<FormRecord> {
+    try {
+      const existingRecord = await prisma.formRecord15.findUnique({
+        where: { id: userId }
+      })
+
+      if (!existingRecord) {
+        throw new Error(`User record not found: ${userId}`)
+      }
+
+      const updatedRecordData = {
+        ...(existingRecord.recordData as any),
+        ...updateData,
+        updatedDate: new Date().toISOString()
+      }
+
+      const updatedRecord = await prisma.formRecord15.update({
+        where: { id: userId },
+        data: {
+          recordData: updatedRecordData,
+          updatedAt: new Date()
+        }
+      })
+
+      return this.transformRecord(updatedRecord)
+    } catch (error: any) {
+      console.error("Database error updating user profile:", error)
+      throw new Error(`Failed to update user profile: ${error?.message}`)
+    }
+  }
+
   // Module operations with hierarchy support
   static async createModule(data: {
     name: string
@@ -834,8 +1026,8 @@ export class DatabaseService {
           requireLogin: data.requireLogin,
           maxSubmissions: data.maxSubmissions,
           submissionMessage: data.submissionMessage,
-          conditional: data.conditional ?? undefined,
-          styling: data.styling === null ? undefined : data.styling,
+          conditional: data.conditional,
+          styling: data.styling,
           isUserForm: data.isUserForm,
         },
         include: {
@@ -2535,6 +2727,7 @@ export class DatabaseService {
     }
   }
 
+ 
   static async getLinkedRecords(formId: string): Promise<{
     linkedForms: Array<{
       id: string
