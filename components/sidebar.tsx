@@ -121,7 +121,6 @@ function SidebarContent({
     if (permissionLevel.add) permissions.push("A");
     if (permissionLevel.edit) permissions.push("E");
     if (permissionLevel.delete) permissions.push("D");
-
     if (permissions.length === 0) return null;
 
     return (
@@ -256,7 +255,7 @@ export function DynamicSidebar() {
 
         const response = await fetch("/api/modules");
         const result = await response.json();
-
+        console.log("Fetched modules at sidebar:", result);
         if (!result.success) {
           throw new Error(result.error || "Failed to fetch modules");
         }
@@ -303,6 +302,12 @@ export function DynamicSidebar() {
         delete: mockUser.role.toLowerCase().includes("admin"),
       };
 
+      // For child modules, append the ID as a query parameter
+      const href =
+        module.moduleType === "child"
+          ? `/${modulePath}?id=${module.id}`
+          : `/${modulePath}`;
+
       // Create children from nested modules only (exclude forms)
       const moduleChildren: MenuItem[] = (module.children || []).map((child) =>
         createMenuItem(child, modulePath)
@@ -311,7 +316,7 @@ export function DynamicSidebar() {
       return {
         id: module.id,
         title: module.name,
-        href: `/${modulePath}`,
+        href: href,
         icon: module.icon || "Package",
         hasPermission: true,
         permissionLevel: defaultPermissions,
