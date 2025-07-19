@@ -630,3 +630,46 @@ model LookupFieldRelation {
   @@index([formId])
   @@index([moduleId])
 }
+
+// New RBAC Models
+model Role {
+  id          String          @id @default(cuid())
+  name        String          @unique // e.g., "Supervisor", "Admin"
+  description String?         // Optional description of the role
+  permissions RolePermission[] // Relation to permissions
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  @@map("roles")
+  @@index([name])
+}
+
+model Permission {
+  id           String          @id @default(cuid())
+  name         String          @unique // e.g., "form:read", "module:edit"
+  description  String?         // Optional description of the permission
+  resourceId   String?         // ID of the resource (e.g., Form or FormModule ID)
+  resourceType String?         // Type of resource (e.g., "Form", "FormModule", "FormField")
+  roles        RolePermission[] // Relation to roles
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+
+  @@map("permissions")
+  @@index([name])
+  @@index([resourceId])
+  @@index([resourceType])
+}
+
+model RolePermission {
+  id           String     @id @default(cuid())
+  roleId       String     @map("role_id")
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permissionId String     @map("permission_id")
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  @@map("role_permissions")
+  @@index([roleId])
+  @@index([permissionId])
+}

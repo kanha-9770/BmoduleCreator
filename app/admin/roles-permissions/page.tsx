@@ -2,15 +2,14 @@
 
 import { useState, useEffect } from "react"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
-import { PermissionMatrix } from "@/components/admin-roles/permission-matrix"
+import { PermissionMatrix } from "@/components/rbac/PermissionMatrix"
 import { Card, CardContent } from "@/components/ui/card"
 import { toast } from "@/components/ui/use-toast"
 
 export default function RolePermissions() {
   const [searchTerm, setSearchTerm] = useState("")
-
   // Type definitions for Employee and Permissions
-  type Permissions = { [key: string]: any }
+  type Permissions = Record<string, Record<string, Record<string, boolean>>>
   type Employee = {
     id: string
     name: string
@@ -21,8 +20,18 @@ export default function RolePermissions() {
     permissions: Permissions
   }
 
+  type Module = {
+    id: string
+    name: string
+    description: string
+    subModules: Array<{
+      id: string
+      name: string
+    }>
+  }
+
   const [employees, setEmployees] = useState<Employee[]>([])
-  const [modules, setModules] = useState<any[]>([])
+  const [modules, setModules] = useState<Module[]>([])
   const [loading, setLoading] = useState(true)
   const [isEditMode, setIsEditMode] = useState(false)
   const [originalPermissions, setOriginalPermissions] = useState<Employee[]>([])
@@ -70,15 +79,8 @@ export default function RolePermissions() {
   }, [])
 
   // Toggle employee permission (only in edit mode)
-  const toggleEmployeePermission = (employeeId: string, moduleSubmodule: string, permissionType: string) => {
+  const toggleEmployeePermission = (employeeId: string, moduleId: string, submoduleId: string, permissionType: string) => {
     if (!isEditMode) return
-
-    const [moduleId, submoduleId] = moduleSubmodule.split(".")
-
-    if (!moduleId || !submoduleId) {
-      console.error("Invalid module/submodule format:", moduleSubmodule)
-      return
-    }
 
     // Find current permission value
     const employee = employees.find((emp) => emp.id === employeeId)
@@ -150,12 +152,7 @@ export default function RolePermissions() {
         Object.keys(employee.permissions).forEach((moduleId) => {
           Object.keys(employee.permissions[moduleId]).forEach((submoduleId) => {
             const currentPerms = employee.permissions[moduleId][submoduleId]
-            const originalPerms = originalEmployee.permissions[moduleId]?.[submoduleId] || {
-              view: false,
-              add: false,
-              edit: false,
-              delete: false,
-            }
+            const originalPerms = originalEmployee.permissions[moduleId]?.[submoduleId] || {}
 
             // Check each permission type for changes
             Object.keys(currentPerms).forEach((permissionType) => {
