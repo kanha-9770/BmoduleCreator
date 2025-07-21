@@ -1,8 +1,25 @@
 import { NextResponse } from "next/server"
+import { NextRequest } from "next/server"
 import { DatabaseService } from "@/lib/database-service"
+import { AuthMiddleware } from "@/lib/auth-middleware"
 
-export async function POST(request: Request, { params }: { params: { moduleId: string } }) {
+export async function POST(request: NextRequest, { params }: { params: { moduleId: string } }) {
   try {
+    // Check user permissions for creating forms in this module
+    const authResult = await AuthMiddleware.checkPermission(
+      request,
+      "module",
+      params.moduleId,
+      "manage"
+    )
+
+    if (!authResult.authorized) {
+      return NextResponse.json(
+        { success: false, error: authResult.error },
+        { status: authResult.user ? 403 : 401 }
+      )
+    }
+
     const body = await request.json()
     const { name, description } = body
 
@@ -15,6 +32,8 @@ export async function POST(request: Request, { params }: { params: { moduleId: s
       name,
       description,
     })
+
+    console.log(`[Forms API] User ${authResult.user!.userEmail} created form: ${name} in module: ${params.moduleId}`)
 
     return NextResponse.json({ success: true, data: form })
   } catch (error: any) {

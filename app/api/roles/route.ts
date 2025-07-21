@@ -1,7 +1,6 @@
 import { DatabaseRoles } from "@/lib/DatabaseRoles"
 import { NextRequest, NextResponse } from "next/server"
 
-// GET /api/roles - Get all roles
 export async function GET(request: NextRequest) {
   try {
     const roles = await DatabaseRoles.getRoles()

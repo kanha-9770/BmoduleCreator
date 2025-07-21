@@ -1,13 +1,30 @@
 import { NextResponse } from "next/server"
+import { NextRequest } from "next/server"
 import { DatabaseService } from "@/lib/database-service"
+import { AuthMiddleware } from "@/lib/auth-middleware"
 
-export async function GET(request: Request, { params }: { params: { moduleId: string } }) {
+export async function GET(request: NextRequest, { params }: { params: { moduleId: string } }) {
   try {
+    // Check user permissions for this module
+    const authResult = await AuthMiddleware.checkPermission(
+      request,
+      "module",
+      params.moduleId,
+      "view"
+    )
+
+    if (!authResult.authorized) {
+      return NextResponse.json(
+        { success: false, error: authResult.error },
+        { status: authResult.user ? 403 : 401 }
+      )
+    }
+
     const { searchParams } = new URL(request.url)
     const search = searchParams.get("search") || ""
     const limit = Number.parseInt(searchParams.get("limit") || "50")
 
-    console.log("Module lookup API called:", params.moduleId, search)
+    console.log(`[Module Lookup API] User ${authResult.user!.userEmail} accessing module: ${params.moduleId}, search: ${search}`)
 
     // Get the module and its forms
     const module = await DatabaseService.getModule(params.moduleId)
@@ -19,6 +36,19 @@ export async function GET(request: Request, { params }: { params: { moduleId: st
     const allRecords: any[] = []
 
     for (const form of module.forms) {
+      // Check if user has permission to view this form
+      const hasFormPermission = AuthMiddleware.hasFormPermission(
+        authResult.user!.permissions,
+        params.moduleId,
+        form.id,
+        "view"
+      )
+
+      if (!hasFormPermission) {
+        console.log(`[Module Lookup API] User ${authResult.user!.userEmail} skipping form ${form.id} - no permission`)
+        continue
+      }
+
       const records = await DatabaseService.getFormRecords(form.id)
       const formattedRecords = records.map((record) => ({
         id: record.id,
@@ -52,7 +82,7 @@ export async function GET(request: Request, { params }: { params: { moduleId: st
     // Apply limit
     const limitedRecords = filteredRecords.slice(0, limit)
 
-    console.log("Module lookup returning:", limitedRecords.length, "records")
+    console.log(`[Module Lookup API] Returning ${limitedRecords.length} records to user ${authResult.user!.userEmail}`)
 
     return NextResponse.json({
       success: true,
