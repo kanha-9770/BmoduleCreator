@@ -1,134 +1,95 @@
-import type { ApiResponse } from "@/types/auth"
-
 export class ApiClient {
-  private static baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"
+  private static baseUrl = ''
 
-  /**
-   * Make authenticated API request with user credentials or token
-   */
-  static async request<T = any>(
-    endpoint: string,
-    options: RequestInit & {
-      userId?: string
-      userEmail?: string
-      useToken?: boolean
-    } = {}
-  ): Promise<ApiResponse<T>> {
-    const { userId, userEmail, useToken = false, ...requestOptions } = options
-
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      ...(requestOptions.headers as Record<string, string>),
-    }
-
-    // Add authentication headers
-    if (useToken) {
-      // Use token-based authentication (for existing auth system)
-      const token = typeof window !== 'undefined' ? localStorage.getItem("authToken") : null
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`
-      }
-    } else {
-      // Use user credentials for RBAC system
-      if (userId) {
-        headers["x-user-id"] = userId
-      }
-      if (userEmail) {
-        headers["x-user-email"] = userEmail
-      }
-    }
-
+  static async request(endpoint: string, options: RequestInit = {}, userId?: string, userEmail?: string, useToken: boolean = false) {
     try {
-      const response = await fetch(`${this.baseUrl}${endpoint}`, {
-        ...requestOptions,
-        headers,
+      console.log(`[ApiClient] Making request to: ${endpoint}`, {
+        userId: userId || 'not provided',
+        userEmail: userEmail || 'not provided',
+        useToken
       })
 
-      const data = await response.json()
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...((options.headers as Record<string, string>) || {})
+      }
+
+      if (useToken) {
+        // Use JWT token authentication (preferred)
+        const token = localStorage.getItem('authToken')
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`
+          console.log(`[ApiClient] Added JWT token for authentication`)
+        } else {
+          console.warn(`[ApiClient] No JWT token found for ${endpoint}`)
+        }
+      } else {
+        // Fallback to header-based authentication
+        const finalUserId = userId || localStorage.getItem('auth_user_id')
+        const finalUserEmail = userEmail || localStorage.getItem('auth_user_email')
+
+        if (finalUserId && finalUserEmail) {
+          headers['x-user-id'] = finalUserId
+          headers['x-user-email'] = finalUserEmail
+          console.log(`[ApiClient] Added auth headers for user: ${finalUserEmail}`)
+        } else {
+          console.warn(`[ApiClient] No authentication credentials available for ${endpoint}`)
+        }
+      }
+
+      const response = await fetch(endpoint, {
+        ...options,
+        headers
+      })
+
+      console.log(`[ApiClient] Response status: ${response.status} for ${endpoint}`)
 
       if (!response.ok) {
-        throw new Error(data.error || `HTTP ${response.status}`)
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`
+        
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData.error || errorMessage
+        } catch (e) {
+          // If response is not JSON, use status text
+          console.warn(`[ApiClient] Could not parse error response as JSON`)
+        }
+        
+        console.error(`[ApiClient] Request failed:`, errorMessage)
+        throw new Error(errorMessage)
       }
 
+      const data = await response.json()
+      console.log(`[ApiClient] Request successful for ${endpoint}`, {
+        success: data.success,
+        dataLength: Array.isArray(data.data) ? data.data.length : 'not array'
+      })
       return data
     } catch (error: any) {
-      console.error(`API request failed for ${endpoint}:`, error)
-      return {
-        success: false,
-        error: error.message || "Request failed",
-      }
+      console.error(`[ApiClient] Request error for ${endpoint}:`, error.message)
+      throw error
     }
   }
 
-  /**
-   * GET request with authentication
-   */
-  static async get<T = any>(
-    endpoint: string,
-    userId?: string,
-    userEmail?: string,
-    useToken = false
-  ): Promise<ApiResponse<T>> {
-    return this.request<T>(endpoint, {
-      method: "GET",
-      userId,
-      userEmail,
-      useToken,
-    })
+  static async get(endpoint: string, userId?: string, userEmail?: string, useToken: boolean = false) {
+    return this.request(endpoint, { method: 'GET' }, userId, userEmail, useToken)
   }
 
-  /**
-   * POST request with authentication
-   */
-  static async post<T = any>(
-    endpoint: string,
-    data: any,
-    userId?: string,
-    userEmail?: string,
-    useToken = false
-  ): Promise<ApiResponse<T>> {
-    return this.request<T>(endpoint, {
-      method: "POST",
-      body: JSON.stringify(data),
-      userId,
-      userEmail,
-      useToken,
-    })
+  static async post(endpoint: string, data: any, userId?: string, userEmail?: string, useToken: boolean = false) {
+    return this.request(endpoint, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }, userId, userEmail, useToken)
   }
 
-  /**
-   * PUT request with authentication
-   */
-  static async put<T = any>(
-    endpoint: string,
-    data: any,
-    userId?: string,
-    userEmail?: string,
-    useToken = false
-  ): Promise<ApiResponse<T>> {
-    return this.request<T>(endpoint, {
-      method: "PUT",
-      body: JSON.stringify(data),
-      userId,
-      userEmail,
-      useToken,
-    })
+  static async put(endpoint: string, data: any, userId?: string, userEmail?: string, useToken: boolean = false) {
+    return this.request(endpoint, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    }, userId, userEmail, useToken)
   }
 
-  /**
-   * DELETE request with authentication
-   */
-  static async delete<T = any>(
-    endpoint: string,
-    userId?: string,
-    userEmail?: string,
-    useToken = false
-  ): Promise<ApiResponse<T>> {
-    return this.request<T>(endpoint, {
-      method: "DELETE",
-      userId,
-      userEmail,
-      useToken,
-    })
+  static async delete(endpoint: string, userId?: string, userEmail?: string, useToken: boolean = false) {
+    return this.request(endpoint, { method: 'DELETE' }, userId, userEmail, useToken)
   }
 }

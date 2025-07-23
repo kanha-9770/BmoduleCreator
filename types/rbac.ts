@@ -1,12 +1,20 @@
+// Resource types that can have permissions
+export type ResourceType = 'FormModule' | 'Form' | 'FormField' | 'User' | 'System'
+
+// Permission actions
+export type PermissionAction = 'view' | 'create' | 'edit' | 'delete' | 'publish' | 'manage'
+
+// Role interface (now just for designation purposes)
 export interface Role {
   id: string
   name: string
   description: string | null
-  permissions: Permission[]
+  permissions: Permission[] // Deprecated - kept for backward compatibility
   createdAt: Date
   updatedAt: Date
 }
 
+// Permission interface (deprecated - kept for backward compatibility)
 export interface Permission {
   id: string
   name: string
@@ -18,28 +26,84 @@ export interface Permission {
   updatedAt: Date
 }
 
+// Role-Permission relationship (deprecated)
 export interface RolePermission {
   id: string
   roleId: string
   permissionId: string
-  role: Role
-  permission: Permission
   createdAt: Date
   updatedAt: Date
 }
 
-export interface UserWithRole {
+// NEW: User-specific permission interface
+export interface UserPermission {
   id: string
-  email: string
+  userId: string
+  resourceType: 'module' | 'form'
+  resourceId: string
+  resource?: {
+    id: string
+    name: string
+    description?: string
+    moduleId?: string // For forms
+  }
+  permissions: {
+    canView: boolean
+    canCreate: boolean
+    canEdit: boolean
+    canDelete: boolean
+    canManage: boolean
+  }
+  isSystemAdmin: boolean
+  grantedBy?: string
+  grantedAt: Date
+  expiresAt?: Date
+  isActive: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+
+// Permission matrix for UI display
+export interface PermissionMatrix {
+  [moduleId: string]: {
+    name: string
+    permissions: {
+      canView: boolean
+      canManage: boolean
+    }
+    subModules: {
+      [formId: string]: {
+        name: string
+        permissions: {
+          canView: boolean
+          canAdd: boolean
+          canEdit: boolean
+          canDelete: boolean
+          canManage: boolean
+        }
+      }
+    }
+  }
+}
+
+// Employee with permissions for admin interface
+export interface EmployeeWithPermissions {
+  id: string
   name: string
-  role?: Role
-  permissions: Permission[]
+  email: string
+  role: string
+  department: string
+  status: string
+  permissions: Record<string, Record<string, Record<string, boolean>>>
 }
 
-export interface PermissionCheck {
-  hasPermission: boolean
-  missingPermissions?: string[]
+// Module with submodules for permission management
+export interface ModuleWithSubmodules {
+  id: string
+  name: string
+  description: string
+  subModules: Array<{
+    id: string
+    name: string
+  }>
 }
-
-export type ResourceType = 'FormModule' | 'Form' | 'FormSection' | 'FormField' | 'FormRecord'
-export type PermissionAction = 'view' | 'create' | 'edit' | 'delete' | 'publish'

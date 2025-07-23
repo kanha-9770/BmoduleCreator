@@ -16,7 +16,7 @@ interface LookupFieldProps {
     label: string
     type: string
     placeholder?: string | undefined
-    description?: string | null | undefined // Allow null to match database schema
+    description?: string | null | undefined
     validation: {
       required?: boolean
       minLength?: number
@@ -29,9 +29,9 @@ interface LookupFieldProps {
       multiple?: boolean
       searchable?: boolean
       searchPlaceholder?: string
-      allowCustomValues?: boolean // New property to enable custom values
-      useIdField?: boolean // New property for ID field support
-      idFieldName?: string // Name of the ID field
+      allowCustomValues?: boolean
+      useIdField?: boolean
+      idFieldName?: string
       fieldMapping?: {
         display: string
         value: string
@@ -41,7 +41,7 @@ interface LookupFieldProps {
     }
   }
   value?: any
-  onChange?: (value: any) => void
+  onChange?: (value: any, fullOption?: any) => void
   disabled?: boolean
   error?: string
 }
@@ -54,7 +54,7 @@ interface LookupOption {
   description?: string | null
   data?: any
   type?: string
-  isCustom?: boolean // Flag to identify custom values
+  isCustom?: boolean
 }
 
 export function LookupField({ field, value, onChange, disabled = false, error }: LookupFieldProps) {
@@ -67,7 +67,7 @@ export function LookupField({ field, value, onChange, disabled = false, error }:
 
   const isMultiple = field.lookup?.multiple || false
   const isSearchable = field.lookup?.searchable !== false
-  const allowCustomValues = field.lookup?.allowCustomValues !== false // Enable by default
+  const allowCustomValues = field.lookup?.allowCustomValues !== false
   const useIdField = field.lookup?.useIdField || false
   const idFieldName = field.lookup?.idFieldName
   const sourceId = field.lookup?.sourceId
@@ -76,13 +76,10 @@ export function LookupField({ field, value, onChange, disabled = false, error }:
     if (value && (options.length > 0 || allowCustomValues)) {
       if (isMultiple && Array.isArray(value)) {
         const selected = value.map((val) => {
-          // First try to find existing option
           const existingOption = options.find((opt) => opt.storeValue === val)
           if (existingOption) {
             return existingOption
           }
-
-          // Create custom option for unknown values
           return {
             id: `custom-${String(val)}`,
             label: String(val),
@@ -92,14 +89,12 @@ export function LookupField({ field, value, onChange, disabled = false, error }:
             type: "text",
           }
         })
-
         setSelectedOptions(selected)
       } else if (!isMultiple && value) {
         const existingOption = options.find((opt) => opt.storeValue === value)
         if (existingOption) {
           setSelectedOptions([existingOption])
         } else if (allowCustomValues) {
-          // Create custom option for unknown value
           const customOption = {
             id: `custom-${String(value)}`,
             label: String(value),
@@ -166,7 +161,6 @@ export function LookupField({ field, value, onChange, disabled = false, error }:
             description: null,
           }
 
-          // Try to match by field_label, then field_id, then fallback to default
           const fieldData =
             item[mapping.display] ||
             Object.values(item).find((val: any) => val?.field_label === mapping.display) ||
@@ -193,7 +187,6 @@ export function LookupField({ field, value, onChange, disabled = false, error }:
             storeValue = fieldValue
           }
 
-          // Format display label based on field type
           let displayLabel = fieldValue
           if (fieldData.field_type === "datetime" && fieldValue) {
             try {
@@ -257,10 +250,10 @@ export function LookupField({ field, value, onChange, disabled = false, error }:
       }
 
       setSelectedOptions(newSelected)
-      onChange?.(newSelected.map((opt) => opt.storeValue))
+      onChange?.(newSelected.map((opt) => opt.storeValue), newSelected)
     } else {
       setSelectedOptions([option])
-      onChange?.(option.storeValue)
+      onChange?.(option.storeValue, option)
       setOpen(false)
     }
   }
@@ -277,31 +270,30 @@ export function LookupField({ field, value, onChange, disabled = false, error }:
       type: "text",
     }
 
-    // Check if custom value already exists
     const existsInSelected = selectedOptions.some((opt) => opt.storeValue === customOption.storeValue)
     if (existsInSelected) return
 
     if (isMultiple) {
       const newSelected = [...selectedOptions, customOption]
       setSelectedOptions(newSelected)
-      onChange?.(newSelected.map((opt) => opt.storeValue))
+      onChange?.(newSelected.map((opt) => opt.storeValue), newSelected)
     } else {
       setSelectedOptions([customOption])
-      onChange?.(customOption.storeValue)
+      onChange?.(customOption.storeValue, customOption)
       setOpen(false)
     }
 
-    setSearchTerm("") // Clear search after creating
+    setSearchTerm("")
   }
 
   const handleRemove = (optionToRemove: LookupOption) => {
     if (isMultiple) {
       const newSelected = selectedOptions.filter((selected) => selected.value !== optionToRemove.value)
       setSelectedOptions(newSelected)
-      onChange?.(newSelected.map((opt) => opt.storeValue))
+      onChange?.(newSelected.map((opt) => opt.storeValue), newSelected)
     } else {
       setSelectedOptions([])
-      onChange?.(null)
+      onChange?.(null, null)
     }
   }
 
@@ -317,14 +309,12 @@ export function LookupField({ field, value, onChange, disabled = false, error }:
     return selectedOptions[0].label
   }
 
-  // Check if search term matches any existing options
   const searchMatchesExisting = options.some(
     (option) =>
       option.label.toLowerCase().includes(searchTerm.toLowerCase()) ||
       String(option.storeValue).toLowerCase().includes(searchTerm.toLowerCase()),
   )
 
-  // Check if search term already exists in selected options
   const searchExistsInSelected = selectedOptions.some((opt) => opt.storeValue === searchTerm.trim())
 
   const showCreateOption = allowCustomValues && searchTerm.trim() && !searchMatchesExisting && !searchExistsInSelected
@@ -377,7 +367,6 @@ export function LookupField({ field, value, onChange, disabled = false, error }:
               ) : (
                 <CommandGroup>
                   <ScrollArea className="h-[200px]">
-                    {/* Show create option first if applicable */}
                     {showCreateOption && (
                       <CommandItem
                         onSelect={handleCreateCustom}
@@ -395,7 +384,6 @@ export function LookupField({ field, value, onChange, disabled = false, error }:
                       </CommandItem>
                     )}
 
-                    {/* Show existing options */}
                     {options.length === 0 && !showCreateOption ? (
                       <div className="p-4 text-center text-sm text-muted-foreground">
                         {allowCustomValues ? "No options found. Type to create a custom value." : "No options found."}

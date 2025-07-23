@@ -1,40 +1,43 @@
-export interface UserPermissions {
-  canView: boolean
-  canAdd: boolean
-  canEdit: boolean
-  canDelete: boolean
-  canManage: boolean
-}
-
-export interface AuthenticatedUser {
-  id: string
-  email: string
-  role?: string
-  permissions: UserPermissions
-}
-
-export interface ApiResponse<T = any> {
-  success: boolean
-  data?: T
-  error?: string
-  permissions?: UserPermissions
-  user?: {
-    id: string
-    email: string
-    role?: string
+export interface PermissionMatrix {
+  [moduleId: string]: {
+    permissions: {
+      canView: boolean
+      canAdd: boolean
+      canEdit: boolean
+      canDelete: boolean
+      canManage: boolean
+    }
+    subModules: {
+      [formId: string]: {
+        permissions: {
+          canView: boolean
+          canAdd: boolean
+          canEdit: boolean
+          canDelete: boolean
+          canManage: boolean
+        }
+      }
+    }
   }
 }
 
-export interface PermissionMatrix {
-  [moduleId: string]: {
+export interface UserPermission {
+  id: string
+  userId: string
+  resourceType: 'module' | 'form'
+  resourceId: string
+  permissions: {
+    canView: boolean
+    canCreate: boolean
+    canEdit: boolean
+    canDelete: boolean
+    canManage: boolean
+  }
+  isSystemAdmin: boolean
+  resource?: {
+    id: string
     name: string
-    description: string
-    permissions: UserPermissions
-    subModules: {
-      [subModuleId: string]: {
-        name: string
-        permissions: UserPermissions
-      }
-    }
+    description?: string
+    moduleId?: string
   }
 }

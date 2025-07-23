@@ -32,6 +32,7 @@ model FormModule {
   // Lookup relations
   lookupSources LookupSource[]
 
+
   @@map("form_modules")
   @@index([parentId])
   @@index([level])
@@ -79,9 +80,13 @@ model Form {
   // Lookup relations
   lookupSources     LookupSource[]
   isUserForm        Boolean? @default(false)
+  isEmployeeForm    Boolean? @default(false)
+
   @@map("forms")
   @@index([moduleId])
   @@index([isPublished])
+  @@index([isUserForm])
+  @@index([isEmployeeForm])
 }
 
 model FormTableMapping {
@@ -631,12 +636,11 @@ model LookupFieldRelation {
   @@index([moduleId])
 }
 
-// New RBAC Models
+// RBAC Models - Simplified for designation purposes only
 model Role {
   id          String          @id @default(cuid())
-  name        String          @unique // e.g., "Supervisor", "Admin"
+  name        String          @unique // e.g., "Manager", "Admin" - just for designation
   description String?         // Optional description of the role
-  permissions RolePermission[] // Relation to permissions
   createdAt   DateTime        @default(now()) @map("created_at")
   updatedAt   DateTime        @updatedAt @map("updated_at")
 
@@ -644,13 +648,13 @@ model Role {
   @@index([name])
 }
 
+// Deprecated - keeping for backward compatibility but not used for permissions
 model Permission {
   id           String          @id @default(cuid())
-  name         String          @unique // e.g., "form:read", "module:edit"
-  description  String?         // Optional description of the permission
-  resourceId   String?         // ID of the resource (e.g., Form or FormModule ID)
-  resourceType String?         // Type of resource (e.g., "Form", "FormModule", "FormField")
-  roles        RolePermission[] // Relation to roles
+  name         String          @unique
+  description  String?
+  resourceId   String?
+  resourceType String?
   createdAt    DateTime        @default(now()) @map("created_at")
   updatedAt    DateTime        @updatedAt @map("updated_at")
 
@@ -660,16 +664,50 @@ model Permission {
   @@index([resourceType])
 }
 
+// Deprecated - keeping for backward compatibility
 model RolePermission {
   id           String     @id @default(cuid())
   roleId       String     @map("role_id")
-  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
   permissionId String     @map("permission_id")
-  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
   createdAt    DateTime   @default(now()) @map("created_at")
   updatedAt    DateTime   @updatedAt @map("updated_at")
 
   @@map("role_permissions")
   @@index([roleId])
   @@index([permissionId])
+}
+
+// NEW: User-specific permissions table
+model UserPermission {
+  id           String      @id @default(cuid())
+  userId       String      @map("user_id") // References FormRecord15.id
+  resourceType String      @map("resource_type") // "module" or "form"
+  resourceId   String      @map("resource_id") // FormModule.id or Form.id
+  
+  // Permission actions
+  canView      Boolean     @default(false) @map("can_view")
+  canCreate    Boolean     @default(false) @map("can_create")
+  canEdit      Boolean     @default(false) @map("can_edit")
+  canDelete    Boolean     @default(false) @map("can_delete")
+  canManage    Boolean     @default(false) @map("can_manage") // Full control
+  
+  // System permissions (for admin users)
+  isSystemAdmin Boolean    @default(false) @map("is_system_admin")
+  
+  // Metadata
+  grantedBy    String?     @map("granted_by") // Who granted this permission
+  grantedAt    DateTime    @default(now()) @map("granted_at")
+  expiresAt    DateTime?   @map("expires_at") // Optional expiration
+  isActive     Boolean     @default(true) @map("is_active")
+  
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  @@map("user_permissions")
+  @@unique([userId, resourceType, resourceId], name: "unique_user_resource_permission")
+  @@index([userId])
+  @@index([resourceType])
+  @@index([resourceId])
+  @@index([isActive])
+  @@index([expiresAt])
 }

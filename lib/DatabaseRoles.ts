@@ -1,627 +1,982 @@
-import { prisma } from "@/lib/prisma";
-import type { Role, Permission, RolePermission } from "@/types/rbac";
-import { DatabaseTransforms } from "./DatabaseTransforms";
+import { prisma } from "@/lib/prisma"
+import type { Role, Permission, RolePermission } from "@/types/rbac"
 
 export class DatabaseRoles {
-  // Role Operations
+  // Role Operations (Now just for designation/department purposes)
   static async createRole(data: {
-    name: string;
-    description?: string;
-    permissions?: string[];
+    name: string
+    description?: string
   }): Promise<Role> {
     try {
-      console.log("[DatabaseRoles] Creating role:", data.name);
+      console.log("[DatabaseRoles] Creating role (designation):", data.name)
 
       // Check if role already exists
       const existingRole = await prisma.role.findUnique({
-        where: { name: data.name },
-      });
+        where: { name: data.name }
+      })
 
       if (existingRole) {
-        throw new Error(`Role with name "${data.name}" already exists`);
+        throw new Error(`Role with name "${data.name}" already exists`)
       }
 
-      // Create the role
+      // Create the role (just for designation purposes)
       const role = await prisma.role.create({
         data: {
           name: data.name,
-          description: data.description,
-        },
-        include: {
-          permissions: {
-            include: {
-              permission: true,
-            },
-          },
-        },
-      });
+          description: data.description
+        }
+      })
 
-      // Add permissions if provided
-      if (data.permissions && data.permissions.length > 0) {
-        await this.assignPermissionsToRole(role.id, data.permissions);
-
-        // Re-fetch role with permissions
-        const roleWithPermissions = await this.getRole(role.id);
-        return roleWithPermissions!;
-      }
-
-      return this.transformRole(role);
+      return this.transformRole(role)
     } catch (error: any) {
-      console.error("Database error creating role:", error);
-      throw new Error(`Failed to create role: ${error?.message}`);
+      console.error("Database error creating role:", error)
+      throw new Error(`Failed to create role: ${error?.message}`)
     }
   }
 
   static async getRoles(): Promise<Role[]> {
     try {
       const roles = await prisma.role.findMany({
-        include: {
-          permissions: {
-            include: {
-              permission: true,
-            },
-          },
-        },
-        orderBy: { name: "asc" },
-      });
+        orderBy: { name: "asc" }
+      })
 
-      return roles.map((role) => this.transformRole(role));
+      return roles.map(role => this.transformRole(role))
     } catch (error: any) {
-      console.error("Database error fetching roles:", error);
-      throw new Error(`Failed to fetch roles: ${error?.message}`);
+      console.error("Database error fetching roles:", error)
+      throw new Error(`Failed to fetch roles: ${error?.message}`)
     }
   }
 
   static async getRole(id: string): Promise<Role | null> {
     try {
       const role = await prisma.role.findUnique({
-        where: { id },
-        include: {
-          permissions: {
-            include: {
-              permission: true,
-            },
-          },
-        },
-      });
+        where: { id }
+      })
 
-      if (!role) return null;
-      return this.transformRole(role);
+      if (!role) return null
+      return this.transformRole(role)
     } catch (error: any) {
-      console.error("Database error fetching role:", error);
-      throw new Error(`Failed to fetch role: ${error?.message}`);
+      console.error("Database error fetching role:", error)
+      throw new Error(`Failed to fetch role: ${error?.message}`)
     }
   }
 
-  static async updateRole(
-    id: string,
-    data: {
-      name?: string;
-      description?: string;
-      permissions?: string[];
-    }
-  ): Promise<Role> {
+  static async updateRole(id: string, data: {
+    name?: string
+    description?: string
+  }): Promise<Role> {
     try {
-      console.log("[DatabaseRoles] Updating role:", id);
+      console.log("[DatabaseRoles] Updating role:", id)
 
       // Check if new name conflicts with existing roles
       if (data.name) {
         const existingRole = await prisma.role.findFirst({
-          where: {
+          where: { 
             name: data.name,
-            id: { not: id },
-          },
-        });
+            id: { not: id }
+          }
+        })
 
         if (existingRole) {
-          throw new Error(`Role with name "${data.name}" already exists`);
+          throw new Error(`Role with name "${data.name}" already exists`)
         }
       }
 
       // Update role basic info
-      await prisma.role.update({
+      const role = await prisma.role.update({
         where: { id },
         data: {
           name: data.name,
-          description: data.description,
-        },
-      });
-
-      // Update permissions if provided
-      if (data.permissions !== undefined) {
-        // Remove all existing permissions
-        await prisma.rolePermission.deleteMany({
-          where: { roleId: id },
-        });
-
-        // Add new permissions
-        if (data.permissions.length > 0) {
-          await this.assignPermissionsToRole(id, data.permissions);
+          description: data.description
         }
-      }
+      })
 
-      // Return updated role
-      const updatedRole = await this.getRole(id);
-      return updatedRole!;
+      return this.transformRole(role)
     } catch (error: any) {
-      console.error("Database error updating role:", error);
-      throw new Error(`Failed to update role: ${error?.message}`);
+      console.error("Database error updating role:", error)
+      throw new Error(`Failed to update role: ${error?.message}`)
     }
   }
 
   static async deleteRole(id: string): Promise<void> {
     try {
-      console.log("[DatabaseRoles] Deleting role:", id);
+      console.log("[DatabaseRoles] Deleting role:", id)
 
-      // Check if role is in use
+      // Check if role is in use (just for reference, not permissions)
       const usersWithRole = await prisma.formRecord15.count({
         where: {
           recordData: {
             path: ["roleId"],
-            equals: id,
-          },
-        },
-      });
+            equals: id
+          }
+        }
+      })
 
       if (usersWithRole > 0) {
-        throw new Error(
-          `Cannot delete role. ${usersWithRole} users are assigned to this role.`
-        );
+        throw new Error(`Cannot delete role. ${usersWithRole} users are assigned to this role.`)
       }
 
-      // Delete the role (permissions will be cascade deleted)
+      // Delete the role
       await prisma.role.delete({
-        where: { id },
-      });
+        where: { id }
+      })
 
-      console.log("[DatabaseRoles] Role deleted successfully");
+      console.log("[DatabaseRoles] Role deleted successfully")
     } catch (error: any) {
-      console.error("Database error deleting role:", error);
-      throw new Error(`Failed to delete role: ${error?.message}`);
+      console.error("Database error deleting role:", error)
+      throw new Error(`Failed to delete role: ${error?.message}`)
     }
   }
 
-  // Permission Operations
-  static async createPermission(data: {
-    name: string;
-    description?: string;
-    resourceId?: string;
-    resourceType?: string;
-  }): Promise<Permission> {
-    try {
-      console.log("[DatabaseRoles] Creating permission:", data.name);
-
-      // Check if permission already exists
-      const existingPermission = await prisma.permission.findUnique({
-        where: { name: data.name },
-      });
-
-      if (existingPermission) {
-        throw new Error(`Permission with name "${data.name}" already exists`);
-      }
-
-      const permission = await prisma.permission.create({
-        data: {
-          name: data.name,
-          description: data.description,
-          resourceId: data.resourceId,
-          resourceType: data.resourceType,
-        },
-        include: {
-          roles: {
-            include: {
-              role: true,
-            },
-          },
-        },
-      });
-
-      return this.transformPermission(permission);
-    } catch (error: any) {
-      console.error("Database error creating permission:", error);
-      throw new Error(`Failed to create permission: ${error?.message}`);
-    }
-  }
-
-  static async getPermissions(filters?: {
-    resourceType?: string;
-    resourceId?: string;
-  }): Promise<Permission[]> {
-    try {
-      const where: any = {};
-
-      if (filters?.resourceType) {
-        where.resourceType = filters.resourceType;
-      }
-
-      if (filters?.resourceId) {
-        where.resourceId = filters.resourceId;
-      }
-
-      const permissions = await prisma.permission.findMany({
-        where,
-        include: {
-          roles: {
-            include: {
-              role: true,
-            },
-          },
-        },
-        orderBy: { name: "asc" },
-      });
-
-      return permissions.map((permission) => this.transformPermission(permission));
-    } catch (error: any) {
-      console.error("Database error fetching permissions:", error);
-      throw new Error(`Failed to fetch permissions: ${error?.message}`);
-    }
-  }
-
-  static async getPermission(id: string): Promise<Permission | null> {
-    try {
-      const permission = await prisma.permission.findUnique({
-        where: { id },
-        include: {
-          roles: {
-            include: {
-              role: true,
-            },
-          },
-        },
-      });
-
-      if (!permission) return null;
-      return this.transformPermission(permission);
-    } catch (error: any) {
-      console.error("Database error fetching permission:", error);
-      throw new Error(`Failed to fetch permission: ${error?.message}`);
-    }
-  }
-
-  static async updatePermission(
-    id: string,
-    data: {
-      name?: string;
-      description?: string;
-      resourceId?: string;
-      resourceType?: string;
-    }
-  ): Promise<Permission> {
-    try {
-      console.log("[DatabaseRoles] Updating permission:", id);
-
-      // Check if new name conflicts with existing permissions
-      if (data.name) {
-        const existingPermission = await prisma.permission.findFirst({
-          where: {
-            name: data.name,
-            id: { not: id },
-          },
-        });
-
-        if (existingPermission) {
-          throw new Error(`Permission with name "${data.name}" already exists`);
-        }
-      }
-
-      const permission = await prisma.permission.update({
-        where: { id },
-        data: {
-          name: data.name,
-          description: data.description,
-          resourceId: data.resourceId,
-          resourceType: data.resourceType,
-        },
-        include: {
-          roles: {
-            include: {
-              role: true,
-            },
-          },
-        },
-      });
-
-      return this.transformPermission(permission);
-    } catch (error: any) {
-      console.error("Database error updating permission:", error);
-      throw new Error(`Failed to update permission: ${error?.message}`);
-    }
-  }
-
-  static async deletePermission(id: string): Promise<void> {
-    try {
-      console.log("[DatabaseRoles] Deleting permission:", id);
-
-      // Delete the permission (role assignments will be cascade deleted)
-      await prisma.permission.delete({
-        where: { id },
-      });
-
-      console.log("[DatabaseRoles] Permission deleted successfully");
-    } catch (error: any) {
-      console.error("Database error deleting permission:", error);
-      throw new Error(`Failed to delete permission: ${error?.message}`);
-    }
-  }
-
-  // Role-Permission Assignment Operations
-  static async assignPermissionsToRole(
-    roleId: string,
-    permissionIds: string[]
-  ): Promise<void> {
-    try {
-      console.log("[DatabaseRoles] Assigning permissions to role:", {
-        roleId,
-        permissionIds,
-      });
-
-      // Validate role exists
-      const role = await prisma.role.findUnique({ where: { id: roleId } });
-      if (!role) {
-        throw new Error(`Role not found: ${roleId}`);
-      }
-
-      // Validate permissions exist
-      const permissions = await prisma.permission.findMany({
-        where: { id: { in: permissionIds } },
-      });
-
-      if (permissions.length !== permissionIds.length) {
-        const foundIds = permissions.map((p) => p.id);
-        const missingIds = permissionIds.filter((id) => !foundIds.includes(id));
-        throw new Error(`Permissions not found: ${missingIds.join(", ")}`);
-      }
-
-      // Create role-permission assignments
-      const assignments = permissionIds.map((permissionId) => ({
-        roleId,
-        permissionId,
-      }));
-
-      await prisma.rolePermission.createMany({
-        data: assignments,
-        skipDuplicates: true,
-      });
-
-      console.log("[DatabaseRoles] Permissions assigned successfully");
-    } catch (error: any) {
-      console.error("Database error assigning permissions:", error);
-      throw new Error(`Failed to assign permissions: ${error?.message}`);
-    }
-  }
-
-  static async removePermissionsFromRole(
-    roleId: string,
-    permissionIds: string[]
-  ): Promise<void> {
-    try {
-      console.log("[DatabaseRoles] Removing permissions from role:", {
-        roleId,
-        permissionIds,
-      });
-
-      await prisma.rolePermission.deleteMany({
-        where: {
-          roleId,
-          permissionId: { in: permissionIds },
-        },
-      });
-
-      console.log("[DatabaseRoles] Permissions removed successfully");
-    } catch (error: any) {
-      console.error("Database error removing permissions:", error);
-      throw new Error(`Failed to remove permissions: ${error?.message}`);
-    }
-  }
-
-  // User Permission Operations (for form_records_15 users)
+  // USER-SPECIFIC PERMISSION OPERATIONS (COMPLETELY REFACTORED FOR DEDICATED TABLE)
+  
+  /**
+   * Assign role to user (just for designation/department purposes)
+   */
   static async assignRoleToUser(userId: string, roleId: string): Promise<void> {
     try {
-      console.log("[DatabaseRoles] Assigning role to user:", { userId, roleId });
+      console.log("[DatabaseRoles] Assigning role (designation) to user:", { userId, roleId })
 
       // Validate role exists
-      const role = await prisma.role.findUnique({ where: { id: roleId } });
+      const role = await prisma.role.findUnique({ where: { id: roleId } })
       if (!role) {
-        throw new Error(`Role not found: ${roleId}`);
+        throw new Error(`Role not found: ${roleId}`)
       }
 
       // Get user record from form_records_15
       const userRecord = await prisma.formRecord15.findUnique({
-        where: { id: userId },
-      });
+        where: { id: userId }
+      })
 
       if (!userRecord) {
-        throw new Error(`User not found: ${userId}`);
+        throw new Error(`User not found: ${userId}`)
       }
 
-      // Update user record with role assignment
-      const recordData = userRecord.recordData as any;
+      // Update user record with role assignment (just for designation)
+      const recordData = userRecord.recordData as any
       const updatedRecordData = {
         ...recordData,
         roleId: roleId,
         roleName: role.name,
-        roleUpdatedAt: new Date().toISOString(),
-      };
+        roleUpdatedAt: new Date().toISOString()
+      }
 
       await prisma.formRecord15.update({
         where: { id: userId },
         data: {
           recordData: updatedRecordData,
-          updatedAt: new Date(),
-        },
-      });
+          updatedAt: new Date()
+        }
+      })
 
-      console.log("[DatabaseRoles] Role assigned to user successfully");
+      console.log("[DatabaseRoles] Role assigned to user successfully")
     } catch (error: any) {
-      console.error("Database error assigning role to user:", error);
-      throw new Error(`Failed to assign role to user: ${error?.message}`);
+      console.error("Database error assigning role to user:", error)
+      throw new Error(`Failed to assign role to user: ${error?.message}`)
     }
   }
 
-  static async getUserPermissions(userId: string): Promise<Permission[]> {
+  /**
+   * Get user permissions from dedicated UserPermission table
+   */
+  static async getUserPermissions(userId: string): Promise<any[]> {
     try {
-      console.log("[DatabaseRoles] Getting user permissions:", userId);
+      console.log("[DatabaseRoles] Getting user permissions from UserPermission table:", userId)
 
-      // Get user record from form_records_15
-      const userRecord = await prisma.formRecord15.findUnique({
-        where: { id: userId },
-      });
-
-      if (!userRecord) {
-        throw new Error(`User not found: ${userId}`);
+      // Check if UserPermission table exists
+      let tableExists = true
+      try {
+        await prisma.userPermission.findFirst({ take: 1 })
+      } catch (error) {
+        console.log("[DatabaseRoles] UserPermission table not available, returning empty permissions")
+        tableExists = false
+        return []
       }
 
-      const recordData = userRecord.recordData as any;
-      const roleId = recordData?.roleId;
-
-      if (!roleId) {
-        console.log("[DatabaseRoles] User has no role assigned");
-        return [];
+      if (!tableExists) {
+        return []
       }
 
-      // Get role with permissions
-      const role = await prisma.role.findUnique({
-        where: { id: roleId },
-        include: {
-          permissions: {
-            include: {
-              permission: true,
-            },
-          },
+      // Get user permissions from dedicated table
+      const userPermissions: any[] = await prisma.userPermission.findMany({
+        where: {
+          userId: userId,
+          isActive: true,
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gt: new Date() } }
+          ]
         },
-      });
+        orderBy: [
+          { resourceType: 'asc' },
+          { createdAt: 'desc' }
+        ]
+      })
 
-      if (!role) {
-        console.log("[DatabaseRoles] Role not found:", roleId);
-        return [];
-      }
-
-      const permissions = role.permissions.map((rp) =>
-        this.transformPermission(rp.permission)
-      );
-      console.log(
-        `[DatabaseRoles] Found ${permissions.length} permissions for user`
-      );
-
-      return permissions;
+      console.log(`[DatabaseRoles] Found ${userPermissions.length} permissions for user`)
+      
+      // Get resource details for each permission
+      const permissionsWithResources = await Promise.all(
+        userPermissions.map(async (perm: any) => {
+          let resource = null
+          
+          if (perm.resourceType === 'module') {
+            resource = await prisma.formModule.findUnique({
+              where: { id: perm.resourceId },
+              select: {
+                id: true,
+                name: true,
+                description: true
+              }
+            })
+          } else if (perm.resourceType === 'form') {
+            resource = await prisma.form.findUnique({
+              where: { id: perm.resourceId },
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                moduleId: true
+              }
+            })
+          }
+          
+          return {
+            id: perm.id,
+            userId: perm.userId,
+            resourceType: perm.resourceType,
+            resourceId: perm.resourceId,
+            resource: resource,
+            permissions: {
+              canView: perm.canView,
+              canCreate: perm.canCreate,
+              canEdit: perm.canEdit,
+              canDelete: perm.canDelete,
+              canManage: perm.canManage
+            },
+            isSystemAdmin: perm.isSystemAdmin,
+            grantedBy: perm.grantedBy,
+            grantedAt: perm.grantedAt,
+            expiresAt: perm.expiresAt,
+            isActive: perm.isActive
+          }
+        })
+      )
+      
+      return permissionsWithResources.filter(perm => perm.resource !== null)
     } catch (error: any) {
-      console.error("Database error getting user permissions:", error);
-      throw new Error(`Failed to get user permissions: ${error?.message}`);
+      console.error("Database error getting user permissions:", error)
+      return []
     }
   }
 
+  /**
+   * Get resource details for permissions
+   */
+  static async getResourceDetails(resourceType: 'module' | 'form', resourceId: string): Promise<any> {
+    try {
+      if (resourceType === 'module') {
+        return await prisma.formModule.findUnique({
+          where: { id: resourceId },
+          select: {
+            id: true,
+            name: true,
+            description: true
+          }
+        })
+      } else if (resourceType === 'form') {
+        return await prisma.form.findUnique({
+          where: { id: resourceId },
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            moduleId: true
+          }
+        })
+      }
+      return null
+    } catch (error: any) {
+      console.error("Database error getting resource details:", error)
+      return null
+    }
+  }
+
+  /**
+   * Get user permissions with resource details (optimized version)
+   */
+  static async getUserPermissionsWithResources(userId: string): Promise<any[]> {
+    try {
+      console.log("[DatabaseRoles] Getting user permissions with resources:", userId)
+
+      // Check if UserPermission table exists
+      let tableExists = true
+      try {
+        await prisma.userPermission.findFirst({ take: 1 })
+      } catch (error) {
+        console.log("[DatabaseRoles] UserPermission table not available, returning empty permissions")
+        tableExists = false
+        return []
+      }
+
+      if (!tableExists) {
+        return []
+      }
+
+      // Get user permissions from dedicated table
+      const userPermissions: any[] = await prisma.userPermission.findMany({
+        where: {
+          userId: userId,
+          isActive: true,
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gt: new Date() } }
+          ]
+        },
+        orderBy: [
+          { resourceType: 'asc' },
+          { createdAt: 'desc' }
+        ]
+      })
+
+      console.log(`[DatabaseRoles] Found ${userPermissions.length} permissions for user`)
+      
+      // Get all unique module and form IDs
+      const moduleIds = userPermissions
+        .filter(p => p.resourceType === 'module')
+        .map(p => p.resourceId)
+      
+      const formIds = userPermissions
+        .filter(p => p.resourceType === 'form')
+        .map(p => p.resourceId)
+      
+      // Batch fetch resources
+      const [modules, forms] = await Promise.all([
+        moduleIds.length > 0 ? prisma.formModule.findMany({
+          where: { id: { in: moduleIds } },
+          select: {
+            id: true,
+            name: true,
+            description: true
+          }
+        }) : [],
+        formIds.length > 0 ? prisma.form.findMany({
+          where: { id: { in: formIds } },
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            moduleId: true
+          }
+        }) : []
+      ])
+      
+      // Create lookup maps
+      const moduleMap = new Map(modules.map(m => [m.id, m]))
+      const formMap = new Map(forms.map(f => [f.id, f]))
+      
+      // Combine permissions with resources
+      return userPermissions.map(perm => ({
+        id: perm.id,
+        userId: perm.userId,
+        resourceType: perm.resourceType,
+        resourceId: perm.resourceId,
+        resource: perm.resourceType === 'module' 
+          ? moduleMap.get(perm.resourceId) 
+          : formMap.get(perm.resourceId),
+        permissions: {
+          canView: perm.canView,
+          canCreate: perm.canCreate,
+          canEdit: perm.canEdit,
+          canDelete: perm.canDelete,
+          canManage: perm.canManage
+        },
+        isSystemAdmin: perm.isSystemAdmin,
+        grantedBy: perm.grantedBy,
+        grantedAt: perm.grantedAt,
+        expiresAt: perm.expiresAt,
+        isActive: perm.isActive
+      })).filter(perm => perm.resource !== null)
+    } catch (error: any) {
+      console.error("Database error getting user permissions:", error)
+      return []
+    }
+  }
+
+  /**
+   * Check if user has specific permission on a resource
+   */
   static async checkUserPermission(
-    userId: string,
-    permissionName: string,
-    resourceId?: string
+    userId: string, 
+    resourceType: 'module' | 'form', 
+    resourceId: string, 
+    action: 'view' | 'create' | 'edit' | 'delete' | 'manage'
   ): Promise<boolean> {
     try {
-      const userPermissions = await this.getUserPermissions(userId);
+      console.log("[DatabaseRoles] Checking user permission:", { userId, resourceType, resourceId, action })
 
-      return userPermissions.some((permission) => {
-        if (permission.name !== permissionName) return false;
-        if (
-          resourceId &&
-          permission.resourceId &&
-          permission.resourceId !== resourceId
-        )
-          return false;
-        return true;
-      });
-    } catch (error: any) {
-      console.error("Database error checking user permission:", error);
-      return false;
-    }
-  }
-
-  // New Methods to Resolve Errors
-  static async createResourcePermissions(data: {
-    resourceId: string;
-    resourceType: string;
-    permissions: Array<{ name: string; description?: string }>;
-  }): Promise<Permission[]> {
-    try {
-      console.log("[DatabaseRoles] Creating resource permissions:", {
-        resourceId: data.resourceId,
-        resourceType: data.resourceType,
-      });
-
-      const createdPermissions: Permission[] = [];
-
-      for (const perm of data.permissions) {
-        // Check if permission already exists
-        const existingPermission = await prisma.permission.findUnique({
-          where: { name: perm.name },
-        });
-
-        if (existingPermission) {
-          throw new Error(`Permission with name "${perm.name}" already exists`);
-        }
-
-        const permission = await prisma.permission.create({
-          data: {
-            name: perm.name,
-            description: perm.description,
-            resourceId: data.resourceId,
-            resourceType: data.resourceType,
-          },
-          include: {
-            roles: {
-              include: {
-                role: true,
-              },
-            },
-          },
-        });
-
-        createdPermissions.push(this.transformPermission(permission));
+      // Check if UserPermission table exists
+      let tableExists = true
+      try {
+        await prisma.userPermission.findFirst({ take: 1 })
+      } catch (error) {
+        console.log("[DatabaseRoles] UserPermission table not available, returning false")
+        return false
       }
 
-      console.log("[DatabaseRoles] Resource permissions created successfully");
-      return createdPermissions;
+      if (!tableExists) {
+        return false
+      }
+
+      // Check if user has system admin permission
+      const systemAdminPermission = await prisma.userPermission.findFirst({
+        where: {
+          userId: userId,
+          isSystemAdmin: true,
+          isActive: true,
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gt: new Date() } }
+          ]
+        }
+      })
+
+      if (systemAdminPermission) {
+        console.log("[DatabaseRoles] User has system admin permission")
+        return true
+      }
+
+      // Check specific resource permission
+      const permission = await prisma.userPermission.findFirst({
+        where: {
+          userId: userId,
+          resourceType: resourceType,
+          resourceId: resourceId,
+          isActive: true,
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gt: new Date() } }
+          ]
+        }
+      })
+
+      if (!permission) {
+        console.log("[DatabaseRoles] No permission found for resource")
+        return false
+      }
+
+      // Check specific action
+      let hasPermission = false
+      switch (action) {
+        case 'view':
+          hasPermission = permission.canView || permission.canManage
+          break
+        case 'create':
+          hasPermission = permission.canCreate || permission.canManage
+          break
+        case 'edit':
+          hasPermission = permission.canEdit || permission.canManage
+          break
+        case 'delete':
+          hasPermission = permission.canDelete || permission.canManage
+          break
+        case 'manage':
+          hasPermission = permission.canManage
+          break
+        default:
+          hasPermission = false
+      }
+
+      console.log(`[DatabaseRoles] Permission check result: ${hasPermission}`)
+      return hasPermission
     } catch (error: any) {
-      console.error("Database error creating resource permissions:", error);
-      throw new Error(`Failed to create resource permissions: ${error?.message}`);
+      console.error("Database error checking user permission:", error)
+      return false
     }
   }
 
-  static async deleteResourcePermissions(
-    resourceId: string,
-    resourceType: string
+  /**
+   * Grant permission to user for a specific resource
+   */
+  static async grantUserPermission(data: {
+    userId: string
+    resourceType: 'module' | 'form'
+    resourceId: string
+    permissions: {
+      canView?: boolean
+      canCreate?: boolean
+      canEdit?: boolean
+      canDelete?: boolean
+      canManage?: boolean
+    }
+    isSystemAdmin?: boolean
+    grantedBy?: string
+    expiresAt?: Date
+  }): Promise<void> {
+    try {
+      console.log("[DatabaseRoles] Granting user permission:", data)
+
+      // Check if UserPermission table exists
+      let tableExists = true
+      try {
+        await prisma.userPermission.findFirst({ take: 1 })
+      } catch (error) {
+        console.log("[DatabaseRoles] UserPermission table not available, skipping permission grant")
+        return
+      }
+
+      if (!tableExists) {
+        return
+      }
+
+      // Validate resource exists
+      if (data.resourceType === 'module') {
+        const module = await prisma.formModule.findUnique({
+          where: { id: data.resourceId }
+        })
+        if (!module) {
+          throw new Error(`Module not found: ${data.resourceId}`)
+        }
+      } else if (data.resourceType === 'form') {
+        const form = await prisma.form.findUnique({
+          where: { id: data.resourceId }
+        })
+        if (!form) {
+          throw new Error(`Form not found: ${data.resourceId}`)
+        }
+      }
+
+      // Validate user exists
+      const userRecord = await prisma.formRecord15.findUnique({
+        where: { id: data.userId }
+      })
+      if (!userRecord) {
+        throw new Error(`User not found: ${data.userId}`)
+      }
+
+      // Upsert permission
+      await prisma.userPermission.upsert({
+        where: {
+          unique_user_resource_permission: {
+            userId: data.userId,
+            resourceType: data.resourceType,
+            resourceId: data.resourceId
+          }
+        },
+        update: {
+          canView: data.permissions.canView ?? false,
+          canCreate: data.permissions.canCreate ?? false,
+          canEdit: data.permissions.canEdit ?? false,
+          canDelete: data.permissions.canDelete ?? false,
+          canManage: data.permissions.canManage ?? false,
+          isSystemAdmin: data.isSystemAdmin ?? false,
+          grantedBy: data.grantedBy,
+          expiresAt: data.expiresAt,
+          isActive: true,
+          updatedAt: new Date()
+        },
+        create: {
+          userId: data.userId,
+          resourceType: data.resourceType,
+          resourceId: data.resourceId,
+          canView: data.permissions.canView ?? false,
+          canCreate: data.permissions.canCreate ?? false,
+          canEdit: data.permissions.canEdit ?? false,
+          canDelete: data.permissions.canDelete ?? false,
+          canManage: data.permissions.canManage ?? false,
+          isSystemAdmin: data.isSystemAdmin ?? false,
+          grantedBy: data.grantedBy,
+          expiresAt: data.expiresAt,
+          isActive: true
+        }
+      })
+
+      console.log("[DatabaseRoles] User permission granted successfully")
+    } catch (error: any) {
+      console.error("Database error granting user permission:", error)
+      throw new Error(`Failed to grant user permission: ${error?.message}`)
+    }
+  }
+
+  /**
+   * Revoke permission from user for a specific resource
+   */
+  static async revokeUserPermission(
+    userId: string,
+    resourceType: 'module' | 'form',
+    resourceId: string
   ): Promise<void> {
     try {
-      console.log("[DatabaseRoles] Deleting permissions for resource:", {
-        resourceId,
-        resourceType,
-      });
+      console.log("[DatabaseRoles] Revoking user permission:", { userId, resourceType, resourceId })
 
-      // Delete all permissions associated with the resource
-      await prisma.permission.deleteMany({
+      // Check if UserPermission table exists
+      let tableExists = true
+      try {
+        await prisma.userPermission.findFirst({ take: 1 })
+      } catch (error) {
+        console.log("[DatabaseRoles] UserPermission table not available, skipping permission revoke")
+        return
+      }
+
+      if (!tableExists) {
+        return
+      }
+
+      await prisma.userPermission.updateMany({
         where: {
-          resourceId,
-          resourceType,
+          userId: userId,
+          resourceType: resourceType,
+          resourceId: resourceId
         },
-      });
+        data: {
+          isActive: false,
+          updatedAt: new Date()
+        }
+      })
 
-      console.log("[DatabaseRoles] Resource permissions deleted successfully");
+      console.log("[DatabaseRoles] User permission revoked successfully")
     } catch (error: any) {
-      console.error("Database error deleting resource permissions:", error);
-      throw new Error(`Failed to delete resource permissions: ${error?.message}`);
+      console.error("Database error revoking user permission:", error)
+      throw new Error(`Failed to revoke user permission: ${error?.message}`)
+    }
+  }
+
+  /**
+   * Batch update multiple user permissions
+   */
+  static async batchUpdateUserPermissions(
+    userId: string,
+    permissionUpdates: Array<{
+      resourceType: 'module' | 'form'
+      resourceId: string
+      permissions: {
+        canView?: boolean
+        canCreate?: boolean
+        canEdit?: boolean
+        canDelete?: boolean
+        canManage?: boolean
+      }
+      grantedBy?: string
+    }>
+  ): Promise<void> {
+    try {
+      console.log("[DatabaseRoles] Batch updating user permissions:", { userId, updates: permissionUpdates.length })
+
+      // Check if UserPermission table exists
+      let tableExists = true
+      try {
+        await prisma.userPermission.findFirst({ take: 1 })
+      } catch (error) {
+        console.log("[DatabaseRoles] UserPermission table not available, skipping batch update")
+        return
+      }
+
+      if (!tableExists) {
+        return
+      }
+
+      // Validate user exists
+      const userRecord = await prisma.formRecord15.findUnique({
+        where: { id: userId }
+      })
+      if (!userRecord) {
+        throw new Error(`User not found: ${userId}`)
+      }
+
+      // Process each permission update
+      for (const update of permissionUpdates) {
+        await this.grantUserPermission({
+          userId: userId,
+          resourceType: update.resourceType,
+          resourceId: update.resourceId,
+          permissions: update.permissions,
+          grantedBy: update.grantedBy
+        })
+      }
+
+      console.log("[DatabaseRoles] Batch user permissions updated successfully")
+    } catch (error: any) {
+      console.error("Database error batch updating user permissions:", error)
+      throw new Error(`Failed to batch update user permissions: ${error?.message}`)
+    }
+  }
+
+  /**
+   * Batch update user permissions using permission name format (moduleId:submoduleId:action)
+   */
+  static async updateUserPermissionsBatch(
+    userId: string,
+    permissionUpdates: Array<{
+      permissionName: string // Format: "moduleId:submoduleId:action"
+      value: boolean
+    }>
+  ): Promise<void> {
+    try {
+      console.log("[DatabaseRoles] Batch updating user permissions by name:", { userId, updates: permissionUpdates.length })
+
+      // Check if UserPermission table exists
+      let tableExists = true
+      try {
+        await prisma.userPermission.findFirst({ take: 1 })
+      } catch (error) {
+        console.log("[DatabaseRoles] UserPermission table not available, skipping permission updates")
+        return
+      }
+
+      if (!tableExists) {
+        return
+      }
+
+      // Validate user exists
+      const userRecord = await prisma.formRecord15.findUnique({
+        where: { id: userId }
+      })
+      if (!userRecord) {
+        throw new Error(`User not found: ${userId}`)
+      }
+
+      // Group updates by resource
+      const resourceUpdates = new Map<string, {
+        resourceType: 'module' | 'form'
+        resourceId: string
+        permissions: Record<string, boolean>
+      }>()
+
+      for (const update of permissionUpdates) {
+        const parts = update.permissionName.split(':')
+        if (parts.length !== 3) {
+          console.warn(`[DatabaseRoles] Invalid permission name format: ${update.permissionName}`)
+          continue
+        }
+
+        const [moduleId, submoduleId, action] = parts
+        let resourceType: 'module' | 'form'
+        let resourceId: string
+
+        if (submoduleId === '_module') {
+          resourceType = 'module'
+          resourceId = moduleId
+        } else {
+          resourceType = 'module'
+          resourceId = submoduleId
+        }
+
+        const key = `${resourceType}:${resourceId}`
+        if (!resourceUpdates.has(key)) {
+          resourceUpdates.set(key, {
+            resourceType,
+            resourceId,
+            permissions: {}
+          })
+        }
+
+        const resourceUpdate = resourceUpdates.get(key)!
+        
+        // Map action to permission field
+        switch (action) {
+          case 'view':
+            resourceUpdate.permissions.canView = update.value
+            break
+          case 'create':
+            resourceUpdate.permissions.canCreate = update.value
+            break
+          case 'edit':
+            resourceUpdate.permissions.canEdit = update.value
+            break
+          case 'delete':
+            resourceUpdate.permissions.canDelete = update.value
+            break
+          case 'manage':
+            resourceUpdate.permissions.canManage = update.value
+            break
+        }
+      }
+
+      console.log(`[DatabaseRoles] Processing ${resourceUpdates.size} resource updates`)
+      
+      // Apply all updates
+      for (const [, resourceUpdate] of resourceUpdates) {
+        // Get existing permissions first
+        let existingPermission = null
+        try {
+          existingPermission = await prisma.userPermission.findFirst({
+            where: {
+              userId: userId,
+              resourceType: resourceUpdate.resourceType,
+              resourceId: resourceUpdate.resourceId
+            }
+          })
+        } catch (error) {
+          console.log("[DatabaseRoles] Error fetching existing permission, creating new one")
+        }
+
+        // Merge with existing permissions
+        const finalPermissions = {
+          canView: resourceUpdate.permissions.canView ?? existingPermission?.canView ?? false,
+          canCreate: resourceUpdate.permissions.canCreate ?? existingPermission?.canCreate ?? false,
+          canEdit: resourceUpdate.permissions.canEdit ?? existingPermission?.canEdit ?? false,
+          canDelete: resourceUpdate.permissions.canDelete ?? existingPermission?.canDelete ?? false,
+          canManage: resourceUpdate.permissions.canManage ?? existingPermission?.canManage ?? false
+        }
+
+        console.log(`[DatabaseRoles] Updating ${resourceUpdate.resourceType} ${resourceUpdate.resourceId}:`, finalPermissions)
+        await this.grantUserPermission({
+          userId: userId,
+          resourceType: resourceUpdate.resourceType,
+          resourceId: resourceUpdate.resourceId,
+          permissions: finalPermissions
+        })
+      }
+
+      console.log("[DatabaseRoles] Batch user permissions updated successfully")
+    } catch (error: any) {
+      console.error("Database error batch updating user permissions:", error)
+      throw new Error(`Failed to batch update user permissions: ${error?.message}`)
+    }
+  }
+
+  /**
+   * Update single user permission using permission name format
+   */
+  static async updateUserPermission(
+    userId: string,
+    permissionName: string, // Format: "moduleId:submoduleId:action"
+    value: boolean
+  ): Promise<void> {
+    try {
+      console.log("[DatabaseRoles] Updating user permission:", { userId, permissionName, value })
+
+      const parts = permissionName.split(':')
+      if (parts.length !== 3) {
+        throw new Error(`Invalid permission name format: ${permissionName}`)
+      }
+
+      const [moduleId, submoduleId, action] = parts
+      let resourceType: 'module' | 'form'
+      let resourceId: string
+
+      if (submoduleId === '_module') {
+        resourceType = 'module'
+        resourceId = moduleId
+      } else {
+        resourceType = 'module'
+        resourceId = submoduleId
+      }
+
+      // Check if UserPermission table exists
+      let tableExists = true
+      try {
+        await prisma.userPermission.findFirst({ take: 1 })
+      } catch (error) {
+        console.log("[DatabaseRoles] UserPermission table not available, skipping permission update")
+        return
+      }
+
+      if (!tableExists) {
+        return
+      }
+
+      // Get existing permissions
+      const existingPermission = await prisma.userPermission.findFirst({
+        where: {
+          userId: userId,
+          resourceType: resourceType,
+          resourceId: resourceId
+        }
+      })
+
+      // Prepare permission data
+      const permissions = {
+        canView: existingPermission?.canView ?? false,
+        canCreate: existingPermission?.canCreate ?? false,
+        canEdit: existingPermission?.canEdit ?? false,
+        canDelete: existingPermission?.canDelete ?? false,
+        canManage: existingPermission?.canManage ?? false
+      }
+
+      // Update the specific permission
+      switch (action) {
+        case 'view':
+          permissions.canView = value
+          break
+        case 'create':
+          permissions.canCreate = value
+          break
+        case 'edit':
+          permissions.canEdit = value
+          break
+        case 'delete':
+          permissions.canDelete = value
+          break
+        case 'manage':
+          permissions.canManage = value
+          break
+        default:
+          throw new Error(`Invalid permission action: ${action}`)
+      }
+
+      // Grant or update permission
+      await this.grantUserPermission({
+        userId: userId,
+        resourceType: resourceType,
+        resourceId: resourceId,
+        permissions: permissions
+      })
+
+      console.log("[DatabaseRoles] User permission updated successfully")
+    } catch (error: any) {
+      console.error("Database error updating user permission:", error)
+      throw new Error(`Failed to update user permission: ${error?.message}`)
     }
   }
 
   static async getUserById(userId: string): Promise<any | null> {
     try {
-      console.log("[DatabaseRoles] Fetching user by ID:", userId);
+      console.log("[DatabaseRoles] Fetching user by ID:", userId)
 
-      const userRecord = await prisma.formRecord15.findUnique({
-        where: { id: userId },
-      });
+      // Try to find user by ID first
+      let userRecord = await prisma.formRecord15.findUnique({
+        where: { id: userId }
+      })
+
+      // If not found by ID, try to find by email in recordData
+      if (!userRecord) {
+        console.log("[DatabaseRoles] User not found by ID, searching by email pattern...")
+        
+        // Get all records and search for matching email
+        const allRecords = await prisma.formRecord15.findMany()
+        
+        for (const record of allRecords) {
+          const recordData = record.recordData as any
+          if (recordData && typeof recordData === 'object') {
+            // Check direct email property
+            if (recordData.email === userId) {
+              userRecord = record
+              break
+            }
+            
+            // Check field-based structure for email
+            for (const fieldId in recordData) {
+              const field = recordData[fieldId]
+              if (field && typeof field === 'object' && field.value) {
+                if (field.type === 'email' && field.value === userId) {
+                  userRecord = record
+                  break
+                }
+              }
+            }
+            
+            if (userRecord) break
+          }
+        }
+      }
 
       if (!userRecord) {
-        console.log("[DatabaseRoles] User not found:", userId);
-        return null;
+        console.log("[DatabaseRoles] User not found:", userId)
+        return null
       }
+
+      console.log("[DatabaseRoles] User found")
 
       return {
         id: userRecord.id,
@@ -629,192 +984,340 @@ export class DatabaseRoles {
         createdAt: userRecord.createdAt,
         updatedAt: userRecord.updatedAt,
         employee_id: userRecord.employee_id,
-        status: userRecord.status,
-      };
+        status: userRecord.status
+      }
     } catch (error: any) {
-      console.error("Database error fetching user:", error);
-      throw new Error(`Failed to fetch user: ${error?.message}`);
+      console.error("Database error fetching user:", error)
+      throw new Error(`Failed to fetch user: ${error?.message}`)
     }
   }
 
-  // Employee Permission Matrix Operations
-  static async getEmployeesWithPermissions(): Promise<
-    Array<{
-      id: string;
-      name: string;
-      email: string;
-      role: string;
-      department: string;
-      status: string;
-      permissions: Record<string, Record<string, boolean>>;
-    }>
-  > {
+  /**
+   * Get user by email address
+   */
+  static async getUserByEmail(email: string): Promise<any | null> {
     try {
-      console.log("[DatabaseRoles] Getting employees with permissions");
+      console.log("[DatabaseRoles] Fetching user by email:", email)
+
+      // Get all records and search for matching email
+      const allRecords = await prisma.formRecord15.findMany()
+      
+      for (const record of allRecords) {
+        const recordData = record.recordData as any
+        if (recordData && typeof recordData === 'object') {
+          // Check direct email property
+          if (recordData.email && recordData.email.toLowerCase() === email.toLowerCase()) {
+            console.log("[DatabaseRoles] User found by direct email property")
+            return {
+              id: record.id,
+              recordData: record.recordData,
+              createdAt: record.createdAt,
+              updatedAt: record.updatedAt,
+              employee_id: record.employee_id,
+              status: record.status
+            }
+          }
+          
+          // Check field-based structure for email
+          for (const fieldId in recordData) {
+            const field = recordData[fieldId]
+            if (field && typeof field === 'object' && field.value) {
+              if (field.type === 'email' && field.value.toLowerCase() === email.toLowerCase()) {
+                console.log("[DatabaseRoles] User found by field-based email structure")
+                return {
+                  id: record.id,
+                  recordData: record.recordData,
+                  createdAt: record.createdAt,
+                  updatedAt: record.updatedAt,
+                  employee_id: record.employee_id,
+                  status: record.status
+                }
+              }
+            }
+          }
+        }
+      }
+
+      console.log("[DatabaseRoles] User not found by email:", email)
+      return null
+    } catch (error: any) {
+      console.error("Database error fetching user by email:", error)
+      throw new Error(`Failed to fetch user by email: ${error?.message}`)
+    }
+  }
+
+  // Employee Permission Matrix Operations (UPDATED FOR DEDICATED PERMISSIONS TABLE)
+  static async getEmployeesWithPermissions(): Promise<Array<{
+    id: string
+    name: string
+    email: string
+    role: string
+    department: string
+    status: string
+    permissions: Record<string, Record<string, Record<string, boolean>>>
+  }>> {
+    try {
+      console.log("[DatabaseRoles] Getting employees with permissions from UserPermission table")
 
       // Get all users from form_records_15
       const userRecords = await prisma.formRecord15.findMany({
-        orderBy: { createdAt: "desc" },
-      });
+        orderBy: { createdAt: "desc" }
+      })
 
-      console.log(
-        `[DatabaseRoles] Found ${userRecords.length} total records in form_records_15`
-      );
+      console.log(`[DatabaseRoles] Found ${userRecords.length} total records in form_records_15`)
 
-      const employees = [];
+      const employees = []
 
       for (const record of userRecords) {
-        const recordData = record.recordData as any;
-
+        const recordData = record.recordData as any
+        
         // Skip records that don't have basic user information
-        if (!recordData || typeof recordData !== "object") continue;
-
-        // Try to extract email from various possible field structures
-        let email = null;
-        let name = null;
-
-        // Check if recordData has direct properties
+        if (!recordData || typeof recordData !== 'object') continue
+        
+        // Extract user information from the dynamic field structure
+        let email = null
+        let name = null
+        
+        // Check if recordData has direct properties first
         if (recordData.email) {
-          email = recordData.email;
-          name = recordData.name || recordData.fullName || recordData.firstName;
+          email = recordData.email
+          name = recordData.name || recordData.fullName || recordData.firstName
         } else {
           // Check if recordData has field-based structure
           for (const fieldId in recordData) {
-            const field = recordData[fieldId];
-            if (field && typeof field === "object" && field.value) {
-              if (
-                field.type === "email" ||
-                (field.label && field.label.toLowerCase().includes("email"))
-              ) {
-                email = field.value;
+            const field = recordData[fieldId]
+            if (field && typeof field === 'object' && field.value) {
+              if (field.type === 'email' || (field.label && field.label.toLowerCase().includes('email'))) {
+                email = field.value
               }
-              if (
-                !name &&
-                (field.type === "text" || field.type === "name") &&
-                field.label &&
-                (field.label.toLowerCase().includes("name") ||
-                  field.label.toLowerCase().includes("full"))
-              ) {
-                name = field.value;
+              if (!name && (field.type === 'text' || field.type === 'name') && 
+                  (field.label && (field.label.toLowerCase().includes('name') || field.label.toLowerCase().includes('full')))) {
+                name = field.value
+              }
+            }
+          }
+        }
+        
+        // Skip if no email found
+        if (!email) continue
+
+        // Get user's permissions from UserPermission table
+        let userPermissions: any[] = []
+        try {
+          // Check if UserPermission table exists
+          let tableExists = true
+          try {
+            await prisma.userPermission.findFirst({ take: 1 })
+          } catch (error) {
+            console.log("[DatabaseRoles] UserPermission table not available, using empty permissions")
+            tableExists = false
+          }
+
+          if (tableExists) {
+            userPermissions = await prisma.userPermission.findMany({
+              where: {
+                userId: record.id,
+                isActive: true,
+                OR: [
+                  { expiresAt: null },
+                  { expiresAt: { gt: new Date() } }
+                ]
+              }
+            })
+          }
+        } catch (error) {
+          console.log(`[DatabaseRoles] Error fetching permissions for ${email}, using empty permissions:`, error)
+          userPermissions = []
+        }
+        
+        console.log(`[DatabaseRoles] User ${email} has ${userPermissions.length} permissions`)
+        
+        // Get resource details for permissions
+        const moduleIds = userPermissions
+          .filter(p => p.resourceType === 'module')
+          .map(p => p.resourceId)
+        
+        const formIds = userPermissions
+          .filter(p => p.resourceType === 'form')
+          .map(p => p.resourceId)
+        
+        const [modules, forms] = await Promise.all([
+          moduleIds.length > 0 ? prisma.formModule.findMany({
+            where: { id: { in: moduleIds } },
+            select: { id: true, name: true }
+          }) : [],
+          formIds.length > 0 ? prisma.form.findMany({
+            where: { id: { in: formIds } },
+            select: { id: true, name: true, moduleId: true }
+          }) : []
+        ])
+        
+        const moduleMap = new Map(modules.map(m => [m.id, m]))
+        const formMap = new Map(forms.map(f => [f.id, f]))
+        
+        // Transform permissions into module-submodule matrix format
+        const permissionMatrix: Record<string, Record<string, Record<string, boolean>>> = {}
+        
+        for (const perm of userPermissions) {
+          const resource = perm.resourceType === 'module' 
+            ? moduleMap.get(perm.resourceId)
+            : null // We're not using forms anymore, only modules
+          
+          if (!resource) continue
+          
+          if (perm.resourceType === 'module') {
+            const moduleId = perm.resourceId
+            
+            // Check if this is a parent module or child module
+            const isParentModule = await prisma.formModule.findFirst({
+              where: { id: moduleId, parentId: null }
+            })
+            
+            if (!permissionMatrix[moduleId]) {
+              permissionMatrix[moduleId] = {}
+            }
+            
+            if (isParentModule) {
+              // This is a parent module - create module-level permissions
+              permissionMatrix[moduleId]['_module'] = {
+                view: perm.canView,
+                create: perm.canCreate,
+                edit: perm.canEdit,
+                delete: perm.canDelete,
+                manage: perm.canManage
+              }
+            } else {
+              // This is a child module - find its parent and add as submodule permission
+              const childModule = await prisma.formModule.findUnique({
+                where: { id: moduleId },
+                select: { parentId: true }
+              })
+              
+              if (childModule && childModule.parentId) {
+                const parentId = childModule.parentId
+                if (!permissionMatrix[parentId]) {
+                  permissionMatrix[parentId] = {}
+                }
+                
+                permissionMatrix[parentId][moduleId] = {
+                  view: perm.canView,
+                  create: perm.canCreate,
+                  edit: perm.canEdit,
+                  delete: perm.canDelete,
+                  manage: perm.canManage
+                }
               }
             }
           }
         }
 
-        // Skip if no email found
-        if (!email) continue;
-
-        // Get user's role and permissions
-        const roleId = recordData.roleId;
-        let userPermissions: Permission[] = [];
-
-        if (roleId) {
-          userPermissions = await this.getUserPermissions(record.id);
-        }
-
-        // Transform permissions into module-submodule matrix format
-        const permissionMatrix: Record<string, Record<string, boolean>> = {};
-
-        for (const permission of userPermissions) {
-          // Parse permission name: moduleId:submoduleId:action
-          const parts = permission.name.split(":");
-          if (parts.length === 3) {
-            const moduleId = parts[0];
-            const submoduleId = parts[1];
-            const action = parts[2];
-
-            if (!permissionMatrix[moduleId]) {
-              permissionMatrix[moduleId] = {};
-            }
-            if (!permissionMatrix[moduleId][submoduleId]) {
-              permissionMatrix[moduleId][submoduleId] = {};
-            }
-
-            if (["view", "create", "edit", "delete"].includes(action)) {
-              permissionMatrix[moduleId][submoduleId][action] = true;
+        console.log(`[DatabaseRoles] Built permission matrix for ${email}:`, {
+          moduleCount: Object.keys(permissionMatrix).length,
+          permissionMatrix: permissionMatrix
+        })
+        
+        // Get role name from lookup field or direct field
+        let roleName = 'No Role'
+        if (recordData.roleName) {
+          roleName = recordData.roleName
+        } else if (recordData.role) {
+          roleName = recordData.role
+        } else {
+          // Check lookup field for role
+          for (const fieldId in recordData) {
+            const field = recordData[fieldId]
+            if (field && field.type === 'lookup' && field.label && field.label.toLowerCase().includes('role')) {
+              roleName = field.value || 'No Role'
+              break
             }
           }
         }
 
         employees.push({
           id: record.id,
-          name: name || "Unknown User",
+          name: name || 'Unknown User',
           email: email,
-          role: recordData.roleName || "No Role",
-          department: recordData.department || "Unassigned",
-          status: recordData.status || "Active",
-          permissions: permissionMatrix,
-        });
+          role: roleName,
+          department: recordData.department || 'Unassigned',
+          status: recordData.status || 'Active',
+          permissions: permissionMatrix
+        })
       }
 
-      console.log(`[DatabaseRoles] Found ${employees.length} employees`);
-      return employees;
+      console.log(`[DatabaseRoles] Found ${employees.length} employees with permissions`)
+      
+      // Log detailed permission info for debugging
+      employees.forEach(emp => {
+        const permissionCount = Object.keys(emp.permissions).reduce((total, moduleId) => {
+          return total + Object.keys(emp.permissions[moduleId]).length
+        }, 0)
+        console.log(`[DatabaseRoles] Employee ${emp.name}: ${permissionCount} permission entries`)
+      })
+      
+      return employees
     } catch (error: any) {
-      console.error("Database error getting employees with permissions:", error);
-      throw new Error(
-        `Failed to get employees with permissions: ${error?.message}`
-      );
+      console.error("Database error getting employees with permissions:", error)
+      throw new Error(`Failed to get employees with permissions: ${error?.message}`)
     }
   }
 
-  static async getModulesWithSubmodules(): Promise<
-    Array<{
-      id: string;
-      name: string;
-      description: string;
-      subModules: Array<{
-        id: string;
-        name: string;
-      }>;
+  static async getModulesWithSubmodules(): Promise<Array<{
+    id: string
+    name: string
+    description: string
+    subModules: Array<{
+      id: string
+      name: string
     }>
-  > {
+  }>> {
     try {
-      console.log("[DatabaseRoles] Getting modules with submodules");
+      console.log("[DatabaseRoles] Getting modules with submodules (child modules)")
 
-      // Get all modules with their child modules (treating child modules as submodules)
+      // Get all parent modules with their child modules (treating child modules as submodules)
       const modules = await prisma.formModule.findMany({
         where: {
           parentId: null, // Only get parent modules
-          isActive: true,
+          isActive: true
         },
         include: {
           children: {
             where: {
-              isActive: true,
+              isActive: true
             },
             select: {
               id: true,
               name: true,
-              description: true,
+              description: true
             },
-            orderBy: { name: "asc" },
-          },
+            orderBy: { name: "asc" }
+          }
         },
-        orderBy: { name: "asc" },
-      });
+        orderBy: { name: "asc" }
+      })
 
-      const result = modules.map((module) => ({
-        id: module.id,
-        name: module.name,
-        description: module.description || "",
-        subModules: module.children.map((childModule) => ({
-          id: childModule.id,
-          name: childModule.name,
-        })),
-      }));
+      const result = modules.map(module => {
+        return {
+          id: module.id,
+          name: module.name,
+          description: module.description || '',
+          subModules: module.children.map(child => ({
+            id: child.id,
+            name: child.name
+          }))
+        }
+      })
 
-      console.log(
-        `[DatabaseRoles] Found ${result.length} modules with submodules`
-      );
-      return result;
+      console.log(`[DatabaseRoles] Found ${result.length} parent modules with ${result.reduce((total, m) => total + m.subModules.length, 0)} child modules`)
+      return result
     } catch (error: any) {
-      console.error("Database error getting modules with submodules:", error);
-      throw new Error(
-        `Failed to get modules with submodules: ${error?.message}`
-      );
+      console.error("Database error getting modules with submodules:", error)
+      throw new Error(`Failed to get modules with submodules: ${error?.message}`)
     }
   }
 
+  /**
+   * Update employee permission using dedicated UserPermission table
+   */
   static async updateEmployeePermission(
     employeeId: string,
     moduleId: string,
@@ -823,77 +1326,95 @@ export class DatabaseRoles {
     value: boolean
   ): Promise<void> {
     try {
-      console.log("[DatabaseRoles] Updating employee permission:", {
+      console.log("[DatabaseRoles] Updating employee permission in UserPermission table:", {
         employeeId,
         moduleId,
         submoduleId,
         permissionType,
-        value,
-      });
+        value
+      })
 
-      // Get user's current role
-      const userRecord = await prisma.formRecord15.findUnique({
-        where: { id: employeeId },
-      });
-
-      if (!userRecord) {
-        throw new Error(`User not found: ${employeeId}`);
+      // Check if UserPermission table exists
+      let tableExists = true
+      try {
+        await prisma.userPermission.findFirst({ take: 1 })
+      } catch (error) {
+        console.log("[DatabaseRoles] UserPermission table not available, skipping permission update")
+        return
       }
 
-      const recordData = userRecord.recordData as any;
-      const roleId = recordData?.roleId;
-
-      if (!roleId) {
-        throw new Error(`User has no role assigned: ${employeeId}`);
+      if (!tableExists) {
+        return
       }
 
-      // Create permission name
-      const permissionName = `${moduleId}:${submoduleId}:${permissionType}`;
-
-      // Check if permission exists
-      let permission = await prisma.permission.findUnique({
-        where: { name: permissionName },
-      });
-
-      if (!permission) {
-        // Create the permission if it doesn't exist
-        permission = await this.createPermission({
-          name: permissionName,
-          description: `${permissionType.toUpperCase()} permission for ${submoduleId} submodule in ${moduleId} module`,
-          resourceId: submoduleId,
-          resourceType: "FormModule",
-        });
+      // Validate permission type
+      if (!['view', 'create', 'edit', 'delete', 'manage'].includes(permissionType)) {
+        throw new Error(`Invalid permission type: ${permissionType}`)
       }
 
-      // Check if role already has this permission
-      const existingRolePermission = await prisma.rolePermission.findFirst({
+      // Determine resource type and ID
+      let resourceType: 'module' | 'form'
+      let resourceId: string
+
+      if (submoduleId === '_module') {
+        // Module-level permission
+        resourceType = 'module'
+        resourceId = moduleId
+      } else {
+        // Submodule-level permission (child module)
+        resourceType = 'module'
+        resourceId = submoduleId
+      }
+
+      // Get existing permission or create new one
+      const existingPermission = await prisma.userPermission.findFirst({
         where: {
-          roleId: roleId,
-          permissionId: permission.id,
-        },
-      });
+          userId: employeeId,
+          resourceType: resourceType,
+          resourceId: resourceId
+        }
+      })
 
-      if (value && !existingRolePermission) {
-        // Add permission to role
-        await prisma.rolePermission.create({
-          data: {
-            roleId: roleId,
-            permissionId: permission.id,
-          },
-        });
-      } else if (!value && existingRolePermission) {
-        // Remove permission from role
-        await prisma.rolePermission.delete({
-          where: {
-            id: existingRolePermission.id,
-          },
-        });
+      // Prepare permission data
+      const permissionData = {
+        canView: existingPermission?.canView ?? false,
+        canCreate: existingPermission?.canCreate ?? false,
+        canEdit: existingPermission?.canEdit ?? false,
+        canDelete: existingPermission?.canDelete ?? false,
+        canManage: existingPermission?.canManage ?? false
       }
 
-      console.log("[DatabaseRoles] Employee permission updated successfully");
+      // Update the specific permission
+      switch (permissionType) {
+        case 'view':
+          permissionData.canView = value
+          break
+        case 'create':
+          permissionData.canCreate = value
+          break
+        case 'edit':
+          permissionData.canEdit = value
+          break
+        case 'delete':
+          permissionData.canDelete = value
+          break
+        case 'manage':
+          permissionData.canManage = value
+          break
+      }
+
+      // Grant or update permission
+      await this.grantUserPermission({
+        userId: employeeId,
+        resourceType: resourceType,
+        resourceId: resourceId,
+        permissions: permissionData
+      })
+
+      console.log("[DatabaseRoles] Employee permission updated successfully")
     } catch (error: any) {
-      console.error("Database error updating employee permission:", error);
-      throw new Error(`Failed to update employee permission: ${error?.message}`);
+      console.error("Database error updating employee permission:", error)
+      throw new Error(`Failed to update employee permission: ${error?.message}`)
     }
   }
 
@@ -903,229 +1424,103 @@ export class DatabaseRoles {
       id: rawRole.id,
       name: rawRole.name,
       description: rawRole.description || null,
-      permissions: rawRole.permissions?.map((rp: any) =>
-        this.transformPermission(rp.permission)
-      ) || [],
+      permissions: [], // No longer used for permissions
       createdAt: rawRole.createdAt,
-      updatedAt: rawRole.updatedAt,
-    };
+      updatedAt: rawRole.updatedAt
+    }
   }
 
-  private static transformPermission(rawPermission: any): Permission {
-    return {
-      id: rawPermission.id,
-      name: rawPermission.name,
-      description: rawPermission.description || null,
-      resourceId: rawPermission.resourceId || null,
-      resourceType: rawPermission.resourceType || null,
-      roles: rawPermission.roles?.map((rp: any) => rp.role) || [],
-      createdAt: rawPermission.createdAt,
-      updatedAt: rawPermission.updatedAt,
-    };
-  }
-
-  // Seed default roles and permissions
+  // Seed default roles (just for designations now)
   static async seedDefaultRoles(): Promise<void> {
     try {
-      console.log("[DatabaseRoles] Seeding default roles and permissions");
+      console.log("[DatabaseRoles] Seeding default roles (designations)")
 
-      // Get all modules and forms to create permissions
-      const modules = await this.getModulesWithSubmodules();
-
-      // Create permissions for each module and form
-      const createdPermissions: Permission[] = [];
-
-      for (const module of modules) {
-        // Create module-level permissions
-        const modulePermissions = [
-          { name: `${module.id}:view`, description: `View ${module.name} module` },
-          {
-            name: `${module.id}:manage`,
-            description: `Manage ${module.name} module`,
-          },
-        ];
-
-        for (const perm of modulePermissions) {
-          try {
-            const existing = await prisma.permission.findUnique({
-              where: { name: perm.name },
-            });
-
-            if (!existing) {
-              const permission = await this.createPermission({
-                name: perm.name,
-                description: perm.description,
-                resourceId: module.id,
-                resourceType: "FormModule",
-              });
-              createdPermissions.push(permission);
-            }
-          } catch (error) {
-            // Permission might already exist, continue
-          }
-        }
-
-        // Create form-level permissions (submodules)
-        for (const submodule of module.subModules) {
-          const formPermissions = [
-            {
-              name: `${module.id}:${submodule.id}:view`,
-              description: `View ${submodule.name}`,
-            },
-            {
-              name: `${module.id}:${submodule.id}:add`,
-              description: `Add records to ${submodule.name}`,
-            },
-            {
-              name: `${module.id}:${submodule.id}:edit`,
-              description: `Edit records in ${submodule.name}`,
-            },
-            {
-              name: `${module.id}:${submodule.id}:delete`,
-              description: `Delete records from ${submodule.name}`,
-            },
-          ];
-
-          for (const perm of formPermissions) {
-            try {
-              const existing = await prisma.permission.findUnique({
-                where: { name: perm.name },
-              });
-
-              if (!existing) {
-                const permission = await this.createPermission({
-                  name: perm.name,
-                  description: perm.description,
-                  resourceId: submodule.id,
-                  resourceType: "Form",
-                });
-                createdPermissions.push(permission);
-              }
-            } catch (error) {
-              // Permission might already exist, continue
-            }
-          }
-        }
-      }
-
-      // Create system-level permissions
-      const systemPermissions = [
-        { name: "system:admin", description: "System Administrator" },
-        { name: "system:user_management", description: "Manage Users" },
-        { name: "system:role_management", description: "Manage Roles" },
-        {
-          name: "system:permission_management",
-          description: "Manage Permissions",
-        },
-      ];
-
-      for (const perm of systemPermissions) {
-        try {
-          const existing = await prisma.permission.findUnique({
-            where: { name: perm.name },
-          });
-
-          if (!existing) {
-            const permission = await this.createPermission(perm);
-            createdPermissions.push(permission);
-          }
-        } catch (error) {
-          // Permission might already exist, continue
-        }
-      }
-
-      // Create default roles
+      // Create default roles (just for designation purposes)
       const defaultRoles = [
         {
           name: "Super Admin",
-          description: "Full system access",
-          permissions: ["system:admin"],
+          description: "Super Administrator designation"
         },
         {
           name: "Admin",
-          description: "Administrative access",
-          permissions: [
-            "system:user_management",
-            "system:role_management",
-            ...modules.flatMap((m) => [
-              `${m.id}:view`,
-              `${m.id}:manage`,
-              ...m.subModules.flatMap((sm) => [
-                `${m.id}:${sm.id}:view`,
-                `${m.id}:${sm.id}:add`,
-                `${m.id}:${sm.id}:edit`,
-                `${m.id}:${sm.id}:delete`,
-              ]),
-            ]),
-          ],
+          description: "Administrator designation"
         },
         {
           name: "Manager",
-          description: "Management access",
-          permissions: [
-            ...modules.flatMap((m) => [
-              `${m.id}:view`,
-              ...m.subModules.flatMap((sm) => [
-                `${m.id}:${sm.id}:view`,
-                `${m.id}:${sm.id}:add`,
-                `${m.id}:${sm.id}:edit`,
-              ]),
-            ]),
-          ],
+          description: "Manager designation"
         },
         {
           name: "Editor",
-          description: "Edit access",
-          permissions: [
-            ...modules.flatMap((m) => [
-              `${m.id}:view`,
-              ...m.subModules.flatMap((sm) => [
-                `${m.id}:${sm.id}:view`,
-                `${m.id}:${sm.id}:add`,
-                `${m.id}:${sm.id}:edit`,
-              ]),
-            ]),
-          ],
+          description: "Editor designation"
         },
         {
           name: "Viewer",
-          description: "View-only access",
-          permissions: [
-            ...modules.flatMap((m) => [
-              `${m.id}:view`,
-              ...m.subModules.map((sm) => `${m.id}:${sm.id}:view`),
-            ]),
-          ],
+          description: "Viewer designation"
         },
-      ];
+        {
+          name: "HR",
+          description: "Human Resources designation"
+        },
+        {
+          name: "Finance",
+          description: "Finance department designation"
+        },
+        {
+          name: "IT",
+          description: "Information Technology designation"
+        }
+      ]
 
       for (const roleData of defaultRoles) {
         try {
           const existing = await prisma.role.findUnique({
-            where: { name: roleData.name },
-          });
-
+            where: { name: roleData.name }
+          })
+          
           if (!existing) {
-            // Get permission IDs
-            const permissions = await prisma.permission.findMany({
-              where: { name: { in: roleData.permissions } },
-            });
-
             await this.createRole({
               name: roleData.name,
-              description: roleData.description,
-              permissions: permissions.map((p) => p.id),
-            });
+              description: roleData.description
+            })
           }
         } catch (error) {
-          console.error(`Error creating role ${roleData.name}:`, error);
+          console.error(`Error creating role ${roleData.name}:`, error)
         }
       }
 
-      console.log("[DatabaseRoles] Default roles and permissions seeded successfully");
+      console.log("[DatabaseRoles] Default roles (designations) seeded successfully")
     } catch (error: any) {
-      console.error("Database error seeding default roles:", error);
-      throw new Error(`Failed to seed default roles: ${error?.message}`);
+      console.error("Database error seeding default roles:", error)
+      throw new Error(`Failed to seed default roles: ${error?.message}`)
     }
+  }
+
+  // Legacy methods for backward compatibility
+  static async createPermission(): Promise<any> {
+    throw new Error("Permission creation is deprecated. Use UserPermission table directly.")
+  }
+
+  static async getPermissions(): Promise<any[]> {
+    return []
+  }
+
+  static async getPermission(): Promise<any> {
+    return null
+  }
+
+  static async updatePermission(): Promise<any> {
+    throw new Error("Permission updates are deprecated. Use UserPermission table directly.")
+  }
+
+  static async deletePermission(): Promise<void> {
+    throw new Error("Permission deletion is deprecated. Use UserPermission table directly.")
+  }
+
+  static async createResourcePermissions(): Promise<void> {
+    // No-op - permissions are now managed directly in UserPermission table
+  }
+
+  static async deleteResourcePermissions(): Promise<void> {
+    // No-op - permissions are now managed directly in UserPermission table
   }
 }

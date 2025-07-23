@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server"
+import jwt from "jsonwebtoken"
 import { DatabaseRoles } from "@/lib/DatabaseRoles"
 
 export interface AuthContext {
@@ -6,27 +7,73 @@ export interface AuthContext {
   userEmail: string
   roleId?: string
   roleName?: string
-  permissions: string[]
+  permissions: Array<{
+    resourceType: 'module' | 'form'
+    resourceId: string
+    permissions: {
+      canView: boolean
+      canCreate: boolean
+      canEdit: boolean
+      canDelete: boolean
+      canManage: boolean
+    }
+    isSystemAdmin: boolean
+    resource?: {
+      id: string
+      name: string
+      description?: string
+      moduleId?: string // For forms
+    }
+  }>
 }
 
 export class AuthMiddleware {
   /**
-   * Extract user information from request headers or session
-   * In a real application, this would validate JWT tokens or session cookies
+   * Extract user information from JWT token
    */
   static async getUserFromRequest(request: NextRequest): Promise<AuthContext | null> {
     try {
-      // For now, we'll get user info from headers
-      // In production, you'd validate JWT tokens or session cookies here
+      // Try JWT token first (preferred method)
+      const authHeader = request.headers.get("authorization")
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        const token = authHeader.substring(7)
+        
+        try {
+          const decoded = jwt.verify(token, process.env.JWT_SECRET || "your-secret-key") as any
+          const userId = decoded.userId
+          const userEmail = decoded.email
+          
+          if (userId && userEmail) {
+            console.log(`[AuthMiddleware] JWT auth successful for user: ${userEmail}`)
+            
+            // Get user permissions
+            const userPermissions = await DatabaseRoles.getUserPermissionsWithResources(userId)
+            
+            return {
+              userId,
+              userEmail,
+              roleId: decoded.roleId,
+              roleName: decoded.role,
+              permissions: userPermissions
+            }
+          }
+        } catch (jwtError) {
+          console.log("[AuthMiddleware] JWT verification failed, trying header auth")
+        }
+      }
+
+      // Fallback to header-based auth (for development)
       const userId = request.headers.get("x-user-id")
       const userEmail = request.headers.get("x-user-email")
 
       if (!userId || !userEmail) {
-        console.log("[AuthMiddleware] No user credentials found in request")
+        console.log("[AuthMiddleware] No authentication credentials found")
         return null
       }
 
-      // Get user record to fetch role information
+      console.log(`[AuthMiddleware] Header auth for user: ${userEmail}`)
+
+      // Get user record to fetch role info
       const userRecord = await DatabaseRoles.getUserById(userId)
       if (!userRecord) {
         console.log("[AuthMiddleware] User record not found:", userId)
@@ -37,18 +84,17 @@ export class AuthMiddleware {
       const roleId = recordData?.roleId
       const roleName = recordData?.roleName
 
-      // Get user permissions
-      const permissions = await DatabaseRoles.getUserPermissions(userId)
-      const permissionNames = permissions.map(p => p.name)
+      // Get user permissions with resource details from UserPermission table
+      const userPermissions = await DatabaseRoles.getUserPermissionsWithResources(userId)
 
-      console.log(`[AuthMiddleware] User ${userEmail} has ${permissionNames.length} permissions`)
+      console.log(`[AuthMiddleware] User ${userEmail} has ${userPermissions.length} permissions`)
 
       return {
         userId,
         userEmail,
         roleId,
         roleName,
-        permissions: permissionNames
+        permissions: userPermissions
       }
     } catch (error: any) {
       console.error("[AuthMiddleware] Error getting user from request:", error)
@@ -60,105 +106,165 @@ export class AuthMiddleware {
    * Check if user has permission to access a module
    */
   static hasModulePermission(
-    userPermissions: string[],
+    userPermissions: AuthContext['permissions'],
     moduleId: string,
     action: "view" | "manage" = "view"
   ): boolean {
     // Check for system admin permission
-    if (userPermissions.includes("system:admin")) {
+    const hasSystemAdmin = userPermissions.some(perm => perm.isSystemAdmin)
+    if (hasSystemAdmin) {
       return true
     }
 
-    // Check for specific module permission
-    const modulePermission = `${moduleId}:${action}`
-    if (userPermissions.includes(modulePermission)) {
-      return true
+    // Check for module-level permission
+    const modulePermission = userPermissions.find(perm => 
+      perm.resourceType === 'module' && perm.resourceId === moduleId
+    )
+
+    if (modulePermission) {
+      switch (action) {
+        case "view":
+          return modulePermission.permissions.canView || modulePermission.permissions.canManage
+        case "manage":
+          return modulePermission.permissions.canManage
+        default:
+          return false
+      }
     }
 
-    // For view action, also check if user has manage permission
-    if (action === "view" && userPermissions.includes(`${moduleId}:manage`)) {
-      return true
-    }
+    // Check if user has any form permissions within this module
+    const hasAnyFormPermission = userPermissions.some(perm => {
+      if (perm.resourceType === 'form' && perm.resource) {
+        const form = perm.resource as any
+        return form.moduleId === moduleId && (
+          perm.permissions.canView || 
+          perm.permissions.canCreate || 
+          perm.permissions.canEdit || 
+          perm.permissions.canDelete || 
+          perm.permissions.canManage
+        )
+      }
+      return false
+    })
 
-    return false
+    console.log(`[AuthMiddleware] Module ${moduleId} permission check: ${hasAnyFormPermission}`)
+    return hasAnyFormPermission
   }
 
   /**
    * Check if user has permission to access a form (submodule)
    */
   static hasFormPermission(
-    userPermissions: string[],
+    userPermissions: AuthContext['permissions'],
     moduleId: string,
     formId: string,
-    action: "view" | "add" | "edit" | "delete" = "view"
+    action: "view" | "create" | "edit" | "delete" | "manage" = "view"
   ): boolean {
     // Check for system admin permission
-    if (userPermissions.includes("system:admin")) {
+    const hasSystemAdmin = userPermissions.some(perm => perm.isSystemAdmin)
+    if (hasSystemAdmin) {
       return true
     }
 
     // Check for module manage permission (grants all form permissions)
-    if (userPermissions.includes(`${moduleId}:manage`)) {
+    const modulePermission = userPermissions.find(perm => 
+      perm.resourceType === 'module' && perm.resourceId === moduleId
+    )
+
+    if (modulePermission && modulePermission.permissions.canManage) {
       return true
     }
 
     // Check for specific form permission
-    const formPermission = `${moduleId}:${formId}:${action}`
-    if (userPermissions.includes(formPermission)) {
-      return true
-    }
+    const formPermission = userPermissions.find(perm => 
+      perm.resourceType === 'form' && perm.resourceId === formId
+    )
 
-    // For view action, also check if user has any other permission on this form
-    if (action === "view") {
-      const hasAnyFormPermission = ["add", "edit", "delete"].some(act =>
-        userPermissions.includes(`${moduleId}:${formId}:${act}`)
-      )
-      if (hasAnyFormPermission) {
-        return true
+    if (formPermission) {
+      switch (action) {
+        case "view":
+          return formPermission.permissions.canView || formPermission.permissions.canManage
+        case "create":
+          return formPermission.permissions.canCreate || formPermission.permissions.canManage
+        case "edit":
+          return formPermission.permissions.canEdit || formPermission.permissions.canManage
+        case "delete":
+          return formPermission.permissions.canDelete || formPermission.permissions.canManage
+        case "manage":
+          return formPermission.permissions.canManage
+        default:
+          return false
       }
     }
 
+    console.log(`[AuthMiddleware] Form ${moduleId}:${formId}:${action} permission check: false`)
     return false
   }
 
   /**
-   * Filter modules based on user permissions
+   * Filter modules based on user permissions - COMPLETELY SECURE
    */
-  static filterModulesByPermissions(modules: any[], userPermissions: string[]): any[] {
+  static filterModulesByPermissions(modules: any[], userPermissions: AuthContext['permissions']): any[] {
     // System admin sees everything
-    if (userPermissions.includes("system:admin")) {
+    const hasSystemAdmin = userPermissions.some(perm => perm.isSystemAdmin)
+    if (hasSystemAdmin) {
+      console.log("[AuthMiddleware] System admin - showing all modules")
       return modules
     }
 
-    return modules.filter(module => {
-      // Check if user has any permission on this module
+    console.log(`[AuthMiddleware] Filtering ${modules.length} modules by ${userPermissions.length} permissions`)
+
+    const filteredModules = modules.filter(module => {
+      // Check if user has any permission on this module or its forms
       const hasModuleAccess = this.hasModulePermission(userPermissions, module.id, "view")
       
-      if (!hasModuleAccess) {
-        // Check if user has permission on any forms in this module
-        const hasFormAccess = module.forms?.some((form: any) =>
+      // If no module access, check if user has access to any forms in this module
+      let hasAnyFormAccess = false
+      if (!hasModuleAccess && module.forms) {
+        hasAnyFormAccess = module.forms.some((form: any) =>
           this.hasFormPermission(userPermissions, module.id, form.id, "view")
         )
-        
-        if (!hasFormAccess) {
-          return false
-        }
+      }
+
+      // Check if user has permission on any child modules
+      let hasChildModuleAccess = false
+      if (module.children) {
+        // Recursively filter child modules
+        const filteredChildren = this.filterModulesByPermissions(module.children, userPermissions)
+        hasChildModuleAccess = filteredChildren.length > 0
+      }
+
+      // Module is visible if user has access to module itself, its forms, or child modules
+      if (!hasModuleAccess && !hasAnyFormAccess && !hasChildModuleAccess) {
+        console.log(`[AuthMiddleware] Filtering out module "${module.name}" (${module.id}) - no access`)
+        return false
+      }
+
+      console.log(`[AuthMiddleware] Module "${module.name}" (${module.id}) is accessible`)
+      return true
+    }).map(module => {
+      // Create a filtered copy of the module
+      const filteredModule = { ...module }
+
+      // Filter child modules recursively
+      if (module.children) {
+        filteredModule.children = this.filterModulesByPermissions(module.children, userPermissions)
       }
 
       // Filter forms within the module
       if (module.forms) {
-        module.forms = module.forms.filter((form: any) =>
+        const originalFormsCount = module.forms.length
+        filteredModule.forms = module.forms.filter((form: any) =>
           this.hasFormPermission(userPermissions, module.id, form.id, "view")
         )
+        console.log(`[AuthMiddleware] Module "${module.name}": filtered forms from ${originalFormsCount} to ${filteredModule.forms.length}`)
       }
 
-      // Filter child modules recursively
-      if (module.children) {
-        module.children = this.filterModulesByPermissions(module.children, userPermissions)
-      }
-
-      return true
+      return filteredModule
     })
+
+    console.log(`[AuthMiddleware] Final filtered modules: ${filteredModules.length} out of ${modules.length}`)
+    return filteredModules
   }
 
   /**
@@ -207,7 +313,7 @@ export class AuthMiddleware {
    * Get user's accessible actions for a resource
    */
   static getAccessibleActions(
-    userPermissions: string[],
+    userPermissions: AuthContext['permissions'],
     moduleId: string,
     formId?: string
   ): {
@@ -218,7 +324,8 @@ export class AuthMiddleware {
     canManage: boolean
   } {
     // System admin can do everything
-    if (userPermissions.includes("system:admin")) {
+    const hasSystemAdmin = userPermissions.some(perm => perm.isSystemAdmin)
+    if (hasSystemAdmin) {
       return {
         canView: true,
         canAdd: true,
@@ -228,26 +335,56 @@ export class AuthMiddleware {
       }
     }
 
-    const canManage = userPermissions.includes(`${moduleId}:manage`)
-
     if (formId) {
       // Form-level permissions
       return {
-        canView: canManage || this.hasFormPermission(userPermissions, moduleId, formId, "view"),
-        canAdd: canManage || this.hasFormPermission(userPermissions, moduleId, formId, "add"),
-        canEdit: canManage || this.hasFormPermission(userPermissions, moduleId, formId, "edit"),
-        canDelete: canManage || this.hasFormPermission(userPermissions, moduleId, formId, "delete"),
-        canManage
+        canView: this.hasFormPermission(userPermissions, moduleId, formId, "view"),
+        canAdd: this.hasFormPermission(userPermissions, moduleId, formId, "create"),
+        canEdit: this.hasFormPermission(userPermissions, moduleId, formId, "edit"),
+        canDelete: this.hasFormPermission(userPermissions, moduleId, formId, "delete"),
+        canManage: this.hasFormPermission(userPermissions, moduleId, formId, "manage")
       }
     } else {
       // Module-level permissions
       return {
-        canView: canManage || this.hasModulePermission(userPermissions, moduleId, "view"),
-        canAdd: canManage,
-        canEdit: canManage,
-        canDelete: canManage,
-        canManage
+        canView: this.hasModulePermission(userPermissions, moduleId, "view"),
+        canAdd: this.hasModulePermission(userPermissions, moduleId, "manage"),
+        canEdit: this.hasModulePermission(userPermissions, moduleId, "manage"),
+        canDelete: this.hasModulePermission(userPermissions, moduleId, "manage"),
+        canManage: this.hasModulePermission(userPermissions, moduleId, "manage")
       }
     }
+  }
+
+  /**
+   * Middleware function to protect API routes
+   */
+  static async requireAuth(request: NextRequest): Promise<{ authorized: boolean; user?: AuthContext; error?: string }> {
+    const user = await this.getUserFromRequest(request)
+    
+    if (!user) {
+      return {
+        authorized: false,
+        error: "Authentication required"
+      }
+    }
+
+    return {
+      authorized: true,
+      user
+    }
+  }
+
+  /**
+   * Middleware function to require specific permission
+   */
+  static async requirePermission(
+    request: NextRequest,
+    resourceType: "module" | "form",
+    resourceId: string,
+    action: string,
+    moduleId?: string
+  ): Promise<{ authorized: boolean; user?: AuthContext; error?: string }> {
+    return this.checkPermission(request, resourceType, resourceId, action, moduleId)
   }
 }

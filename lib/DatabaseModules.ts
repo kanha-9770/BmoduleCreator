@@ -382,7 +382,7 @@ export class DatabaseModules {
   }
 
   // Form operations
-  static async createForm(data: { moduleId: string; name: string; description?: string; isUserForm?: boolean }): Promise<Form> {
+  static async createForm(data: { moduleId: string; name: string; description?: string; isUserForm?: boolean; isEmployeeForm?: boolean }): Promise<Form> {
     try {
       const form = await prisma.form.create({
         data: {
@@ -395,6 +395,7 @@ export class DatabaseModules {
           requireLogin: false,
           submissionMessage: "Thank you for your submission!",
           isUserForm: data.isUserForm || false,
+          isEmployeeForm: data.isEmployeeForm || false,
         },
         include: {
           tableMapping: true,
@@ -540,37 +541,43 @@ export class DatabaseModules {
 
   static async updateForm(id: string, data: Partial<Form>): Promise<Form> {
     try {
-      // Handle isUserForm changes and update table mapping accordingly
-      if (data.isUserForm !== undefined) {
+      // Handle isUserForm and isEmployeeForm changes and update table mapping accordingly
+      if (data.isUserForm !== undefined || data.isEmployeeForm !== undefined) {
         const currentForm = await prisma.form.findUnique({
           where: { id },
-          select: { isUserForm: true },
+          select: { isUserForm: true, isEmployeeForm: true },
         })
 
-        // If isUserForm status is changing, update table mapping
-        if (currentForm && currentForm.isUserForm !== data.isUserForm) {
-          const targetTable = data.isUserForm ? "form_records_15" : null
+        // If isUserForm or isEmployeeForm status is changing, update table mapping
+        if (currentForm && (currentForm.isUserForm !== data.isUserForm || currentForm.isEmployeeForm !== data.isEmployeeForm)) {
+          let targetTable = null
+          
+          if (data.isUserForm) {
+            targetTable = "form_records_15"
+          } else if (data.isEmployeeForm) {
+            targetTable = "form_records_14"
+          }
           
           if (targetTable) {
-            // Update or create mapping for user form
+            // Update or create mapping for user/employee form
             await prisma.formTableMapping.upsert({
               where: { formId: id },
               update: { storageTable: targetTable },
               create: { formId: id, storageTable: targetTable },
             })
-            console.log(`Updated table mapping for form ${id} -> ${targetTable} (isUserForm: ${data.isUserForm})`)
+            console.log(`Updated table mapping for form ${id} -> ${targetTable} (isUserForm: ${data.isUserForm}, isEmployeeForm: ${data.isEmployeeForm})`)
           } else {
-            // For non-user forms, let getFormRecordTable handle the assignment
+            // For non-user/non-employee forms, let getFormRecordTable handle the assignment
             const existingMapping = await prisma.formTableMapping.findUnique({
               where: { formId: id },
             })
             
-            if (existingMapping && existingMapping.storageTable === "form_records_15") {
+            if (existingMapping && (existingMapping.storageTable === "form_records_15" || existingMapping.storageTable === "form_records_14")) {
               // Remove the mapping so it can be reassigned to a regular table
               await prisma.formTableMapping.delete({
                 where: { formId: id },
               })
-              console.log(`Removed user form table mapping for form ${id}`)
+              console.log(`Removed special form table mapping for form ${id}`)
             }
           }
         }
@@ -592,6 +599,7 @@ export class DatabaseModules {
           conditional: data.conditional ?? undefined,
           styling: data.styling === null ? undefined : data.styling,
           isUserForm: data.isUserForm,
+          isEmployeeForm: data.isEmployeeForm,
         },
         include: {
           tableMapping: true,

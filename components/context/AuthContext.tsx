@@ -1,5 +1,3 @@
-"use client"
-
 import React, { createContext, useContext, useEffect, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { ApiClient } from "@/lib/api-client"
@@ -101,16 +99,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 const userData = await response.json()
                 setUser(userData.user)
                 
+                // Store user credentials for API calls
+                localStorage.setItem('auth_user_id', userData.user.id)
+                localStorage.setItem('auth_user_email', userData.user.email)
+                
                 // Load permissions after setting user
                 await loadUserPermissions(userData.user.id, userData.user.email)
             } else {
                 // Token is invalid, remove it
                 localStorage.removeItem("authToken")
+                localStorage.removeItem('auth_user_id')
+                localStorage.removeItem('auth_user_email')
                 clearAuthState()
             }
         } catch (error) {
             console.error("Auth initialization error:", error)
             localStorage.removeItem("authToken")
+            localStorage.removeItem('auth_user_id')
+            localStorage.removeItem('auth_user_email')
             clearAuthState()
         } finally {
             setLoading(false)
@@ -125,11 +131,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const response = await ApiClient.get("/api/users/permissions", userId, userEmail, true)
             
             if (response.success && response.data) {
-                setPermissions(response.data.permissions.map((p: any) => p.name))
-                setPermissionMatrix(response.data.permissionMatrix)
-                setSystemPermissions(response.data.systemPermissions)
+                setPermissions(response.data.permissions || [])
+                setPermissionMatrix(response.data.permissionMatrix || {})
+                setSystemPermissions(response.data.systemPermissions || {
+                    isAdmin: false,
+                    canManageUsers: false,
+                    canManageRoles: false,
+                    canManagePermissions: false
+                })
                 
-                console.log("[AuthProvider] Permissions loaded successfully:", response.data.permissions.length)
+                console.log("[AuthProvider] Permissions loaded successfully:", response.data.permissions?.length || 0)
             } else {
                 console.error("[AuthProvider] Failed to load permissions:", response.error)
                 // Don't fail auth if permissions can't be loaded, just log the error
@@ -143,7 +154,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 })
             }
         } catch (error: any) {
-            console.error("[AuthProvider] Error loading permissions:", error)
+            console.error("[AuthProvider] Failed to load permissions:", error?.message)
             // Don't fail auth if permissions can't be loaded
             setPermissions([])
             setPermissionMatrix({})
@@ -185,14 +196,108 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
 
             if (result.success && result.token) {
-                // Store token
+                // Store token and user credentials
                 localStorage.setItem("authToken", result.token)
+                localStorage.setItem('auth_user_id', result.user.id)
+                localStorage.setItem('auth_user_email', result.user.email)
 
                 // Set user data
                 setUser(result.user)
 
-                // Load user permissions
-                await loadUserPermissions(result.user.id, result.user.email)
+                // Load user permissions if they were returned with login
+                if (result.user.permissions) {
+                    // Process permissions from login response
+                    const userPermissions = result.user.permissions
+                    
+                    // Transform permissions into the format expected by frontend
+                    const permissionMatrix: any = {}
+                    const permissionsList: string[] = []
+                    
+                    for (const perm of userPermissions) {
+                        if (perm.resourceType === 'module') {
+                            const moduleId = perm.resourceId
+                            if (!permissionMatrix[moduleId]) {
+                                permissionMatrix[moduleId] = {
+                                    permissions: {
+                                        canView: false,
+                                        canAdd: false,
+                                        canEdit: false,
+                                        canDelete: false,
+                                        canManage: false
+                                    },
+                                    subModules: {}
+                                }
+                            }
+                            
+                            permissionMatrix[moduleId].permissions = {
+                                canView: perm.permissions.canView,
+                                canAdd: perm.permissions.canCreate,
+                                canEdit: perm.permissions.canEdit,
+                                canDelete: perm.permissions.canDelete,
+                                canManage: perm.permissions.canManage
+                            }
+                            
+                            // Add to permissions list
+                            if (perm.permissions.canView) permissionsList.push(`${moduleId}:view`)
+                            if (perm.permissions.canCreate) permissionsList.push(`${moduleId}:create`)
+                            if (perm.permissions.canEdit) permissionsList.push(`${moduleId}:edit`)
+                            if (perm.permissions.canDelete) permissionsList.push(`${moduleId}:delete`)
+                            if (perm.permissions.canManage) permissionsList.push(`${moduleId}:manage`)
+                            
+                        } else if (perm.resourceType === 'form' && perm.resource) {
+                            const form = perm.resource as any
+                            const moduleId = form.moduleId
+                            const formId = perm.resourceId
+                            
+                            if (!permissionMatrix[moduleId]) {
+                                permissionMatrix[moduleId] = {
+                                    permissions: {
+                                        canView: false,
+                                        canAdd: false,
+                                        canEdit: false,
+                                        canDelete: false,
+                                        canManage: false
+                                    },
+                                    subModules: {}
+                                }
+                            }
+                            
+                            permissionMatrix[moduleId].subModules[formId] = {
+                                permissions: {
+                                    canView: perm.permissions.canView,
+                                    canAdd: perm.permissions.canCreate,
+                                    canEdit: perm.permissions.canEdit,
+                                    canDelete: perm.permissions.canDelete,
+                                    canManage: perm.permissions.canManage
+                                }
+                            }
+                            
+                            // Add to permissions list
+                            if (perm.permissions.canView) permissionsList.push(`${moduleId}:${formId}:view`)
+                            if (perm.permissions.canCreate) permissionsList.push(`${moduleId}:${formId}:create`)
+                            if (perm.permissions.canEdit) permissionsList.push(`${moduleId}:${formId}:edit`)
+                            if (perm.permissions.canDelete) permissionsList.push(`${moduleId}:${formId}:delete`)
+                            if (perm.permissions.canManage) permissionsList.push(`${moduleId}:${formId}:manage`)
+                        }
+                    }
+
+                    // Check for system admin
+                    const hasSystemAdmin = userPermissions.some((p: any) => p.isSystemAdmin)
+                    
+                    setPermissions(permissionsList)
+                    setPermissionMatrix(permissionMatrix)
+                    setSystemPermissions({
+                        isAdmin: hasSystemAdmin,
+                        canManageUsers: hasSystemAdmin,
+                        canManageRoles: hasSystemAdmin,
+                        canManagePermissions: hasSystemAdmin
+                    })
+                    
+                    console.log("[AuthProvider] Permissions loaded from login response:", permissionsList.length)
+                } else {
+                    // Load permissions separately if not included in login response
+                    await loadUserPermissions(result.user.id, result.user.email)
+                }
 
                 return { success: true }
             } else {
@@ -206,6 +311,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const logout = () => {
         localStorage.removeItem("authToken")
+        localStorage.removeItem('auth_user_id')
+        localStorage.removeItem('auth_user_email')
         clearAuthState()
         router.push("/login")
     }

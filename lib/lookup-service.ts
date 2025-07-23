@@ -557,12 +557,12 @@ export class LookupService {
           }
         }
 
-        fields.add("id")
-        fields.add("name")
-        fields.add("title")
-        fields.add("description")
-        fields.add("createdAt")
-        fields.add("updatedAt")
+        // fields.add("id")
+        // fields.add("name")
+        // fields.add("title")
+        // fields.add("description")
+        // fields.add("createdAt")
+        // fields.add("updatedAt")
 
         const fieldArray = Array.from(fields)
         console.log(`Form ${sourceId} fields:`, fieldArray)
@@ -598,12 +598,12 @@ export class LookupService {
             }
           }
 
-          fields.add("id")
-          fields.add("name")
-          fields.add("title")
-          fields.add("description")
-          fields.add("createdAt")
-          fields.add("updatedAt")
+          // fields.add("id")
+          // fields.add("name")
+          // fields.add("title")
+          // fields.add("description")
+          // fields.add("createdAt")
+          // fields.add("updatedAt")
 
           const fieldArray = Array.from(fields)
           console.log(`Module ${sourceId} fields:`, fieldArray)

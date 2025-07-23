@@ -7,6 +7,7 @@ import { useAuth } from "./context/AuthContext"
 import { DynamicSidebar } from "./sidebar"
 import { Header } from "./header"
 import { LoadingSpinner } from "./LoadingSpinner"
+import { PermissionProvider } from "@/lib/permission-context"
 
 // Routes that should not show the main layout (sidebar + header)
 const NO_LAYOUT_ROUTES = ["/login", "/register", "/forgot-password"]
@@ -14,7 +15,8 @@ const NO_LAYOUT_ROUTES = ["/login", "/register", "/forgot-password"]
 export function ConditionalLayout({ children }: { children: React.ReactNode }) {
   return (
     <Providers>
-      <ConditionalLayoutInner>{children}</ConditionalLayoutInner>
+      <PermissionProvider>
+        <ConditionalLayoutInner>{children}</ConditionalLayoutInner></PermissionProvider>
     </Providers>
   )
 }
@@ -35,7 +37,7 @@ function ConditionalLayoutInner({ children }: { children: React.ReactNode }) {
   if (isAuthenticated && shouldShowLayout) {
     return (
       <div className="flex h-screen bg-gray-50">
-        <DynamicSidebar/>
+        <DynamicSidebar />
         <div className="flex-1 flex flex-col overflow-hidden">
           <Header />
           <main className="flex-1 overflow-y-auto">

@@ -1,70 +1,46 @@
+import { type NextRequest, NextResponse } from "next/server"
+import { AuthMiddleware } from "@/lib/auth-middleware"
 import { DatabaseRoles } from "@/lib/DatabaseRoles"
-import { NextRequest, NextResponse } from "next/server"
 
-// GET /api/permissions - Get all permissions
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const resourceType = searchParams.get("resourceType")
-    const resourceId = searchParams.get("resourceId")
+    console.log("[API] /api/users/permissions - Getting user permissions")
 
-    const filters: any = {}
-    if (resourceType) filters.resourceType = resourceType
-    if (resourceId) filters.resourceId = resourceId
+    // Get authenticated user context
+    const authResult = await AuthMiddleware.getUserFromRequest(request)
 
-    const permissions = await DatabaseRoles.getPermissions(filters)
-    
-    return NextResponse.json({
-      success: true,
-      data: permissions
-    })
-  } catch (error: any) {
-    console.error("Error fetching permissions:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: error?.message || "Failed to fetch permissions"
-      },
-      { status: 500 }
-    )
-  }
-}
-
-// POST /api/permissions - Create a new permission
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json()
-    const { name, description, resourceId, resourceType } = body
-
-    if (!name || name.trim() === "") {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Permission name is required"
-        },
-        { status: 400 }
-      )
+    if (!authResult) {
+      console.log("[API] /api/users/permissions - No authentication found")
+      return NextResponse.json({ success: false, error: "Authentication required" }, { status: 401 })
     }
 
-    const permission = await DatabaseRoles.createPermission({
-      name: name.trim(),
-      description: description?.trim() || undefined,
-      resourceId: resourceId?.trim() || undefined,
-      resourceType: resourceType?.trim() || undefined
-    })
+    const { userId, userEmail } = authResult
+    console.log(`[API] /api/users/permissions - Getting permissions for user: ${userEmail}`)
+
+    // Get user permissions with resource details using your existing service
+    const permissions = await DatabaseRoles.getUserPermissionsWithResources(userId)
+
+    console.log(`[API] /api/users/permissions - Found ${permissions.length} permissions`)
 
     return NextResponse.json({
       success: true,
-      data: permission
+      data: permissions,
+      meta: {
+        userId,
+        userEmail,
+        permissionCount: permissions.length,
+        isSystemAdmin: permissions.some((p) => p.isSystemAdmin),
+      },
     })
   } catch (error: any) {
-    console.error("Error creating permission:", error)
+    console.error("[API] /api/users/permissions - Error:", error)
     return NextResponse.json(
       {
         success: false,
-        error: error?.message || "Failed to create permission"
+        error: error.message || "Failed to fetch user permissions",
+        details: process.env.NODE_ENV === "development" ? error.stack : undefined,
       },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }

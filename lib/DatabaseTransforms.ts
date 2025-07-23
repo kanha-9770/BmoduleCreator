@@ -1,249 +1,265 @@
 import { prisma } from "@/lib/prisma"
-import { Prisma } from "@prisma/client"
-import type { FormModule, Form, FormSection, FormField, FormRecord } from "@/types/form-builder"
 
 export class DatabaseTransforms {
-  // Helper method to transform raw module data to include hierarchy fields
-  static transformModule(rawModule: any, level = 0, parentPath = ""): FormModule {
-    const settings = (rawModule.settings || {}) as Record<string, any>
-
-    // Extract hierarchy data from settings or calculate defaults
-    const moduleType = rawModule.moduleType || (level === 0 ? "master" : "child")
-    const modulePath = rawModule.path || rawModule.name.toLowerCase().replace(/\s+/g, "-")
-    const fullPath = parentPath ? `${parentPath}/${modulePath}` : modulePath
-
+  // Transform database module to frontend format
+  static transformModule(rawModule: any, level?: number): any {
     return {
-      ...rawModule,
-      settings,
-      // Add hierarchy fields that don't exist in Prisma schema
-      parentId: rawModule.parentId || null,
-      parent: rawModule.parent || null,
-      children: rawModule.children
-        ? rawModule.children.map((child: any) => this.transformModule(child, level + 1, fullPath))
-        : [],
-      moduleType: moduleType as "master" | "child" | "standard",
-      level: rawModule.level || level,
-      path: rawModule.path || fullPath,
-      isActive: rawModule.isActive ?? true,
+      id: rawModule.id,
+      name: rawModule.name,
+      description: rawModule.description,
+      icon: rawModule.icon,
+      color: rawModule.color,
+      moduleType: rawModule.moduleType || "standard",
+      level: level !== undefined ? level : rawModule.level || 0,
+      path: rawModule.path || rawModule.name.toLowerCase().replace(/\s+/g, '-'),
+      isActive: rawModule.isActive !== false,
       sortOrder: rawModule.sortOrder || 0,
+      parentId: rawModule.parentId,
       forms: rawModule.forms ? rawModule.forms.map((form: any) => this.transformForm(form)) : [],
+      children: rawModule.children ? rawModule.children.map((child: any) => this.transformModule(child, (level || 0) + 1)) : [],
+      createdAt: rawModule.createdAt,
+      updatedAt: rawModule.updatedAt,
+      recordCount: this.calculateRecordCount(rawModule)
     }
   }
 
-  // Helper method to transform form data
-  static transformForm(rawForm: any): Form {
+  // Transform database form to frontend format
+  static transformForm(rawForm: any): any {
     return {
-      ...rawForm,
-      settings: (rawForm.settings || {}) as Record<string, any>,
-      conditional: rawForm.conditional || null,
-      styling: rawForm.styling || null,
-      sections: rawForm.sections ? rawForm.sections.map((s: any) => this.transformSection(s)) : [],
+      id: rawForm.id,
+      moduleId: rawForm.moduleId,
+      name: rawForm.name,
+      description: rawForm.description,
+      settings: rawForm.settings || {},
+      isPublished: rawForm.isPublished || false,
+      publishedAt: rawForm.publishedAt,
+      formUrl: rawForm.formUrl,
+      allowAnonymous: rawForm.allowAnonymous !== false,
+      requireLogin: rawForm.requireLogin || false,
+      maxSubmissions: rawForm.maxSubmissions,
+      submissionMessage: rawForm.submissionMessage,
+      conditional: rawForm.conditional,
+      styling: rawForm.styling,
+      isUserForm: rawForm.isUserForm || false,
+      isEmployeeForm: rawForm.isEmployeeForm || false,
+      sections: rawForm.sections ? rawForm.sections.map((section: any) => this.transformSection(section)) : [],
+      createdAt: rawForm.createdAt,
+      updatedAt: rawForm.updatedAt,
       recordCount: this.calculateRecordCount(rawForm),
-      records: this.transformRecords(rawForm),
+      tableMapping: rawForm.tableMapping
     }
   }
 
-  // Calculate total record count from all record tables
-  static calculateRecordCount(form: any): number {
-    if (!form._count) return 0
-
-    return (
-      (form._count.records1 || 0) +
-      (form._count.records2 || 0) +
-      (form._count.records3 || 0) +
-      (form._count.records4 || 0) +
-      (form._count.records5 || 0) +
-      (form._count.records6 || 0) +
-      (form._count.records7 || 0) +
-      (form._count.records8 || 0) +
-      (form._count.records9 || 0) +
-      (form._count.records10 || 0) +
-      (form._count.records11 || 0) +
-      (form._count.records12 || 0) +
-      (form._count.records13 || 0) +
-      (form._count.records14 || 0) +
-      (form._count.records15 || 0)
-    )
-  }
-
-  // Transform records from all tables
-  static transformRecords(form: any): any[] {
-    const allRecords = [
-      ...(form.records1 || []),
-      ...(form.records2 || []),
-      ...(form.records3 || []),
-      ...(form.records4 || []),
-      ...(form.records5 || []),
-      ...(form.records6 || []),
-      ...(form.records7 || []),
-      ...(form.records8 || []),
-      ...(form.records9 || []),
-      ...(form.records10 || []),
-      ...(form.records11 || []),
-      ...(form.records12 || []),
-      ...(form.records13 || []),
-      ...(form.records14 || []),
-      ...(form.records15 || []),
-    ]
-
-    return allRecords.map((r) => this.transformRecord(r))
-  }
-
-  // Helper method to transform section data
-  static transformSection(rawSection: any): FormSection {
+  // Transform database section to frontend format
+  static transformSection(rawSection: any): any {
     return {
-      ...rawSection,
-      conditional: (rawSection.conditional || null) as Record<string, any> | null,
-      styling: (rawSection.styling || null) as Record<string, any> | null,
-      fields: rawSection.fields ? rawSection.fields.map((f: any) => this.transformField(f)) : [],
-      subforms: rawSection.subforms ? rawSection.subforms.map((sf: any) => this.transformSubform(sf)) : [],
+      id: rawSection.id,
+      formId: rawSection.formId,
+      title: rawSection.title,
+      description: rawSection.description,
+      order: rawSection.order || 0,
+      columns: rawSection.columns || 1,
+      visible: rawSection.visible !== false,
+      collapsible: rawSection.collapsible || false,
+      collapsed: rawSection.collapsed || false,
+      conditional: rawSection.conditional,
+      styling: rawSection.styling,
+      fields: rawSection.fields ? rawSection.fields.map((field: any) => this.transformField(field)) : [],
+      subforms: rawSection.subforms ? rawSection.subforms.map((subform: any) => this.transformSubform(subform)) : [],
+      createdAt: rawSection.createdAt,
+      updatedAt: rawSection.updatedAt
     }
   }
 
-  // Helper method to transform field data
-  static transformField(rawField: any): FormField {
+  // Transform database field to frontend format
+  static transformField(rawField: any): any {
     return {
-      ...rawField,
-      options: (rawField.options || []) as any[],
-      validation: (rawField.validation || {}) as Record<string, any>,
-      conditional: (rawField.conditional || null) as Record<string, any> | null,
-      styling: (rawField.styling || null) as Record<string, any> | null,
-      properties: (rawField.properties || null) as Record<string, any> | null,
-      rollup: (rawField.rollup || null) as Record<string, any> | null,
-      lookup: (rawField.lookup || null) as any,
-      width: (rawField.width as "full" | "half" | "third" | "quarter") || "full",
+      id: rawField.id,
+      sectionId: rawField.sectionId,
+      subformId: rawField.subformId,
+      type: rawField.type,
+      label: rawField.label,
+      placeholder: rawField.placeholder,
+      description: rawField.description,
+      defaultValue: rawField.defaultValue,
+      options: rawField.options || [],
+      validation: rawField.validation || {},
+      visible: rawField.visible !== false,
+      readonly: rawField.readonly || false,
+      width: rawField.width || "full",
+      order: rawField.order || 0,
+      conditional: rawField.conditional,
+      styling: rawField.styling,
+      properties: rawField.properties,
+      formula: rawField.formula,
+      rollup: rawField.rollup,
+      lookup: rawField.lookup,
+      createdAt: rawField.createdAt,
+      updatedAt: rawField.updatedAt
     }
   }
 
-  // Helper method to transform subform data
+  // Transform database record to frontend format
+  static transformRecord(rawRecord: any): any {
+    return {
+      id: rawRecord.id,
+      formId: rawRecord.formId,
+      recordData: rawRecord.recordData || {},
+      employee_id: rawRecord.employee_id,
+      amount: rawRecord.amount ? parseFloat(rawRecord.amount.toString()) : null,
+      date: rawRecord.date,
+      submittedBy: rawRecord.submittedBy,
+      submittedAt: rawRecord.submittedAt,
+      ipAddress: rawRecord.ipAddress,
+      userAgent: rawRecord.userAgent,
+      status: rawRecord.status || "submitted",
+      createdAt: rawRecord.createdAt,
+      updatedAt: rawRecord.updatedAt
+    }
+  }
+
+  // Transform database subform to frontend format
   static transformSubform(rawSubform: any): any {
     return {
-      ...rawSubform,
-      fields: rawSubform.fields ? rawSubform.fields.map((f: any) => this.transformField(f)) : [],
-      records: rawSubform.records
-        ? rawSubform.records.map((r: any) => ({
-          ...r,
-          recordData: (r.data || {}) as Record<string, any>,
-        }))
-        : [],
+      id: rawSubform.id,
+      sectionId: rawSubform.sectionId,
+      name: rawSubform.name,
+      order: rawSubform.order || 0,
+      fields: rawSubform.fields ? rawSubform.fields.map((field: any) => this.transformField(field)) : [],
+      records: rawSubform.records ? rawSubform.records.map((record: any) => this.transformRecord(record)) : [],
+      createdAt: rawSubform.createdAt,
+      updatedAt: rawSubform.updatedAt
     }
   }
 
-  // Helper method to transform record data
-  static transformRecord(rawRecord: any): FormRecord {
-    return {
-      ...rawRecord,
-      recordData: (rawRecord.recordData || {}) as Record<string, any>,
-      employee_id: rawRecord.employee_id || null,
-      amount: rawRecord.amount ? Number(rawRecord.amount) : null,
-      date: rawRecord.date || null,
-      ipAddress: rawRecord.ipAddress || undefined,
-      userAgent: rawRecord.userAgent || undefined,
-      createdAt: rawRecord.createdAt || rawRecord.updatedAt,
-      updatedAt: rawRecord.updatedAt,
+  // Calculate record count from _count or records array
+  static calculateRecordCount(entity: any): number {
+    if (entity._count) {
+      // Sum all record counts from different tables
+      return Object.keys(entity._count)
+        .filter(key => key.startsWith('records'))
+        .reduce((sum, key) => sum + (entity._count[key] || 0), 0)
     }
+    
+    if (entity.records && Array.isArray(entity.records)) {
+      return entity.records.length
+    }
+    
+    return 0
   }
 
-  // Recursive helper to transform hierarchy with proper levels
-  static transformModuleHierarchy(module: any, level: number): FormModule {
-    const transformed = this.transformModule(module, level)
-
-    if (module.children && module.children.length > 0) {
-      transformed.children = module.children.map((child: any) => this.transformModuleHierarchy(child, level + 1))
-    }
-
-    return transformed
+  // Transform multiple records
+  static transformRecords(rawRecords: any[]): any[] {
+    return rawRecords.map(record => this.transformRecord(record))
   }
 
-  // Flatten hierarchy into a flat list
-  static flattenModuleHierarchy(modules: FormModule[]): FormModule[] {
-    const flattened: FormModule[] = []
+  // Transform module hierarchy recursively
+  static transformModuleHierarchy(rawModule: any, level: number = 0): any {
+    const transformedModule = this.transformModule(rawModule, level)
+    
+    if (rawModule.children && rawModule.children.length > 0) {
+      transformedModule.children = rawModule.children.map((child: any) => 
+        this.transformModuleHierarchy(child, level + 1)
+      )
+    }
+    
+    return transformedModule
+  }
 
-    const flatten = (moduleList: FormModule[]) => {
-      for (const module of moduleList) {
+  // Flatten module hierarchy to a flat array
+  static flattenModuleHierarchy(modules: any[]): any[] {
+    const flattened: any[] = []
+    
+    const flatten = (moduleList: any[]) => {
+      moduleList.forEach(module => {
         flattened.push(module)
         if (module.children && module.children.length > 0) {
           flatten(module.children)
         }
-      }
+      })
     }
-
+    
     flatten(modules)
     return flattened
   }
 
-  // Get the appropriate record table for a form
+  // Get the appropriate table name for form records
   static async getFormRecordTable(formId: string): Promise<string> {
-    // First check if the form is a user form
-    const form = await prisma.form.findUnique({
-      where: { id: formId },
-      select: { isUserForm: true },
-    })
-
-    // If it's a user form, always use form_records_15
-    if (form?.isUserForm === true) {
-      console.log(`Form ${formId} is a user form, using form_records_15`)
-      
-      // Ensure mapping exists for user forms
-      const mapping = await prisma.formTableMapping.findUnique({
-        where: { formId },
+    try {
+      // Check if form has a specific table mapping
+      const tableMapping = await prisma.formTableMapping.findUnique({
+        where: { formId }
       })
 
-      if (!mapping) {
-        await prisma.formTableMapping.create({
-          data: {
-            formId,
-            storageTable: "form_records_15",
-          },
-        })
-        console.log(`Created table mapping for user form ${formId} -> form_records_15`)
-      } else if (mapping.storageTable !== "form_records_15") {
-        // Update existing mapping to point to form_records_15 for user forms
-        await prisma.formTableMapping.update({
-          where: { formId },
-          data: { storageTable: "form_records_15" },
-        })
-        console.log(`Updated table mapping for user form ${formId} -> form_records_15`)
+      if (tableMapping) {
+        console.log(`Form ${formId} mapped to table: ${tableMapping.storageTable}`)
+        return tableMapping.storageTable
       }
 
-      return "form_records_15"
-    }
-
-    // For non-user forms, use existing logic
-    // Check if form has a mapping
-    const mapping = await prisma.formTableMapping.findUnique({
-      where: { formId },
-    })
-
-    if (mapping && mapping.storageTable !== "form_records_15") {
-      // Ensure non-user forms don't use form_records_15
-      return mapping.storageTable
-    }
-
-    // If no mapping exists, find the next available table (excluding table 15 for user forms)
-    for (let i = 1; i <= 14; i++) {
-      const tableName = `form_records_${i}`
-
-      // Check if this table is already assigned to another form
-      const existingMapping = await prisma.formTableMapping.findFirst({
-        where: { storageTable: tableName },
+      // Check if this is a user form or employee form
+      const form = await prisma.form.findUnique({
+        where: { id: formId },
+        select: { isUserForm: true, isEmployeeForm: true }
       })
 
-      if (!existingMapping) {
-        // Create mapping for this form
-        await prisma.formTableMapping.create({
-          data: {
-            formId,
-            storageTable: tableName,
-          },
-        })
-        console.log(`Created table mapping for regular form ${formId} -> ${tableName}`)
+      if (form?.isUserForm) {
+        // User forms go to form_records_15
+        const tableName = "form_records_15"
+        await this.createTableMapping(formId, tableName)
         return tableName
       }
-    }
 
-    // If all tables 1-14 are taken, use table 1 (this should be handled better in production)
-    console.warn(`All tables 1-14 are taken, using form_records_1 for form ${formId}`)
-    return "form_records_1"
+      if (form?.isEmployeeForm) {
+        // Employee forms go to form_records_14
+        const tableName = "form_records_14"
+        await this.createTableMapping(formId, tableName)
+        return tableName
+      }
+
+      // For regular forms, find the least used table (1-13)
+      const tableCounts = await Promise.all([
+        prisma.formRecord1.count(),
+        prisma.formRecord2.count(),
+        prisma.formRecord3.count(),
+        prisma.formRecord4.count(),
+        prisma.formRecord5.count(),
+        prisma.formRecord6.count(),
+        prisma.formRecord7.count(),
+        prisma.formRecord8.count(),
+        prisma.formRecord9.count(),
+        prisma.formRecord10.count(),
+        prisma.formRecord11.count(),
+        prisma.formRecord12.count(),
+        prisma.formRecord13.count(),
+      ])
+
+      // Find the table with the least records
+      const minCount = Math.min(...tableCounts)
+      const tableIndex = tableCounts.indexOf(minCount) + 1
+      const tableName = `form_records_${tableIndex}`
+
+      // Create mapping
+      await this.createTableMapping(formId, tableName)
+      
+      console.log(`Assigned form ${formId} to table: ${tableName}`)
+      return tableName
+    } catch (error: any) {
+      console.error("Error determining form record table:", error)
+      // Default fallback
+      return "form_records_1"
+    }
+  }
+
+  // Create table mapping
+  private static async createTableMapping(formId: string, tableName: string): Promise<void> {
+    try {
+      await prisma.formTableMapping.upsert({
+        where: { formId },
+        update: { storageTable: tableName },
+        create: { formId, storageTable: tableName }
+      })
+    } catch (error: any) {
+      console.error("Error creating table mapping:", error)
+    }
   }
 }

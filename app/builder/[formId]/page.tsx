@@ -24,7 +24,7 @@ import PublishFormDialog from "@/components/publish-form-dialog"
 import LookupConfigurationDialog from "@/components/lookup-configuration-dialog"
 import UserFormSettingsDialog from "@/components/user-form-settings-dialog"
 import type { Form, FormSection, FormField } from "@/types/form-builder"
-import { Save, Eye, ArrowLeft, Loader2, Share2, Users, Settings } from "lucide-react"
+import { Save, Eye, ArrowLeft, Loader2, Share2, Users, Settings, UserCheck } from "lucide-react"
 import Link from "next/link"
 import { v4 as uuidv4 } from "uuid"
 import FieldComponent from "@/components/field-component"
@@ -87,7 +87,7 @@ export default function FormBuilderPage() {
     setForm(updatedForm)
   }
 
-  const handleUserFormSettingsUpdate = async (isUserForm: boolean) => {
+  const handleUserFormSettingsUpdate = async (isUserForm: boolean, isEmployeeForm: boolean) => {
     if (!form) return
 
     try {
@@ -97,6 +97,7 @@ export default function FormBuilderPage() {
         body: JSON.stringify({
           ...form,
           isUserForm,
+          isEmployeeForm,
         }),
       })
 
@@ -105,15 +106,25 @@ export default function FormBuilderPage() {
       const result = await response.json()
       if (result.success) {
         setForm(result.data)
+        
+        let message = "Form settings updated successfully"
+        if (isUserForm) {
+          message = "Form marked as user form"
+        } else if (isEmployeeForm) {
+          message = "Form marked as employee form"
+        } else {
+          message = "Form marked as regular form"
+        }
+        
         toast({
           title: "Success",
-          description: `Form ${isUserForm ? "marked as user form" : "unmarked as user form"}`,
+          description: message,
         })
       } else {
         throw new Error(result.error || "Failed to update form settings")
       }
     } catch (error: any) {
-      console.error("Error updating user form settings:", error)
+      console.error("Error updating form settings:", error)
       toast({
         title: "Error",
         description: error.message,
@@ -640,6 +651,7 @@ export default function FormBuilderPage() {
         description: form.description,
         settings: form.settings,
         isUserForm: form.isUserForm,
+        isEmployeeForm: form.isEmployeeForm,
       }
 
       const response = await fetch(`/api/forms/${formId}`, {
@@ -721,6 +733,12 @@ export default function FormBuilderPage() {
                       <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200">
                         <Users className="w-3 h-3 mr-1" />
                         User Form
+                      </Badge>
+                    )}
+                    {form.isEmployeeForm && (
+                      <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200">
+                        <UserCheck className="w-3 h-3 mr-1" />
+                        Employee Form
                       </Badge>
                     )}
                   </div>
