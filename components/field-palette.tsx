@@ -1,8 +1,8 @@
-"use client"
+"use client";
 
-import { useDraggable } from "@dnd-kit/core"
-import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { useDraggable } from "@dnd-kit/core";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import {
   Type,
   AlignLeft,
@@ -22,7 +22,8 @@ import {
   User,
   CreditCard,
   ImageIcon,
-} from "lucide-react"
+  Layers,
+} from "lucide-react";
 
 export const fieldTypes = [
   {
@@ -151,29 +152,39 @@ export const fieldTypes = [
     category: "Media",
     description: "Image upload field",
   },
-]
+  {
+    id: "subform",
+    name: "Subform",
+    icon: Layers,
+    category: "Advanced",
+    description: "Nested form with fields",
+  },
+];
 
 interface PaletteItemProps {
-  fieldType: (typeof fieldTypes)[0]
+  fieldType: (typeof fieldTypes)[0];
 }
 
 function PaletteItem({ fieldType }: PaletteItemProps) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: fieldType.id,
-    data: {
-      type: "PaletteItem",
-      isPaletteItem: true,
-      fieldType: fieldType.id,
-    },
-  })
+  const { attributes, listeners, setNodeRef, transform, isDragging } =
+    useDraggable({
+      id: fieldType.id,
+      data: {
+        type: "PaletteItem",
+        isPaletteItem: true,
+        fieldType: fieldType.id,
+      },
+    });
 
   const style = {
-    transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+    transform: transform
+      ? `translate3d(${transform.x}px, ${transform.y}px, 0)`
+      : undefined,
     opacity: isDragging ? 0.5 : 1,
     zIndex: isDragging ? 9999 : 1,
-  }
+  };
 
-  const IconComponent = fieldType.icon
+  const IconComponent = fieldType.icon;
 
   return (
     <Card
@@ -182,7 +193,9 @@ function PaletteItem({ fieldType }: PaletteItemProps) {
       {...listeners}
       {...attributes}
       className={`cursor-grab hover:cursor-grabbing transition-all duration-200 hover:shadow-md hover:scale-105 border-gray-200 ${
-        isDragging ? "shadow-2xl scale-110 rotate-3 border-blue-400 bg-blue-50" : "hover:border-blue-300"
+        isDragging
+          ? "shadow-2xl scale-110 rotate-3 border-blue-400 bg-blue-50"
+          : "hover:border-blue-300"
       }`}
     >
       <CardContent className="p-3">
@@ -191,17 +204,25 @@ function PaletteItem({ fieldType }: PaletteItemProps) {
             <IconComponent className="w-4 h-4 text-gray-600" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900 truncate">{fieldType.name}</p>
-            <p className="text-xs text-gray-500 truncate">{fieldType.description}</p>
+            <p className="text-sm font-medium text-gray-900 truncate">
+              {fieldType.name}
+            </p>
+            <p className="text-xs text-gray-500 truncate">
+              {fieldType.description}
+            </p>
           </div>
         </div>
       </CardContent>
     </Card>
-  )
+  );
 }
 
-export function PaletteItemDragOverlay({ fieldType }: { fieldType: (typeof fieldTypes)[0] }) {
-  const IconComponent = fieldType.icon
+export function PaletteItemDragOverlay({
+  fieldType,
+}: {
+  fieldType: (typeof fieldTypes)[0];
+}) {
+  const IconComponent = fieldType.icon;
 
   return (
     <Card className="palette-item-drag-overlay border-2 border-blue-500 shadow-2xl bg-blue-50 rotate-6 scale-110 z-[9999]">
@@ -217,20 +238,22 @@ export function PaletteItemDragOverlay({ fieldType }: { fieldType: (typeof field
         </div>
       </CardContent>
     </Card>
-  )
+  );
 }
 
 export default function FieldPalette() {
-  const categories = Array.from(new Set(fieldTypes.map((ft) => ft.category)))
+  const categories = Array.from(new Set(fieldTypes.map((ft) => ft.category)));
 
   return (
     <div className="h-full flex flex-col bg-white">
       <div className="p-4 border-b border-gray-200">
         <h2 className="text-lg font-semibold text-gray-900">Field Palette</h2>
-        <p className="text-sm text-gray-600 mt-1">Drag fields to add them to your form</p>
+        <p className="text-sm text-gray-600 mt-1">
+          Drag fields to add them to your form
+        </p>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+      <div className="flex-1 overflow-y-auto p-4 space-y-6 ">
         {categories.map((category) => (
           <div key={category}>
             <div className="flex items-center justify-between mb-3">
@@ -256,5 +279,5 @@ export default function FieldPalette() {
         </p>
       </div>
     </div>
-  )
+  );
 }

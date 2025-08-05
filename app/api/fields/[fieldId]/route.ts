@@ -1,9 +1,12 @@
-import { NextResponse } from "next/server"
-import { DatabaseService } from "@/lib/database-service"
+import { NextResponse } from "next/server";
+import { DatabaseService } from "@/lib/database-service";
 
-export async function PUT(request: Request, { params }: { params: { fieldId: string } }) {
+export async function PUT(
+  request: Request,
+  { params }: { params: { fieldId: string } }
+) {
   try {
-    const body = await request.json()
+    const body = await request.json();
 
     const field = await DatabaseService.updateField(params.fieldId, {
       sectionId: body.sectionId,
@@ -25,31 +28,46 @@ export async function PUT(request: Request, { params }: { params: { fieldId: str
       formula: body.formula,
       rollup: body.rollup,
       lookup: body.lookup,
-    })
+    });
 
-    return NextResponse.json({ success: true, data: field })
+    return NextResponse.json({ success: true, data: field });
   } catch (error: any) {
-    console.error("Error updating field:", error)
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    console.error("Error updating field:", error);
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    );
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: { fieldId: string } }) {
+export async function DELETE(
+  request: Request,
+  { params }: { params: { fieldId: string } }
+) {
   try {
-    await DatabaseService.deleteField(params.fieldId)
-    return NextResponse.json({ success: true })
+    await DatabaseService.deleteField(params.fieldId);
+    return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error("Error deleting field:", error)
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    console.error("Error deleting field:", error);
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    );
   }
 }
 
-export async function GET(request: Request, { params }: { params: { fieldId: string } }) {
+export async function GET(
+  request: Request,
+  { params }: { params: { fieldId: string } }
+) {
   try {
     // This could be used to get a specific field if needed
-    return NextResponse.json({ success: true, data: null })
+    return NextResponse.json({ success: true, data: null });
   } catch (error: any) {
-    console.error("Error fetching field:", error)
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    console.error("Error fetching field:", error);
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    );
   }
 }

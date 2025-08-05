@@ -1,40 +1,46 @@
-import { prisma } from "@/lib/prisma"
-import type { FormModule, Form, FormSection, FormField, FieldType } from "@/types/form-builder"
-import { DatabaseTransforms } from "./DatabaseTransforms"
+import { prisma } from "@/lib/prisma";
+import type {
+  FormModule,
+  Form,
+  FormSection,
+  FormField,
+  FieldType,
+} from "@/types/form-builder";
+import { DatabaseTransforms } from "./DatabaseTransforms";
 
 export class DatabaseModules {
   // Module operations with hierarchy support
   static async createModule(data: {
-    name: string
-    description?: string
-    parentId?: string
-    moduleType?: string
-    icon?: string
-    color?: string
+    name: string;
+    description?: string;
+    parentId?: string;
+    moduleType?: string;
+    icon?: string;
+    color?: string;
   }): Promise<FormModule> {
     if (!data.name || data.name.trim() === "") {
-      throw new Error("Module name is required")
+      throw new Error("Module name is required");
     }
 
     try {
       // Calculate hierarchy data
-      let level = 0
-      let moduleType = data.moduleType || "standard"
+      let level = 0;
+      let moduleType = data.moduleType || "standard";
 
       if (data.parentId) {
         // Get parent module to calculate level
         const parentModule = await prisma.formModule.findUnique({
           where: { id: data.parentId },
           select: { level: true },
-        })
+        });
 
         if (parentModule) {
-          level = parentModule.level + 1
+          level = parentModule.level + 1;
         }
 
-        moduleType = "child"
+        moduleType = "child";
       } else {
-        moduleType = "master"
+        moduleType = "master";
       }
 
       const module = await prisma.formModule.create({
@@ -68,23 +74,26 @@ export class DatabaseModules {
             },
           },
         },
-      })
+      });
 
       // Create a default form for the module
       const defaultForm = await this.createForm({
         moduleId: module.id,
         name: "Default Form",
         description: "Your first form in this module",
-      })
+      });
 
-      const transformedModule = DatabaseTransforms.transformModule(module, level)
+      const transformedModule = DatabaseTransforms.transformModule(
+        module,
+        level
+      );
       return {
         ...transformedModule,
         forms: [defaultForm],
-      }
+      };
     } catch (error: any) {
-      console.error("Database error creating module:", error)
-      throw new Error(`Failed to create module: ${error?.message}`)
+      console.error("Database error creating module:", error);
+      throw new Error(`Failed to create module: ${error?.message}`);
     }
   }
 
@@ -132,46 +141,48 @@ export class DatabaseModules {
           },
         },
         orderBy: [{ level: "asc" }, { sortOrder: "asc" }, { name: "asc" }],
-      })
+      });
 
       // Build hierarchy from flat list
-      const moduleMap = new Map<string, any>()
-      const rootModules: any[] = []
+      const moduleMap = new Map<string, any>();
+      const rootModules: any[] = [];
 
       // First pass: create map and identify root modules
       allModules.forEach((module) => {
-        moduleMap.set(module.id, { ...module, children: [] })
+        moduleMap.set(module.id, { ...module, children: [] });
 
         if (!module.parentId) {
-          rootModules.push(moduleMap.get(module.id))
+          rootModules.push(moduleMap.get(module.id));
         }
-      })
+      });
 
       // Second pass: build parent-child relationships
       allModules.forEach((module) => {
         if (module.parentId && moduleMap.has(module.parentId)) {
-          const parent = moduleMap.get(module.parentId)
-          const child = moduleMap.get(module.id)
-          parent.children.push(child)
+          const parent = moduleMap.get(module.parentId);
+          const child = moduleMap.get(module.id);
+          parent.children.push(child);
         }
-      })
+      });
 
       // Transform to proper format with hierarchy levels
-      return rootModules.map((module) => DatabaseTransforms.transformModuleHierarchy(module, 0))
+      return rootModules.map((module) =>
+        DatabaseTransforms.transformModuleHierarchy(module, 0)
+      );
     } catch (error: any) {
-      console.error("Database error fetching module hierarchy:", error)
-      throw new Error(`Failed to fetch module hierarchy: ${error?.message}`)
+      console.error("Database error fetching module hierarchy:", error);
+      throw new Error(`Failed to fetch module hierarchy: ${error?.message}`);
     }
   }
 
   // Legacy method for backward compatibility - returns flat list
   static async getModules(): Promise<FormModule[]> {
     try {
-      const hierarchyModules = await this.getModuleHierarchy()
-      return DatabaseTransforms.flattenModuleHierarchy(hierarchyModules)
+      const hierarchyModules = await this.getModuleHierarchy();
+      return DatabaseTransforms.flattenModuleHierarchy(hierarchyModules);
     } catch (error: any) {
-      console.error("Database error fetching modules:", error)
-      throw new Error(`Failed to fetch modules: ${error?.message}`)
+      console.error("Database error fetching modules:", error);
+      throw new Error(`Failed to fetch modules: ${error?.message}`);
     }
   }
 
@@ -217,17 +228,20 @@ export class DatabaseModules {
             },
           },
         },
-      })
+      });
 
-      if (!module) return null
-      return DatabaseTransforms.transformModule(module)
+      if (!module) return null;
+      return DatabaseTransforms.transformModule(module);
     } catch (error: any) {
-      console.error("Database error fetching module:", error)
-      throw new Error(`Failed to fetch module: ${error?.message}`)
+      console.error("Database error fetching module:", error);
+      throw new Error(`Failed to fetch module: ${error?.message}`);
     }
   }
 
-  static async updateModule(id: string, data: Partial<FormModule>): Promise<FormModule> {
+  static async updateModule(
+    id: string,
+    data: Partial<FormModule>
+  ): Promise<FormModule> {
     try {
       const module = await prisma.formModule.update({
         where: { id },
@@ -281,28 +295,31 @@ export class DatabaseModules {
             },
           },
         },
-      })
+      });
 
-      return DatabaseTransforms.transformModule(module)
+      return DatabaseTransforms.transformModule(module);
     } catch (error: any) {
-      console.error("Database error updating module:", error)
-      throw new Error(`Failed to update module: ${error?.message}`)
+      console.error("Database error updating module:", error);
+      throw new Error(`Failed to update module: ${error?.message}`);
     }
   }
 
-  static async moveModule(moduleId: string, newParentId?: string): Promise<FormModule> {
+  static async moveModule(
+    moduleId: string,
+    newParentId?: string
+  ): Promise<FormModule> {
     try {
       // Calculate new level
-      let level = 0
+      let level = 0;
 
       if (newParentId) {
         const parent = await prisma.formModule.findUnique({
           where: { id: newParentId },
           select: { level: true },
-        })
+        });
 
         if (parent) {
-          level = parent.level + 1
+          level = parent.level + 1;
         }
       }
 
@@ -352,12 +369,12 @@ export class DatabaseModules {
             },
           },
         },
-      })
+      });
 
-      return DatabaseTransforms.transformModule(module, level)
+      return DatabaseTransforms.transformModule(module, level);
     } catch (error: any) {
-      console.error("Database error moving module:", error)
-      throw new Error(`Failed to move module: ${error?.message}`)
+      console.error("Database error moving module:", error);
+      throw new Error(`Failed to move module: ${error?.message}`);
     }
   }
 
@@ -366,23 +383,31 @@ export class DatabaseModules {
       // Check if module has children
       const childrenCount = await prisma.formModule.count({
         where: { parentId: id },
-      })
+      });
 
       if (childrenCount > 0) {
-        throw new Error("Cannot delete module with child modules. Please delete or move child modules first.")
+        throw new Error(
+          "Cannot delete module with child modules. Please delete or move child modules first."
+        );
       }
 
       await prisma.formModule.delete({
         where: { id },
-      })
+      });
     } catch (error: any) {
-      console.error("Database error deleting module:", error)
-      throw new Error(`Failed to delete module: ${error?.message}`)
+      console.error("Database error deleting module:", error);
+      throw new Error(`Failed to delete module: ${error?.message}`);
     }
   }
 
   // Form operations
-  static async createForm(data: { moduleId: string; name: string; description?: string; isUserForm?: boolean; isEmployeeForm?: boolean }): Promise<Form> {
+  static async createForm(data: {
+    moduleId: string;
+    name: string;
+    description?: string;
+    isUserForm?: boolean;
+    isEmployeeForm?: boolean;
+  }): Promise<Form> {
     try {
       const form = await prisma.form.create({
         data: {
@@ -412,7 +437,7 @@ export class DatabaseModules {
             orderBy: { order: "asc" },
           },
         },
-      })
+      });
 
       // Create a default section for the form
       const defaultSection = await this.createSection({
@@ -421,15 +446,15 @@ export class DatabaseModules {
         description: "Your first section",
         columns: 1,
         order: 0,
-      })
+      });
 
       return {
         ...DatabaseTransforms.transformForm(form),
         sections: [defaultSection],
-      }
+      };
     } catch (error: any) {
-      console.error("Database error creating form:", error)
-      throw new Error(`Failed to create form: ${error?.message}`)
+      console.error("Database error creating form:", error);
+      throw new Error(`Failed to create form: ${error?.message}`);
     }
   }
 
@@ -477,12 +502,12 @@ export class DatabaseModules {
           },
         },
         orderBy: { createdAt: "desc" },
-      })
+      });
 
-      return forms.map((form) => DatabaseTransforms.transformForm(form))
+      return forms.map((form) => DatabaseTransforms.transformForm(form));
     } catch (error: any) {
-      console.error("Database error fetching forms:", error)
-      throw new Error(`Failed to fetch forms: ${error.message}`)
+      console.error("Database error fetching forms:", error);
+      throw new Error(`Failed to fetch forms: ${error.message}`);
     }
   }
 
@@ -529,13 +554,13 @@ export class DatabaseModules {
             },
           },
         },
-      })
+      });
 
-      if (!form) return null
-      return DatabaseTransforms.transformForm(form)
+      if (!form) return null;
+      return DatabaseTransforms.transformForm(form);
     } catch (error: any) {
-      console.error("Database error fetching form:", error)
-      throw new Error(`Failed to fetch form: ${error?.message}`)
+      console.error("Database error fetching form:", error);
+      throw new Error(`Failed to fetch form: ${error?.message}`);
     }
   }
 
@@ -546,38 +571,48 @@ export class DatabaseModules {
         const currentForm = await prisma.form.findUnique({
           where: { id },
           select: { isUserForm: true, isEmployeeForm: true },
-        })
+        });
 
         // If isUserForm or isEmployeeForm status is changing, update table mapping
-        if (currentForm && (currentForm.isUserForm !== data.isUserForm || currentForm.isEmployeeForm !== data.isEmployeeForm)) {
-          let targetTable = null
-          
+        if (
+          currentForm &&
+          (currentForm.isUserForm !== data.isUserForm ||
+            currentForm.isEmployeeForm !== data.isEmployeeForm)
+        ) {
+          let targetTable = null;
+
           if (data.isUserForm) {
-            targetTable = "form_records_15"
+            targetTable = "form_records_15";
           } else if (data.isEmployeeForm) {
-            targetTable = "form_records_14"
+            targetTable = "form_records_14";
           }
-          
+
           if (targetTable) {
             // Update or create mapping for user/employee form
             await prisma.formTableMapping.upsert({
               where: { formId: id },
               update: { storageTable: targetTable },
               create: { formId: id, storageTable: targetTable },
-            })
-            console.log(`Updated table mapping for form ${id} -> ${targetTable} (isUserForm: ${data.isUserForm}, isEmployeeForm: ${data.isEmployeeForm})`)
+            });
+            console.log(
+              `Updated table mapping for form ${id} -> ${targetTable} (isUserForm: ${data.isUserForm}, isEmployeeForm: ${data.isEmployeeForm})`
+            );
           } else {
             // For non-user/non-employee forms, let getFormRecordTable handle the assignment
             const existingMapping = await prisma.formTableMapping.findUnique({
               where: { formId: id },
-            })
-            
-            if (existingMapping && (existingMapping.storageTable === "form_records_15" || existingMapping.storageTable === "form_records_14")) {
+            });
+
+            if (
+              existingMapping &&
+              (existingMapping.storageTable === "form_records_15" ||
+                existingMapping.storageTable === "form_records_14")
+            ) {
               // Remove the mapping so it can be reassigned to a regular table
               await prisma.formTableMapping.delete({
                 where: { formId: id },
-              })
-              console.log(`Removed special form table mapping for form ${id}`)
+              });
+              console.log(`Removed special form table mapping for form ${id}`);
             }
           }
         }
@@ -640,12 +675,12 @@ export class DatabaseModules {
             },
           },
         },
-      })
+      });
 
-      return DatabaseTransforms.transformForm(form)
+      return DatabaseTransforms.transformForm(form);
     } catch (error: any) {
-      console.error("Database error updating form:", error)
-      throw new Error(`Failed to update form: ${error?.message}`)
+      console.error("Database error updating form:", error);
+      throw new Error(`Failed to update form: ${error?.message}`);
     }
   }
 
@@ -653,36 +688,38 @@ export class DatabaseModules {
     try {
       await prisma.form.delete({
         where: { id },
-      })
+      });
     } catch (error: any) {
-      console.error("Database error deleting form:", error)
-      throw new Error(`Failed to delete form: ${error?.message}`)
+      console.error("Database error deleting form:", error);
+      throw new Error(`Failed to delete form: ${error?.message}`);
     }
   }
 
   static async publishForm(
     id: string,
     settings: {
-      allowAnonymous?: boolean
-      requireLogin?: boolean
-      maxSubmissions?: number | null
-      submissionMessage?: string
-    },
+      allowAnonymous?: boolean;
+      requireLogin?: boolean;
+      maxSubmissions?: number | null;
+      submissionMessage?: string;
+    }
   ): Promise<Form> {
     try {
-      const formUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/form/${id}`
+      const formUrl = `${
+        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+      }/form/${id}`;
 
       const form = await this.updateForm(id, {
         isPublished: true,
         publishedAt: new Date(),
         formUrl,
         ...settings,
-      })
+      });
 
-      return form
+      return form;
     } catch (error: any) {
-      console.error("Database error publishing form:", error)
-      throw new Error(`Failed to publish form: ${error?.message}`)
+      console.error("Database error publishing form:", error);
+      throw new Error(`Failed to publish form: ${error?.message}`);
     }
   }
 
@@ -692,22 +729,22 @@ export class DatabaseModules {
         isPublished: false,
         publishedAt: undefined,
         formUrl: undefined,
-      })
+      });
 
-      return form
+      return form;
     } catch (error: any) {
-      console.error("Database error unpublishing form:", error)
-      throw new Error(`Failed to unpublish form: ${error?.message}`)
+      console.error("Database error unpublishing form:", error);
+      throw new Error(`Failed to unpublish form: ${error?.message}`);
     }
   }
 
   // Section operations
   static async createSection(data: {
-    formId: string
-    title: string
-    description?: string
-    columns?: number
-    order?: number
+    formId: string;
+    title: string;
+    description?: string;
+    columns?: number;
+    order?: number;
   }): Promise<FormSection> {
     try {
       const section = await prisma.formSection.create({
@@ -735,12 +772,12 @@ export class DatabaseModules {
             orderBy: { order: "asc" },
           },
         },
-      })
+      });
 
-      return DatabaseTransforms.transformSection(section)
+      return DatabaseTransforms.transformSection(section);
     } catch (error: any) {
-      console.error("Database error creating section:", error)
-      throw new Error(`Failed to create section: ${error?.message}`)
+      console.error("Database error creating section:", error);
+      throw new Error(`Failed to create section: ${error?.message}`);
     }
   }
 
@@ -763,16 +800,21 @@ export class DatabaseModules {
           },
         },
         orderBy: { order: "asc" },
-      })
+      });
 
-      return sections.map((section) => DatabaseTransforms.transformSection(section))
+      return sections.map((section) =>
+        DatabaseTransforms.transformSection(section)
+      );
     } catch (error: any) {
-      console.error("Database error fetching sections:", error)
-      throw new Error(`Failed to fetch sections: ${error.message}`)
+      console.error("Database error fetching sections:", error);
+      throw new Error(`Failed to fetch sections: ${error.message}`);
     }
   }
 
-  static async updateSection(id: string, data: Partial<FormSection>): Promise<FormSection> {
+  static async updateSection(
+    id: string,
+    data: Partial<FormSection>
+  ): Promise<FormSection> {
     try {
       const section = await prisma.formSection.update({
         where: { id },
@@ -801,12 +843,12 @@ export class DatabaseModules {
             orderBy: { order: "asc" },
           },
         },
-      })
+      });
 
-      return DatabaseTransforms.transformSection(section)
+      return DatabaseTransforms.transformSection(section);
     } catch (error: any) {
-      console.error("Database error updating section:", error)
-      throw new Error(`Failed to update section: ${error?.message}`)
+      console.error("Database error updating section:", error);
+      throw new Error(`Failed to update section: ${error?.message}`);
     }
   }
 
@@ -814,10 +856,10 @@ export class DatabaseModules {
     try {
       await prisma.formSection.delete({
         where: { id },
-      })
+      });
     } catch (error: any) {
-      console.error("Database error deleting section:", error)
-      throw new Error(`Failed to delete section: ${error?.message}`)
+      console.error("Database error deleting section:", error);
+      throw new Error(`Failed to delete section: ${error?.message}`);
     }
   }
 
@@ -826,7 +868,10 @@ export class DatabaseModules {
    */
   static async deleteSectionWithCleanup(sectionId: string): Promise<void> {
     try {
-      console.log("[DatabaseService] Starting section deletion with cleanup:", sectionId)
+      console.log(
+        "[DatabaseService] Starting section deletion with cleanup:",
+        sectionId
+      );
 
       // First, get the section with all its fields to know what to clean up
       const section = await prisma.formSection.findUnique({
@@ -837,42 +882,46 @@ export class DatabaseModules {
             select: { id: true, name: true, tableMapping: true },
           },
         },
-      })
+      });
 
       if (!section) {
-        throw new Error(`Section with ID ${sectionId} not found`)
+        throw new Error(`Section with ID ${sectionId} not found`);
       }
 
-      const formId = section.formId
-      const fieldLabels = section.fields.map((f) => f.label)
+      const formId = section.formId;
+      const fieldLabels = section.fields.map((f) => f.label);
 
       console.log(
         `[DatabaseService] Found section "${section.title}" with ${section.fields.length} fields:`,
-        fieldLabels,
-      )
+        fieldLabels
+      );
 
       // Step 1: Clean up form records - remove field data for deleted fields
       if (fieldLabels.length > 0 && section.form.tableMapping) {
-        console.log("[DatabaseService] Cleaning up form records...")
+        console.log("[DatabaseService] Cleaning up form records...");
 
-        const tableName = section.form.tableMapping.storageTable
+        const tableName = section.form.tableMapping.storageTable;
 
         // Get all records for this form from the appropriate table
-        const records = await this.getFormRecords(formId)
+        const records = await this.getFormRecords(formId);
 
-        console.log(`[DatabaseService] Found ${records.length} records to clean`)
+        console.log(
+          `[DatabaseService] Found ${records.length} records to clean`
+        );
 
         // Clean each record by removing data for deleted fields
         for (const record of records) {
-          const recordData = (record.recordData as any) || {}
-          let hasChanges = false
+          const recordData = (record.recordData as any) || {};
+          let hasChanges = false;
 
           // Remove data for each deleted field
           for (const fieldLabel of fieldLabels) {
             if (recordData[fieldLabel]) {
-              delete recordData[fieldLabel]
-              hasChanges = true
-              console.log(`[DatabaseService] Removed field "${fieldLabel}" from record ${record.id}`)
+              delete recordData[fieldLabel];
+              hasChanges = true;
+              console.log(
+                `[DatabaseService] Removed field "${fieldLabel}" from record ${record.id}`
+              );
             }
           }
 
@@ -881,42 +930,44 @@ export class DatabaseModules {
             await this.updateFormRecord(record.id, {
               recordData,
               updatedAt: new Date(),
-            })
-            console.log(`[DatabaseService] Updated record ${record.id}`)
+            });
+            console.log(`[DatabaseService] Updated record ${record.id}`);
           }
         }
 
-        console.log("[DatabaseService] Form records cleanup completed")
+        console.log("[DatabaseService] Form records cleanup completed");
       }
 
       // Step 2: Clean up lookup relations for deleted fields
-      console.log("[DatabaseService] Cleaning up lookup relations...")
-      const fieldIds = section.fields.map((f) => f.id)
+      console.log("[DatabaseService] Cleaning up lookup relations...");
+      const fieldIds = section.fields.map((f) => f.id);
       if (fieldIds.length > 0) {
         const deletedRelations = await prisma.lookupFieldRelation.deleteMany({
           where: {
             formFieldId: { in: fieldIds },
           },
-        })
-        console.log(`[DatabaseService] Deleted ${deletedRelations.count} lookup relations`)
+        });
+        console.log(
+          `[DatabaseService] Deleted ${deletedRelations.count} lookup relations`
+        );
       }
 
       // Step 3: Delete the section (this will cascade delete fields due to foreign key constraints)
-      console.log("[DatabaseService] Deleting section and fields...")
+      console.log("[DatabaseService] Deleting section and fields...");
       await prisma.formSection.delete({
         where: { id: sectionId },
-      })
+      });
 
       console.log(
-        `[DatabaseService] Successfully deleted section "${section.title}" and cleaned up all associated data`,
-      )
+        `[DatabaseService] Successfully deleted section "${section.title}" and cleaned up all associated data`
+      );
 
       // Step 4: Reorder remaining sections
-      console.log("[DatabaseService] Reordering remaining sections...")
+      console.log("[DatabaseService] Reordering remaining sections...");
       const remainingSections = await prisma.formSection.findMany({
         where: { formId },
         orderBy: { order: "asc" },
-      })
+      });
 
       // Update order for remaining sections
       for (let i = 0; i < remainingSections.length; i++) {
@@ -924,37 +975,43 @@ export class DatabaseModules {
           await prisma.formSection.update({
             where: { id: remainingSections[i].id },
             data: { order: i },
-          })
+          });
         }
       }
 
-      console.log(`[DatabaseService] Reordered ${remainingSections.length} remaining sections`)
-      console.log("[DatabaseService] Section deletion with cleanup completed successfully")
+      console.log(
+        `[DatabaseService] Reordered ${remainingSections.length} remaining sections`
+      );
+      console.log(
+        "[DatabaseService] Section deletion with cleanup completed successfully"
+      );
     } catch (error: any) {
-      console.error("Database error deleting section with cleanup:", error)
-      throw new Error(`Failed to delete section with cleanup: ${error?.message}`)
+      console.error("Database error deleting section with cleanup:", error);
+      throw new Error(
+        `Failed to delete section with cleanup: ${error?.message}`
+      );
     }
   }
 
   // Field operations
   static async createField(data: {
-    sectionId?: string
-    subformId?: string
-    type: string
-    label: string
-    placeholder?: string
-    description?: string
-    defaultValue?: string
-    options?: any[]
-    validation?: Record<string, any>
-    visible?: boolean
-    readonly?: boolean
-    width?: string
-    order?: number
-    lookup?: any
+    sectionId?: string;
+    subformId?: string;
+    type: string;
+    label: string;
+    placeholder?: string;
+    description?: string;
+    defaultValue?: string;
+    options?: any[];
+    validation?: Record<string, any>;
+    visible?: boolean;
+    readonly?: boolean;
+    width?: string;
+    order?: number;
+    lookup?: any;
   }): Promise<FormField> {
     try {
-      console.log("[DatabaseService] Creating field with data:", data)
+      console.log("[DatabaseService] Creating field with data:", data);
 
       const field = await prisma.formField.create({
         data: {
@@ -973,79 +1030,100 @@ export class DatabaseModules {
           order: data.order || 0,
           lookup: data.lookup, // Store complete lookup configuration
         },
-      })
+      });
 
-      console.log("[DatabaseService] Field created successfully:", field.id)
+      console.log("[DatabaseService] Field created successfully:", field.id);
 
       // Handle lookup relations after field creation
       if (data.type === "lookup" && data.lookup?.sourceId) {
         try {
-          await this.handleLookupRelations(field.id, data)
+          await this.handleLookupRelations(field.id, data);
         } catch (error: any) {
-          console.error("[DatabaseService] Error handling lookup relations:", error.message)
+          console.error(
+            "[DatabaseService] Error handling lookup relations:",
+            error.message
+          );
           // Don't fail the field creation if lookup relations fail
         }
       }
 
-      return DatabaseTransforms.transformField(field)
+      return DatabaseTransforms.transformField(field);
     } catch (error: any) {
-      console.error("Database error creating field:", error)
-      throw new Error(`Failed to create field: ${error?.message}`)
+      console.error("Database error creating field:", error);
+      throw new Error(`Failed to create field: ${error?.message}`);
     }
   }
 
-  private static async handleLookupRelations(fieldId: string, fieldData: any): Promise<void> {
-    console.log("[DatabaseService] Handling lookup relations for field:", fieldId)
+  private static async handleLookupRelations(
+    fieldId: string,
+    fieldData: any
+  ): Promise<void> {
+    console.log(
+      "[DatabaseService] Handling lookup relations for field:",
+      fieldId
+    );
 
     if (!fieldData.lookup?.sourceId) {
-      console.error("[DatabaseService] Lookup field missing source information", { fieldId })
-      return
+      console.error(
+        "[DatabaseService] Lookup field missing source information",
+        { fieldId }
+      );
+      return;
     }
 
-    const lookupSourceId = fieldData.lookup.sourceId
+    const lookupSourceId = fieldData.lookup.sourceId;
 
     // Get form and module info from the field's section
-    let formId: string | null = null
-    let moduleId: string | null = null
+    let formId: string | null = null;
+    let moduleId: string | null = null;
 
     if (fieldData.sectionId) {
       const section = await prisma.formSection.findUnique({
         where: { id: fieldData.sectionId },
         select: { formId: true, form: { select: { moduleId: true } } },
-      })
+      });
       if (section) {
-        formId = section.formId
-        moduleId = section.form.moduleId
+        formId = section.formId;
+        moduleId = section.form.moduleId;
       }
     } else if (fieldData.subformId) {
       const subform = await prisma.subform.findUnique({
         where: { id: fieldData.subformId },
-        select: { section: { select: { formId: true, form: { select: { moduleId: true } } } } },
-      })
+        select: {
+          section: {
+            select: { formId: true, form: { select: { moduleId: true } } },
+          },
+        },
+      });
       if (subform?.section) {
-        formId = subform.section.formId
-        moduleId = subform.section.form.moduleId
+        formId = subform.section.formId;
+        moduleId = subform.section.form.moduleId;
       }
     }
 
     if (!formId || !moduleId) {
-      console.error("[DatabaseService] Could not determine form/module for field", { fieldId })
-      return
+      console.error(
+        "[DatabaseService] Could not determine form/module for field",
+        { fieldId }
+      );
+      return;
     }
 
     // Ensure LookupSource exists
     let lookupSource = await prisma.lookupSource.findUnique({
       where: { id: lookupSourceId },
-    })
+    });
 
     if (!lookupSource) {
-      console.log("[DatabaseService] Creating new LookupSource", { lookupSourceId })
+      console.log("[DatabaseService] Creating new LookupSource", {
+        lookupSourceId,
+      });
 
       if (lookupSourceId.startsWith("module_")) {
-        const sourceModuleId = lookupSourceId.replace("module_", "")
+        const sourceModuleId = lookupSourceId.replace("module_", "");
         const module = await prisma.formModule.findUnique({
           where: { id: sourceModuleId },
-        })
+        });
 
         if (module) {
           lookupSource = await prisma.lookupSource.create({
@@ -1057,13 +1135,13 @@ export class DatabaseModules {
               description: module.description || `Module with forms`,
               active: true,
             },
-          })
+          });
         }
       } else if (lookupSourceId.startsWith("form_")) {
-        const sourceFormId = lookupSourceId.replace("form_", "")
+        const sourceFormId = lookupSourceId.replace("form_", "");
         const sourceForm = await prisma.form.findUnique({
           where: { id: sourceFormId },
-        })
+        });
 
         if (sourceForm) {
           lookupSource = await prisma.lookupSource.create({
@@ -1075,18 +1153,20 @@ export class DatabaseModules {
               description: sourceForm.description || `Form source`,
               active: true,
             },
-          })
+          });
         }
       }
     }
 
     if (!lookupSource) {
-      console.error("[DatabaseService] Failed to create/find LookupSource", { lookupSourceId })
-      return
+      console.error("[DatabaseService] Failed to create/find LookupSource", {
+        lookupSourceId,
+      });
+      return;
     }
 
     // Create LookupFieldRelation
-    const relationId = `lfr_${lookupSourceId}_${fieldId}`
+    const relationId = `lfr_${lookupSourceId}_${fieldId}`;
     await prisma.lookupFieldRelation.upsert({
       where: { id: relationId },
       update: {
@@ -1113,9 +1193,12 @@ export class DatabaseModules {
         searchable: fieldData.lookup.searchable,
         filters: fieldData.lookup.filters || {},
       },
-    })
+    });
 
-    console.log("[DatabaseService] Successfully created/updated LookupFieldRelation", { relationId })
+    console.log(
+      "[DatabaseService] Successfully created/updated LookupFieldRelation",
+      { relationId }
+    );
   }
 
   static async getFields(sectionId: string): Promise<FormField[]> {
@@ -1123,16 +1206,19 @@ export class DatabaseModules {
       const fields = await prisma.formField.findMany({
         where: { sectionId },
         orderBy: { order: "asc" },
-      })
+      });
 
-      return fields.map((field) => DatabaseTransforms.transformField(field))
+      return fields.map((field) => DatabaseTransforms.transformField(field));
     } catch (error: any) {
-      console.error("Database error fetching fields:", error)
-      throw new Error(`Failed to fetch fields: ${error.message}`)
+      console.error("Database error fetching fields:", error);
+      throw new Error(`Failed to fetch fields: ${error.message}`);
     }
   }
 
-  static async updateField(id: string, data: Partial<FormField>): Promise<FormField> {
+  static async updateField(
+    id: string,
+    data: Partial<FormField>
+  ): Promise<FormField> {
     try {
       const updateData: any = {
         sectionId: data.sectionId,
@@ -1153,31 +1239,34 @@ export class DatabaseModules {
         formula: data.formula,
         rollup: data.rollup || undefined,
         lookup: data.lookup || undefined,
-      }
+      };
 
       // Handle options separately to avoid type issues
       if (data.options !== undefined) {
-        updateData.options = data.options
+        updateData.options = data.options;
       }
 
       const field = await prisma.formField.update({
         where: { id },
         data: updateData,
-      })
+      });
 
       // Update lookup relations if needed
       if (data.lookup?.sourceId) {
         try {
-          await this.handleLookupRelations(id, data)
+          await this.handleLookupRelations(id, data);
         } catch (error: any) {
-          console.error("[DatabaseService] Error updating lookup relations:", error.message)
+          console.error(
+            "[DatabaseService] Error updating lookup relations:",
+            error.message
+          );
         }
       }
 
-      return DatabaseTransforms.transformField(field)
+      return DatabaseTransforms.transformField(field);
     } catch (error: any) {
-      console.error("Database error updating field:", error)
-      throw new Error(`Failed to update field: ${error?.message}`)
+      console.error("Database error updating field:", error);
+      throw new Error(`Failed to update field: ${error?.message}`);
     }
   }
 
@@ -1185,10 +1274,10 @@ export class DatabaseModules {
     try {
       await prisma.formField.delete({
         where: { id },
-      })
+      });
     } catch (error: any) {
-      console.error("Database error deleting field:", error)
-      throw new Error(`Failed to delete field: ${error?.message}`)
+      console.error("Database error deleting field:", error);
+      throw new Error(`Failed to delete field: ${error?.message}`);
     }
   }
 
@@ -1198,43 +1287,43 @@ export class DatabaseModules {
       const fieldTypes = await prisma.fieldType.findMany({
         where: { active: true },
         orderBy: { name: "asc" },
-      })
+      });
 
       return fieldTypes.map((ft) => ({
         ...ft,
         description: ft.description || "",
         defaultProps: (ft.defaultProps || {}) as Record<string, any>,
-      }))
+      }));
     } catch (error: any) {
-      console.error("Database error fetching field types:", error)
-      throw new Error(`Failed to fetch field types: ${error?.message}`)
+      console.error("Database error fetching field types:", error);
+      throw new Error(`Failed to fetch field types: ${error?.message}`);
     }
   }
 
   static async upsertFieldType(data: {
-    name: string
-    label: string
-    category: string
-    icon: string
-    description: string
-    defaultProps: Record<string, any>
-    active: boolean
+    name: string;
+    label: string;
+    category: string;
+    icon: string;
+    description: string;
+    defaultProps: Record<string, any>;
+    active: boolean;
   }): Promise<FieldType> {
     try {
       const fieldType = await prisma.fieldType.upsert({
         where: { name: data.name },
         update: data,
         create: data,
-      })
+      });
 
       return {
         ...fieldType,
         description: fieldType.description || "",
         defaultProps: (fieldType.defaultProps || {}) as Record<string, any>,
-      }
+      };
     } catch (error: any) {
-      console.error("Database error upserting field type:", error)
-      throw new Error(`Failed to upsert field type: ${error?.message}`)
+      console.error("Database error upserting field type:", error);
+      throw new Error(`Failed to upsert field type: ${error?.message}`);
     }
   }
 
@@ -1411,14 +1500,14 @@ export class DatabaseModules {
           },
           active: true,
         },
-      ]
+      ];
 
       for (const fieldType of defaultFieldTypes) {
-        await this.upsertFieldType(fieldType)
+        await this.upsertFieldType(fieldType);
       }
     } catch (error: any) {
-      console.error("Database error seeding field types:", error)
-      throw new Error(`Failed to seed field types: ${error?.message}`)
+      console.error("Database error seeding field types:", error);
+      throw new Error(`Failed to seed field types: ${error?.message}`);
     }
   }
 
@@ -1426,12 +1515,12 @@ export class DatabaseModules {
   static async getFormRecords(formId: string): Promise<any[]> {
     // This is a placeholder - the actual implementation will be in DatabaseRecords
     // but we need this method here for the cleanup functionality
-    return []
+    return [];
   }
 
   static async updateFormRecord(recordId: string, data: any): Promise<any> {
     // This is a placeholder - the actual implementation will be in DatabaseRecords
     // but we need this method here for the cleanup functionality
-    return null
+    return null;
   }
 }

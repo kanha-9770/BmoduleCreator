@@ -5,6 +5,12 @@ import { DatabaseRoles } from "./DatabaseRoles"
 import { AuthMiddleware } from "./auth-middleware"
 
 export class DatabaseService {
+  static getFieldById(subformId: any) {
+    throw new Error("Method not implemented.")
+  }
+  static deleteSubformWithCleanup(subformId: string) {
+    throw new Error("Method not implemented.")
+  }
   // Data transformation methods
   static transformModule = DatabaseTransforms.transformModule
   static transformForm = DatabaseTransforms.transformForm

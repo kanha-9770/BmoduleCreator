@@ -1,4 +1,3 @@
-
 "use client";
 import type React from "react";
 import { useState, useEffect } from "react";
@@ -243,16 +242,18 @@ export default function PublicFormPage() {
             );
 
           relatedFields.forEach((relatedField) => {
-
             // Find the matching field in fullOption.data by label
-            const matchedField = Object.values(fullOption.data).find((field) => {
-              const f = field as LookupFieldData;
-              return (
-                typeof f.field_label === "string" &&
-                f.field_label.toLowerCase() === relatedField.label.toLowerCase() &&
-                f.field_value
-              );
-            }) as LookupFieldData | undefined;
+            const matchedField = Object.values(fullOption.data).find(
+              (field) => {
+                const f = field as LookupFieldData;
+                return (
+                  typeof f.field_label === "string" &&
+                  f.field_label.toLowerCase() ===
+                    relatedField.label.toLowerCase() &&
+                  f.field_value
+                );
+              }
+            ) as LookupFieldData | undefined;
 
             if (matchedField) {
               newData[relatedField.id] = matchedField.field_value;
@@ -558,10 +559,11 @@ export default function PublicFormPage() {
                 className="p-1 hover:scale-110 transition-transform"
               >
                 <Star
-                  className={`h-6 w-6 ${rating <= (value || 0)
+                  className={`h-6 w-6 ${
+                    rating <= (value || 0)
                       ? "fill-yellow-400 text-yellow-400"
                       : "text-gray-300"
-                    }`}
+                  }`}
                 />
               </button>
             ))}
@@ -722,10 +724,11 @@ export default function PublicFormPage() {
                     )}
                   </div>
                   <div
-                    className={`grid gap-6 ${section.columns > 1
+                    className={`grid gap-6 ${
+                      section.columns > 1
                         ? `md:grid-cols-${section.columns}`
                         : ""
-                      }`}
+                    }`}
                   >
                     {section.fields.map((field) => (
                       <div key={field.id} className="space-y-2">

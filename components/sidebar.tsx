@@ -6,10 +6,7 @@ import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Badge } from "@/components/ui/badge"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { usePermissions } from "@/lib/permission-context"
-import { ApiClient } from "@/lib/api-client"
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -22,10 +19,6 @@ import {
   Settings,
   ChevronDown,
   ChevronRight,
-  Shield,
-  Brain,
-  Database,
-  BarChart3,
   Menu,
   AlertCircle,
 } from "lucide-react"
@@ -41,10 +34,6 @@ const iconMap = {
   Package,
   Wrench,
   Settings,
-  Shield,
-  Brain,
-  Database,
-  BarChart3,
 }
 
 interface Form {
@@ -72,8 +61,6 @@ interface Module {
 
 interface MenuData {
   modules: Module[]
-  userRole: string
-  userDepartment: string
 }
 
 interface MenuItem {
@@ -82,14 +69,6 @@ interface MenuItem {
   href?: string
   icon?: string
   children?: MenuItem[]
-  hasPermission: boolean
-  permissionLevel: {
-    view: boolean
-    add: boolean
-    edit: boolean
-    delete: boolean
-    manage: boolean
-  }
 }
 
 interface SidebarContentProps {
@@ -100,9 +79,6 @@ interface SidebarContentProps {
   expandedItems: string[]
   toggleExpanded: (title: string) => void
   onItemClick?: () => void
-  user: any
-  permissions: any[]
-  isSystemAdmin: boolean
 }
 
 function SidebarContent({
@@ -113,65 +89,26 @@ function SidebarContent({
   expandedItems,
   toggleExpanded,
   onItemClick,
-  user,
-  permissions,
-  isSystemAdmin,
 }: SidebarContentProps) {
-  const getPermissionBadge = (permissionLevel: any) => {
-    const permissionsList = []
-    if (permissionLevel.view) permissionsList.push("V")
-    if (permissionLevel.add) permissionsList.push("A")
-    if (permissionLevel.edit) permissionsList.push("E")
-    if (permissionLevel.delete) permissionsList.push("D")
-    if (permissionLevel.manage) permissionsList.push("M")
-
-    if (permissionsList.length === 0) return null
-
-    const badgeColor = permissionLevel.manage
-      ? "bg-green-100 text-green-800 border-green-300"
-      : permissionsList.length >= 3
-        ? "bg-blue-100 text-blue-800 border-blue-300"
-        : "bg-gray-100 text-gray-800 border-gray-300"
-
-    return (
-      <Badge variant="outline" className={cn("text-xs ml-auto", badgeColor)}>
-        {permissionsList.join("")}
-      </Badge>
-    )
-  }
-
   return (
     <div className="flex flex-col h-full">
       <div className="p-4 border-b border-gray-200">
-        <h1 className="text-lg sm:text-xl font-bold text-gray-900">ERP System</h1>
-        <div className="text-xs text-gray-500 mt-1">
-          <p>
-            {user?.name || "Loading..."} ({user?.role || menuData?.userRole || "User"})
-          </p>
-          <div className="flex items-center gap-2 mt-1">
-            <span>{permissions.length} permissions</span>
-            {isSystemAdmin && (
-              <Badge variant="destructive" className="text-xs">
-                Admin
-              </Badge>
-            )}
-          </div>
-        </div>
+        <h1 className="text-lg sm:text-xl font-bold text-gray-900">
+          ERP System
+        </h1>
       </div>
 
       <ScrollArea className="flex-1 px-3 py-4">
         <nav className="space-y-1">
           {menuItems.length === 0 && !error ? (
             <div className="text-center py-8">
-              <Shield className="h-12 w-12 text-gray-300 mx-auto mb-2" />
-              <p className="text-sm text-gray-500">No accessible modules</p>
-              <p className="text-xs text-gray-400 mt-1">Contact your administrator for access</p>
+              <AlertCircle className="h-12 w-12 text-gray-300 mx-auto mb-2" />
+              <p className="text-sm text-gray-500">No modules available</p>
             </div>
           ) : (
             menuItems.map((item) => {
-              if (!item.hasPermission) return null
-
-              const IconComponent = iconMap[item.icon as keyof typeof iconMap] || Package
+              const IconComponent =
+                iconMap[item.icon as keyof typeof iconMap] || Package
 
               return (
                 <div key={item.id} className="flex flex-col">
@@ -179,41 +116,45 @@ function SidebarContent({
                     <div>
                       <Button
                         variant="ghost"
-                        className={cn("w-full justify-start gap-2 h-9", "hover:bg-gray-100")}
+                        className={cn(
+                          "w-full justify-start gap-2 h-9",
+                          "hover:bg-gray-100"
+                        )}
                         onClick={() => toggleExpanded(item.title)}
                       >
                         <IconComponent className="h-4 w-4 flex-shrink-0" />
-                        <span className="flex-1 text-left truncate">{item.title}</span>
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          {getPermissionBadge(item.permissionLevel)}
-                          {expandedItems.includes(item.title) ? (
-                            <ChevronDown className="h-4 w-4" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4" />
-                          )}
-                        </div>
+                        <span className="flex-1 text-left truncate">
+                          {item.title}
+                        </span>
+                        {expandedItems.includes(item.title) ? (
+                          <ChevronDown className="h-4 w-4" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4" />
+                        )}
                       </Button>
                       {expandedItems.includes(item.title) && (
                         <div className="ml-6 mt-1 space-y-1">
-                          {item.children.map((child) => {
-                            if (!child.hasPermission) return null
-                            return (
-                              <Link key={child.href} href={child.href!} onClick={onItemClick}>
-                                <Button
-                                  variant="ghost"
-                                  className={cn(
-                                    "w-full justify-start h-8 text-sm",
-                                    pathname === child.href
-                                      ? "bg-blue-50 text-blue-700 hover:bg-blue-50"
-                                      : "hover:bg-gray-100",
-                                  )}
-                                >
-                                  <span className="flex-1 text-left truncate">{child.title}</span>
-                                  {getPermissionBadge(child.permissionLevel)}
-                                </Button>
-                              </Link>
-                            )
-                          })}
+                          {item.children.map((child) => (
+                            <Link
+                              key={child.href}
+                              href={child.href!}
+                              onClick={onItemClick}
+                            >
+                              <Button
+                                variant="ghost"
+                                className={cn(
+                                  "w-full justify-start h-8 text-sm",
+                                  pathname === child.href
+                                    ? "bg-blue-50 text-blue-700 hover:bg-blue-50"
+                                    : "hover:bg-gray-100"
+                                )}
+                              >
+                                <span className="flex-1 text-left truncate">
+                                  {child.title}
+                                </span>
+                              </Button>
+                            </Link>
+                          ))}
                         </div>
                       )}
                     </div>
@@ -223,12 +164,15 @@ function SidebarContent({
                         variant="ghost"
                         className={cn(
                           "w-full justify-start gap-2 h-9",
-                          pathname === item.href ? "bg-blue-50 text-blue-700 hover:bg-blue-50" : "hover:bg-gray-100",
+                          pathname === item.href
+                            ? "bg-blue-50 text-blue-700 hover:bg-blue-50"
+                            : "hover:bg-gray-100"
                         )}
                       >
                         <IconComponent className="h-4 w-4 flex-shrink-0" />
-                        <span className="flex-1 text-left truncate">{item.title}</span>
-                        {getPermissionBadge(item.permissionLevel)}
+                        <span className="flex-1 text-left truncate">
+                          {item.title}
+                        </span>
                       </Button>
                     </Link>
                   )}
@@ -259,48 +203,34 @@ export function DynamicSidebar() {
   const [error, setError] = useState<string | null>(null)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
-  // Use the permission context
-  const {
-    user,
-    permissions,
-    isLoading: permissionsLoading,
-    hasModuleAccess,
-    hasFormAccess,
-    getAccessibleActions,
-    isSystemAdmin,
-  } = usePermissions()
-
   useEffect(() => {
     async function fetchMenuData() {
-      if (!user || permissionsLoading) return
-
       try {
         setLoading(true)
         setError(null)
 
-        console.log("[DynamicSidebar] Fetching modules with permission filtering")
+        console.log("[DynamicSidebar] Fetching modules")
 
-        // Use your existing API client with proper authentication
-        const response = await ApiClient.get("/api/modules", user.id, user.email)
+        const response = await fetch("/api/modules")
 
-        console.log("Fetched modules at sidebar:", response)
+        const data = await response.json()
 
-        if (!response.success) {
-          throw new Error(response.error || "Failed to fetch modules")
+        console.log("Fetched modules at sidebar:", data)
+
+        if (!data.success) {
+          throw new Error(data.error || "Failed to fetch modules")
         }
 
         setMenuData({
-          modules: response.data || [],
-          userRole: user.role || "User",
-          userDepartment: user.department || "",
+          modules: data.data || [],
         })
       } catch (error) {
         console.error("Error fetching menu data:", error)
-        setError(error instanceof Error ? error.message : "Failed to load menu")
+        setError(
+          error instanceof Error ? error.message : "Failed to load menu"
+        )
         setMenuData({
           modules: [],
-          userRole: user?.role || "User",
-          userDepartment: user?.department || "",
         })
       } finally {
         setLoading(false)
@@ -308,121 +238,58 @@ export function DynamicSidebar() {
     }
 
     fetchMenuData()
-  }, [user, permissionsLoading])
-
-  const hasModulePermission = (moduleId: string, action: string): boolean => {
-    if (!user) return false
-
-    // System admin has all permissions
-    if (isSystemAdmin) return true
-
-    // Check ONLY explicit module permission - no inheritance from forms
-    const modulePermission = permissions.find((p) => p.resourceType === "module" && p.resourceId === moduleId)
-
-    if (modulePermission) {
-      switch (action) {
-        case "view":
-          return modulePermission.permissions.canView || modulePermission.permissions.canManage
-        case "create":
-          return modulePermission.permissions.canCreate || modulePermission.permissions.canManage
-        case "edit":
-          return modulePermission.permissions.canEdit || modulePermission.permissions.canManage
-        case "delete":
-          return modulePermission.permissions.canDelete || modulePermission.permissions.canManage
-        case "manage":
-          return modulePermission.permissions.canManage
-        default:
-          return false
-      }
-    }
-
-    // No explicit module permission found
-    return false
-  }
-
-  const getModulePermissions = (moduleId: string) => {
-    if (!user) {
-      return {
-        view: false,
-        add: false,
-        edit: false,
-        delete: false,
-        manage: false,
-      }
-    }
-
-    // System admin has all permissions
-    if (isSystemAdmin) {
-      return {
-        view: true,
-        add: true,
-        edit: true,
-        delete: true,
-        manage: true,
-      }
-    }
-
-    return {
-      view: hasModulePermission(moduleId, "view"),
-      add: hasModulePermission(moduleId, "create"),
-      edit: hasModulePermission(moduleId, "edit"),
-      delete: hasModulePermission(moduleId, "delete"),
-      manage: hasModulePermission(moduleId, "manage"),
-    }
-  }
+  }, [])
 
   const transformMenuData = (modules: Module[]): MenuItem[] => {
-    if (!user) return []
-
     const baseMenuItems: MenuItem[] = []
 
     const createMenuItem = (module: Module, parentPath = ""): MenuItem => {
-      const modulePath = parentPath ? `${parentPath}/${module.path}` : module.path
+      const modulePath = parentPath
+        ? `${parentPath}/${module.path}`
+        : module.path
 
-      // Get actual permissions for this specific module (explicit only)
-      const permissionLevel = getModulePermissions(module.id)
-      const hasAccess = hasModuleAccess(module.id) // This now checks explicit permissions only
+      const href =
+        module.moduleType === "child"
+          ? `/${modulePath}?id=${module.id}`
+          : `/${modulePath}`
 
-      // For child modules, append the ID as a query parameter
-      const href = module.moduleType === "child" ? `/${modulePath}?id=${module.id}` : `/${modulePath}`
-
-      // Create children from nested modules - only include if user has explicit permission
-      const moduleChildren: MenuItem[] = (module.children || [])
-        .map((child) => createMenuItem(child, modulePath))
-        .filter((child) => child.hasPermission) // Only include children user has explicit access to
+      const moduleChildren: MenuItem[] = (module.children || []).map((child) =>
+        createMenuItem(child, modulePath)
+      )
 
       return {
         id: module.id,
         title: module.name,
         href: href,
         icon: module.icon || "Package",
-        hasPermission: hasAccess, // Based on explicit permissions only
-        permissionLevel,
         children: moduleChildren.length > 0 ? moduleChildren : undefined,
       }
     }
 
     modules.forEach((module) => {
       const menuItem = createMenuItem(module)
-      // Only add to menu if user has explicit permission for this module
-      if (menuItem.hasPermission) {
-        baseMenuItems.push(menuItem)
-      }
+      baseMenuItems.push(menuItem)
     })
 
-    console.log(`[DynamicSidebar] Created ${baseMenuItems.length} menu items from ${modules.length} modules`)
+    console.log(
+      `[DynamicSidebar] Created ${baseMenuItems.length} menu items from ${modules.length} modules`
+    )
     return baseMenuItems
   }
 
   const toggleExpanded = (title: string) => {
-    setExpandedItems((prev) => (prev.includes(title) ? prev.filter((item) => item !== title) : [...prev, title]))
+    setExpandedItems((prev) =>
+      prev.includes(title)
+        ? prev.filter((item) => item !== title)
+        : [...prev, title]
+    )
   }
 
   const handleMobileMenuClose = () => {
     setIsMobileMenuOpen(false)
   }
 
-  if (permissionsLoading || loading) {
+  if (loading) {
     return (
       <>
         {/* Mobile Menu Button */}
@@ -455,7 +322,11 @@ export function DynamicSidebar() {
       <div className="lg:hidden fixed top-4 left-4 z-50">
         <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
           <SheetTrigger asChild>
-            <Button variant="outline" size="icon" className="bg-white shadow-md">
+            <Button
+              variant="outline"
+              size="icon"
+              className="bg-white shadow-md"
+            >
               <Menu className="h-4 w-4" />
               <span className="sr-only">Open menu</span>
             </Button>
@@ -469,9 +340,6 @@ export function DynamicSidebar() {
               expandedItems={expandedItems}
               toggleExpanded={toggleExpanded}
               onItemClick={handleMobileMenuClose}
-              user={user}
-              permissions={permissions}
-              isSystemAdmin={isSystemAdmin}
             />
           </SheetContent>
         </Sheet>
@@ -486,9 +354,6 @@ export function DynamicSidebar() {
           error={error}
           expandedItems={expandedItems}
           toggleExpanded={toggleExpanded}
-          user={user}
-          permissions={permissions}
-          isSystemAdmin={isSystemAdmin}
         />
       </div>
     </>

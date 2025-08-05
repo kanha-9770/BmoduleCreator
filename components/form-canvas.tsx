@@ -1,34 +1,40 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { useDroppable } from "@dnd-kit/core"
-import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
-import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Plus, Layers, Loader2 } from "lucide-react"
-import SectionComponent from "./section-component"
-import type { Form, FormSection, FormField } from "@/types/form-builder"
-import { useToast } from "@/hooks/use-toast"
+import { useState } from "react";
+import { useDroppable, useDndMonitor } from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Plus, Layers, Loader2 } from "lucide-react";
+import SectionComponent from "./section-component";
+import type { Form, FormSection, FormField } from "@/types/form-builder";
+import { useToast } from "@/hooks/use-toast";
+import { v4 as uuidv4 } from "uuid";
 
 interface FormCanvasProps {
-  form: Form
-  onFormUpdate: (form: Form) => void
+  form: Form;
+  onFormUpdate: (form: Form) => void;
 }
 
 export default function FormCanvas({ form, onFormUpdate }: FormCanvasProps) {
-  const [isAddingSection, setIsAddingSection] = useState(false)
-  const [deletingSections, setDeletingSections] = useState<Set<string>>(new Set())
-  const { toast } = useToast()
+  const [isAddingSection, setIsAddingSection] = useState(false);
+  const [deletingSections, setDeletingSections] = useState<Set<string>>(
+    new Set()
+  );
+  const { toast } = useToast();
 
   const { setNodeRef, isOver } = useDroppable({
     id: "form-canvas",
     data: {
       type: "Canvas",
     },
-  })
+  });
 
   const addSection = async () => {
-    setIsAddingSection(true)
+    setIsAddingSection(true);
     try {
       const newSectionData = {
         formId: form.id,
@@ -36,18 +42,17 @@ export default function FormCanvas({ form, onFormUpdate }: FormCanvasProps) {
         description: "",
         order: form.sections.length,
         columns: 1,
-      }
+      };
 
-      // Save section to database
       const response = await fetch("/api/sections", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newSectionData),
-      })
+      });
 
-      if (!response.ok) throw new Error("Failed to create section")
+      if (!response.ok) throw new Error("Failed to create section");
 
-      const result = await response.json()
+      const result = await response.json();
       if (result.success) {
         const newSection: FormSection = {
           ...result.data,
@@ -58,190 +63,472 @@ export default function FormCanvas({ form, onFormUpdate }: FormCanvasProps) {
           collapsed: false,
           conditional: null,
           styling: null,
-        }
+        };
 
         const updatedForm = {
           ...form,
           sections: [...form.sections, newSection],
-        }
+        };
 
-        onFormUpdate(updatedForm)
-        toast({ title: "Success", description: "Section added successfully" })
+        onFormUpdate(updatedForm);
+        toast({ title: "Success", description: "Section added successfully" });
       } else {
-        throw new Error(result.error || "Failed to create section")
+        throw new Error(result.error || "Failed to create section");
       }
     } catch (error: any) {
-      console.error("Error adding section:", error)
-      toast({ title: "Error", description: error.message, variant: "destructive" })
+      console.error("Error adding section:", error);
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
     } finally {
-      setIsAddingSection(false)
+      setIsAddingSection(false);
     }
-  }
+  };
 
-  const updateSection = async (sectionId: string, updates: Partial<FormSection>) => {
+  const updateSection = async (
+    sectionId: string,
+    updates: Partial<FormSection>
+  ) => {
     try {
-      // Update in database
       const response = await fetch(`/api/sections/${sectionId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),
-      })
+      });
 
       if (response.ok) {
-        // Update local state with proper ordering
         const updatedSections = form.sections.map((section) =>
-          section.id === sectionId ? { ...section, ...updates, updatedAt: new Date() } : section,
-        )
+          section.id === sectionId
+            ? { ...section, ...updates, updatedAt: new Date() }
+            : section
+        );
 
         onFormUpdate({
           ...form,
           sections: updatedSections,
-        })
+        });
       }
     } catch (error) {
-      console.error("Error updating section:", error)
-      toast({ title: "Error", description: "Failed to update section", variant: "destructive" })
+      console.error("Error updating section:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update section",
+        variant: "destructive",
+      });
     }
-  }
+  };
 
   const deleteSection = async (sectionId: string) => {
-    // Add to deleting set for immediate UI feedback
-    setDeletingSections((prev) => new Set(prev).add(sectionId))
+    setDeletingSections((prev) => new Set(prev).add(sectionId));
 
     try {
-      // Delete from database with comprehensive cleanup
       const response = await fetch(`/api/sections/${sectionId}`, {
         method: "DELETE",
-      })
+      });
 
       if (!response.ok) {
-        throw new Error("Failed to delete section from database")
+        throw new Error("Failed to delete section from database");
       }
 
-      const result = await response.json()
+      const result = await response.json();
       if (!result.success) {
-        throw new Error(result.error || "Failed to delete section")
+        throw new Error(result.error || "Failed to delete section");
       }
 
-      // Remove from local state immediately
       const updatedSections = form.sections
         .filter((section) => section.id !== sectionId)
-        .map((section, index) => ({ ...section, order: index }))
+        .map((section, index) => ({ ...section, order: index }));
 
-      // Update form state immediately
       onFormUpdate({
         ...form,
         sections: updatedSections,
-      })
+      });
 
-      console.log(`Section deleted successfully. Cleaned up ${result.deletedFieldIds?.length || 0} fields.`)
+      console.log(
+        `Section deleted successfully. Cleaned up ${
+          result.deletedFieldIds?.length || 0
+        } fields.`
+      );
     } catch (error: any) {
-      console.error("Error deleting section:", error)
+      console.error("Error deleting section:", error);
       toast({
         title: "Error",
         description: error.message || "Failed to delete section",
         variant: "destructive",
-      })
+      });
     } finally {
-      // Remove from deleting set
       setDeletingSections((prev) => {
-        const newSet = new Set(prev)
-        newSet.delete(sectionId)
-        return newSet
-      })
+        const newSet = new Set(prev);
+        newSet.delete(sectionId);
+        return newSet;
+      });
     }
-  }
+  };
 
   const updateField = async (fieldId: string, updates: Partial<FormField>) => {
     try {
-      // Update in database
       const response = await fetch(`/api/fields/${fieldId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),
-      })
+      });
 
       if (response.ok) {
-        // Update local state with proper ordering
         const updatedSections = form.sections.map((section) => ({
           ...section,
           fields: section.fields.map((field) =>
-            field.id === fieldId ? { ...field, ...updates, updatedAt: new Date() } : field,
+            field.id === fieldId
+              ? { ...field, ...updates, updatedAt: new Date() }
+              : field
           ),
-        }))
+        }));
 
         onFormUpdate({
           ...form,
           sections: updatedSections,
-        })
+        });
       }
     } catch (error) {
-      console.error("Error updating field:", error)
-      toast({ title: "Error", description: "Failed to update field", variant: "destructive" })
+      console.error("Error updating field:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update field",
+        variant: "destructive",
+      });
     }
-  }
+  };
 
   const deleteField = async (fieldId: string) => {
     try {
-      // Delete from database
       const response = await fetch(`/api/fields/${fieldId}`, {
         method: "DELETE",
-      })
+      });
 
       if (response.ok) {
-        // Update local state and reorder remaining fields
         const updatedSections = form.sections.map((section) => {
           const updatedFields = section.fields
             .filter((field) => field.id !== fieldId)
-            .map((field, index) => ({ ...field, order: index }))
+            .map((field, index) => ({ ...field, order: index }));
 
-          // Update field orders in database for this section
           updatedFields.forEach((field) => {
             fetch(`/api/fields/${field.id}`, {
               method: "PUT",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ order: field.order }),
-            })
-          })
+            });
+          });
 
           return {
             ...section,
             fields: updatedFields,
-          }
-        })
+          };
+        });
 
         onFormUpdate({
           ...form,
           sections: updatedSections,
-        })
+        });
 
-        toast({ title: "Success", description: "Field deleted successfully" })
+        toast({ title: "Success", description: "Field deleted successfully" });
       }
     } catch (error) {
-      console.error("Error deleting field:", error)
-      toast({ title: "Error", description: "Failed to delete field", variant: "destructive" })
+      console.error("Error deleting field:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete field",
+        variant: "destructive",
+      });
     }
-  }
+  };
 
-  // Filter out sections that are being deleted
-  const visibleSections = form.sections.filter((section) => !deletingSections.has(section.id))
+  const addSubform = async (sectionId: string, subformData: Partial<Subform>) => {
+    try {
+      const response = await fetch("/api/subforms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(subformData),
+      });
+
+      if (!response.ok) throw new Error("Failed to create subform");
+
+      const result = await response.json();
+      if (result.success) {
+        return result.data;
+      } else {
+        throw new Error(result.error || "Failed to create subform");
+      }
+    } catch (error: any) {
+      console.error("Error adding subform:", error);
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+      throw error;
+    }
+  };
+
+  const updateSubform = async (sectionId: string, subformId: string, updates: Partial<Subform>) => {
+    try {
+      const response = await fetch(`/api/subforms/${subformId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+
+      if (response.ok) {
+        const updatedSections = form.sections.map((section) =>
+          section.id === sectionId
+            ? {
+                ...section,
+                subforms: section.subforms.map((subform) =>
+                  subform.id === subformId
+                    ? { ...subform, ...updates, updatedAt: new Date() }
+                    : subform
+                ),
+              }
+            : section
+        );
+
+        onFormUpdate({
+          ...form,
+          sections: updatedSections,
+        });
+      }
+    } catch (error) {
+      console.error("Error updating subform:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update subform",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const deleteSubform = async (sectionId: string, subformId: string) => {
+    try {
+      const response = await fetch(`/api/subforms/${subformId}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        const updatedSections = form.sections.map((section) => {
+          if (section.id === sectionId) {
+            const updatedFields = section.fields
+              .filter((field) => field.subformId !== subformId)
+              .map((field, index) => ({ ...field, order: index }));
+
+            updatedFields.forEach((field) => {
+              fetch(`/api/fields/${field.id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ order: field.order }),
+              });
+            });
+
+            return {
+              ...section,
+              fields: updatedFields,
+              subforms: section.subforms.filter((subform) => subform.id !== subformId),
+            };
+          }
+          return section;
+        });
+
+        onFormUpdate({
+          ...form,
+          sections: updatedSections,
+        });
+
+        toast({ title: "Success", description: "Subform deleted successfully" });
+      }
+    } catch (error) {
+      console.error("Error deleting subform:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete subform",
+        variant: "destructive",
+      });
+    }
+  };
+
+  useDndMonitor({
+    onDragEnd(event) {
+      const { active, over } = event;
+      if (!over) return;
+
+      const draggedItem = active.data.current;
+      const dropTarget = over.data.current;
+
+      if (draggedItem?.type === "Field" && dropTarget?.type) {
+        const fieldType = draggedItem.fieldType;
+
+        if (dropTarget.type === "Section" && dropTarget.isSectionDropzone) {
+          const sectionId = dropTarget.sectionId;
+          const targetSection = form.sections.find((s) => s.id === sectionId);
+
+          if (targetSection) {
+            const newFieldData = {
+              sectionId: sectionId,
+              type: fieldType,
+              label: `New ${fieldType.charAt(0).toUpperCase() + fieldType.slice(1)}`,
+              placeholder: "",
+              description: "",
+              defaultValue: "",
+              options: [],
+              validation: {},
+              visible: true,
+              readonly: false,
+              width: "full" as const,
+              order: targetSection.fields.length,
+            };
+
+            fetch("/api/fields", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(newFieldData),
+            })
+              .then((response) => response.json())
+              .then((result) => {
+                if (result.success) {
+                  const newField: FormField = {
+                    ...result.data,
+                    conditional: null,
+                    styling: null,
+                    properties: null,
+                    rollup: null,
+                    lookup: null,
+                    formula: null,
+                    options: [],
+                    validation: {},
+                  };
+
+                  const updatedSections = form.sections.map((section) =>
+                    section.id === sectionId
+                      ? { ...section, fields: [...section.fields, newField] }
+                      : section
+                  );
+
+                  onFormUpdate({
+                    ...form,
+                    sections: updatedSections,
+                  });
+
+                  toast({ title: "Success", description: "Field added to section" });
+                }
+              })
+              .catch((error) => {
+                console.error("Error adding field to section:", error);
+                toast({
+                  title: "Error",
+                  description: "Failed to add field to section",
+                  variant: "destructive",
+                });
+              });
+          }
+        } else if (dropTarget.type === "Subform" && dropTarget.subformId) {
+          const sectionId = dropTarget.sectionId;
+          const subformId = dropTarget.subformId;
+          const targetSection = form.sections.find((s) => s.id === sectionId);
+          const targetSubform = targetSection?.subforms.find((s) => s.id === subformId);
+
+          if (targetSection && targetSubform) {
+            const newFieldData = {
+              subformId: subformId,
+              type: fieldType,
+              label: `New ${fieldType.charAt(0).toUpperCase() + fieldType.slice(1)}`,
+              placeholder: "",
+              description: "",
+              defaultValue: "",
+              options: [],
+              validation: {},
+              visible: true,
+              readonly: false,
+              width: "full" as const,
+              order: targetSubform.fields.length,
+            };
+
+            fetch("/api/fields", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(newFieldData),
+            })
+              .then((response) => response.json())
+              .then((result) => {
+                if (result.success) {
+                  const newField: FormField = {
+                    ...result.data,
+                    conditional: null,
+                    styling: null,
+                    properties: null,
+                    rollup: null,
+                    lookup: null,
+                    formula: null,
+                    options: [],
+                    validation: {},
+                  };
+
+                  const updatedSections = form.sections.map((section) =>
+                    section.id === sectionId
+                      ? {
+                          ...section,
+                          subforms: section.subforms.map((subform) =>
+                            subform.id === subformId
+                              ? { ...subform, fields: [...subform.fields, newField] }
+                              : subform
+                          ),
+                        }
+                      : section
+                  );
+
+                  onFormUpdate({
+                    ...form,
+                    sections: updatedSections,
+                  });
+
+                  toast({ title: "Success", description: "Field added to subform" });
+                }
+              })
+              .catch((error) => {
+                console.error("Error adding field to subform:", error);
+                toast({
+                  title: "Error",
+                  description: "Failed to add field to subform",
+                  variant: "destructive",
+                });
+              });
+          }
+        }
+      }
+    },
+  });
+
+  const visibleSections = form.sections.filter(
+    (section) => !deletingSections.has(section.id)
+  );
 
   return (
     <div
       ref={setNodeRef}
-      className={`p-6 min-h-full transition-all duration-200 ${isOver ? "bg-blue-50 border-2 border-dashed border-blue-300" : ""
-        }`}
+      className={`p-6 min-h-full transition-all duration-200 ${
+        isOver ? "bg-blue-50 border-2 border-dashed border-blue-300" : ""
+      }`}
     >
       <div className="max-w-4xl mx-auto space-y-6">
-        {/* Form Header */}
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-gray-900">{form.name}</h1>
-          {form.description && <p className="text-gray-600 mt-2">{form.description}</p>}
+          {form.description && (
+            <p className="text-gray-600 mt-2">{form.description}</p>
+          )}
         </div>
 
-        {/* Form Sections */}
         {visibleSections.length > 0 ? (
-          <SortableContext items={visibleSections.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+          <SortableContext
+            items={visibleSections.map((s) => s.id)}
+            strategy={verticalListSortingStrategy}
+          >
             <div className="space-y-6">
               {visibleSections
                 .sort((a, b) => a.order - b.order)
@@ -249,10 +536,19 @@ export default function FormCanvas({ form, onFormUpdate }: FormCanvasProps) {
                   <SectionComponent
                     key={section.id}
                     section={section}
-                    onUpdateSection={(updates) => updateSection(section.id, updates)}
+                    onUpdateSection={(updates) =>
+                      updateSection(section.id, updates)
+                    }
                     onDeleteSection={() => deleteSection(section.id)}
                     onUpdateField={updateField}
                     onDeleteField={deleteField}
+                    onAddSubform={(subformData) => addSubform(section.id, subformData)}
+                    onUpdateSubform={(subformId, updates) =>
+                      updateSubform(section.id, subformId, updates)
+                    }
+                    onDeleteSubform={(subformId) =>
+                      deleteSubform(section.id, subformId)
+                    }
                     isDeleting={deletingSections.has(section.id)}
                   />
                 ))}
@@ -262,8 +558,12 @@ export default function FormCanvas({ form, onFormUpdate }: FormCanvasProps) {
           <Card className="border-2 border-dashed border-gray-300 bg-gray-50">
             <CardContent className="p-12 text-center">
               <Layers className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-              <h3 className="text-lg font-semibold text-gray-700 mb-2">No sections yet</h3>
-              <p className="text-gray-500 mb-6">Add your first section to start building your form</p>
+              <h3 className="text-lg font-semibold text-gray-700 mb-2">
+                No sections yet
+              </h3>
+              <p className="text-gray-500 mb-6">
+                Add your first section to start building your form
+              </p>
               <Button onClick={addSection} disabled={isAddingSection}>
                 <Plus className="w-4 h-4 mr-2" />
                 {isAddingSection ? "Adding..." : "Add Section"}
@@ -272,29 +572,35 @@ export default function FormCanvas({ form, onFormUpdate }: FormCanvasProps) {
           </Card>
         )}
 
-        {/* Add Section Button */}
         {visibleSections.length > 0 && (
           <div className="flex justify-center pt-6">
-            <Button onClick={addSection} disabled={isAddingSection} variant="outline" size="lg">
+            <Button
+              onClick={addSection}
+              disabled={isAddingSection}
+              variant="outline"
+              size="lg"
+            >
               <Plus className="w-4 h-4 mr-2" />
               {isAddingSection ? "Adding Section..." : "Add Section"}
             </Button>
           </div>
         )}
 
-        {/* Show deletion status */}
         {deletingSections.size > 0 && (
           <div className="fixed bottom-4 right-4 bg-red-100 border border-red-300 rounded-lg p-4 shadow-lg z-50">
             <div className="flex items-center gap-3 text-red-800">
               <Loader2 className="h-5 w-5 animate-spin" />
               <span className="font-medium">
-                Deleting {deletingSections.size} section{deletingSections.size !== 1 ? "s" : ""}...
+                Deleting {deletingSections.size} section
+                {deletingSections.size !== 1 ? "s" : ""}...
               </span>
             </div>
-            <p className="text-sm text-red-600 mt-1">Cleaning up fields, records, and lookup relations</p>
+            <p className="text-sm text-red-600 mt-1">
+              Cleaning up fields, records, and lookup relations
+            </p>
           </div>
         )}
       </div>
     </div>
-  )
+  );
 }
