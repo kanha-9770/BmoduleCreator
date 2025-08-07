@@ -1,4 +1,5 @@
 "use client";
+
 import type React from "react";
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
@@ -28,16 +29,8 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import {
-  CheckCircle,
-  AlertCircle,
-  Loader2,
-  Send,
-  Eye,
-  Calendar,
-  Star,
-} from "lucide-react";
-import type { Form, FormField } from "@/types/form-builder";
+import { CheckCircle, AlertCircle, Loader2, Send, Eye, Calendar, Star, Layers, ChevronDown, ChevronRight } from 'lucide-react';
+import type { Form, FormField, Subform } from "@/types/form-builder";
 import { LookupField } from "@/components/lookup-field";
 
 // Interface for the field entries in fullOption.data
@@ -50,10 +43,50 @@ interface LookupFieldData {
   [key: string]: any;
 }
 
+// Color schemes for different nesting levels
+const NESTING_COLORS = [
+  {
+    bg: "bg-purple-50/30",
+    border: "border-l-purple-400",
+    accent: "text-purple-700",
+    levelBadge: "bg-purple-100 text-purple-700 border-purple-200",
+    leftBorder: "border-l-4 border-l-purple-400"
+  },
+  {
+    bg: "bg-blue-50/30",
+    border: "border-l-blue-400",
+    accent: "text-blue-700",
+    levelBadge: "bg-blue-100 text-blue-700 border-blue-200",
+    leftBorder: "border-l-4 border-l-blue-400"
+  },
+  {
+    bg: "bg-green-50/30",
+    border: "border-l-green-400",
+    accent: "text-green-700",
+    levelBadge: "bg-green-100 text-green-700 border-green-200",
+    leftBorder: "border-l-4 border-l-green-400"
+  },
+  {
+    bg: "bg-orange-50/30",
+    border: "border-l-orange-400",
+    accent: "text-orange-700",
+    levelBadge: "bg-orange-100 text-orange-700 border-orange-200",
+    leftBorder: "border-l-4 border-l-orange-400"
+  },
+  {
+    bg: "bg-pink-50/30",
+    border: "border-l-pink-400",
+    accent: "text-pink-700",
+    levelBadge: "bg-pink-100 text-pink-700 border-pink-200",
+    leftBorder: "border-l-4 border-l-pink-400"
+  },
+];
+
 export default function PublicFormPage() {
   const params = useParams();
   const { toast } = useToast();
   const formId = params.formId as string;
+
   const [form, setForm] = useState<Form | null>(null);
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -61,6 +94,7 @@ export default function PublicFormPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [completionPercentage, setCompletionPercentage] = useState(0);
+  const [collapsedSubforms, setCollapsedSubforms] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (formId) {
@@ -82,23 +116,58 @@ export default function PublicFormPage() {
       setLoading(true);
       const response = await fetch(`/api/forms/${formId}`);
       const result = await response.json();
+
       if (!result.success) {
         throw new Error(result.error);
       }
+
       if (!result.data.isPublished) {
         throw new Error("This form is not published");
       }
+
       setForm(result.data);
+
+      // Initialize form data with default values from all fields (including subform fields)
       const initialData: Record<string, any> = {};
+      const initialCollapsed: Record<string, boolean> = {};
+
       result.data.sections.forEach((section: any) => {
+        // Process section fields
         section.fields.forEach((field: FormField) => {
           if (field.defaultValue) {
             initialData[field.id] = field.defaultValue;
           }
         });
+
+        // Process subform fields recursively
+        const processSubforms = (subforms: Subform[]) => {
+          subforms.forEach((subform) => {
+            // Set initial collapsed state
+            initialCollapsed[subform.id] = subform.collapsed || false;
+
+            // Process subform fields
+            subform.fields.forEach((field: FormField) => {
+              if (field.defaultValue) {
+                initialData[field.id] = field.defaultValue;
+              }
+            });
+
+            // Process nested subforms
+            if (subform.childSubforms && subform.childSubforms.length > 0) {
+              processSubforms(subform.childSubforms);
+            }
+          });
+        };
+
+        if (section.subforms && section.subforms.length > 0) {
+          processSubforms(section.subforms);
+        }
       });
+
       setFormData(initialData);
+      setCollapsedSubforms(initialCollapsed);
       console.log("Initial form data:", initialData);
+      console.log("Initial collapsed subforms:", initialCollapsed);
     } catch (error: any) {
       toast({
         title: "Error",
@@ -130,32 +199,65 @@ export default function PublicFormPage() {
 
   const calculateCompletion = () => {
     if (!form) return;
-    const allFields = form.sections.flatMap((section) => section.fields);
+
+    // Get all fields from sections and subforms
+    const getAllFields = (sections: any[]): FormField[] => {
+      const allFields: FormField[] = [];
+
+      sections.forEach((section) => {
+        // Add section fields
+        allFields.push(...section.fields);
+
+        // Add subform fields recursively
+        const processSubforms = (subforms: Subform[]) => {
+          subforms.forEach((subform) => {
+            allFields.push(...subform.fields);
+            if (subform.childSubforms && subform.childSubforms.length > 0) {
+              processSubforms(subform.childSubforms);
+            }
+          });
+        };
+
+        if (section.subforms && section.subforms.length > 0) {
+          processSubforms(section.subforms);
+        }
+      });
+
+      return allFields;
+    };
+
+    const allFields = getAllFields(form.sections);
     const requiredFields = allFields.filter(
       (field) => field.validation?.required
     );
+
     const completedRequired = requiredFields.filter((field) => {
       const value = formData[field.id];
       return value !== undefined && value !== null && value !== "";
     });
+
     const percentage =
       requiredFields.length > 0
         ? Math.round((completedRequired.length / requiredFields.length) * 100)
         : 100;
+
     setCompletionPercentage(percentage);
   };
 
   const validateField = (field: FormField, value: any): string | null => {
     const validation = field.validation || {};
+
     if (validation.required && (!value || value === "")) {
       return `${field.label} is required`;
     }
+
     if (field.type === "email" && value) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(value)) {
         return "Please enter a valid email address";
       }
     }
+
     if (field.type === "url" && value) {
       try {
         new URL(value);
@@ -163,12 +265,14 @@ export default function PublicFormPage() {
         return "Please enter a valid URL";
       }
     }
+
     if (field.type === "tel" && value) {
       const phoneRegex = /^[+]?[1-9][\d]{0,15}$/;
       if (!phoneRegex.test(value.replace(/[\s\-()]/g, ""))) {
         return "Please enter a valid phone number";
       }
     }
+
     if (field.type === "number" && value) {
       const num = Number(value);
       if (isNaN(num)) {
@@ -181,6 +285,7 @@ export default function PublicFormPage() {
         return `Value must be at most ${validation.max}`;
       }
     }
+
     if ((field.type === "text" || field.type === "textarea") && value) {
       if (validation.minLength && value.length < validation.minLength) {
         return `Must be at least ${validation.minLength} characters`;
@@ -189,12 +294,14 @@ export default function PublicFormPage() {
         return `Must be at most ${validation.maxLength} characters`;
       }
     }
+
     if (validation.pattern && value) {
       const regex = new RegExp(validation.pattern);
       if (!regex.test(value)) {
         return validation.patternMessage || "Invalid format";
       }
     }
+
     return null;
   };
 
@@ -205,6 +312,7 @@ export default function PublicFormPage() {
       "Full option:",
       fullOption
     );
+
     let storeValue = value;
     if (
       value &&
@@ -218,7 +326,7 @@ export default function PublicFormPage() {
     setFormData((prev) => {
       const newData = { ...prev, [fieldId]: storeValue };
 
-      // If this is a lookup field and fullOption is provided, update related lookup fields
+      // Handle lookup field auto-fill logic
       if (
         form &&
         fullOption &&
@@ -226,30 +334,51 @@ export default function PublicFormPage() {
         fullOption.data?.record_id &&
         fullOption.data?.form_id
       ) {
-        const currentField = form.sections
-          .flatMap((section) => section.fields)
-          .find((field) => field.id === fieldId && field.type === "lookup");
+        // Get all fields from sections and subforms
+        const getAllFields = (sections: any[]): FormField[] => {
+          const allFields: FormField[] = [];
+
+          sections.forEach((section) => {
+            allFields.push(...section.fields);
+
+            const processSubforms = (subforms: Subform[]) => {
+              subforms.forEach((subform) => {
+                allFields.push(...subform.fields);
+                if (subform.childSubforms && subform.childSubforms.length > 0) {
+                  processSubforms(subform.childSubforms);
+                }
+              });
+            };
+
+            if (section.subforms && section.subforms.length > 0) {
+              processSubforms(section.subforms);
+            }
+          });
+
+          return allFields;
+        };
+
+        const allFields = getAllFields(form.sections);
+        const currentField = allFields.find(
+          (field) => field.id === fieldId && field.type === "lookup"
+        );
 
         if (currentField?.lookup) {
-          // Find all related lookup fields with the same source, excluding the current field
-          const relatedFields = form.sections
-            .flatMap((section) => section.fields)
-            .filter(
-              (field) =>
-                field.id !== fieldId &&
-                field.type === "lookup" &&
-                field.lookup?.sourceId === currentField.lookup?.sourceId
-            );
+          const relatedFields = allFields.filter(
+            (field) =>
+              field.id !== fieldId &&
+              field.type === "lookup" &&
+              field.lookup?.sourceId === currentField.lookup?.sourceId
+          );
 
           relatedFields.forEach((relatedField) => {
-            // Find the matching field in fullOption.data by label
             const matchedField = Object.values(fullOption.data).find(
               (field) => {
                 const f = field as LookupFieldData;
                 return (
                   typeof f.field_label === "string" &&
                   f.field_label.toLowerCase() ===
-                    relatedField.label.toLowerCase() &&
+                  relatedField.label.toLowerCase() &&
                   f.field_value
                 );
               }
@@ -260,10 +389,6 @@ export default function PublicFormPage() {
               console.log(
                 `Auto-filled ${relatedField.label} with:`,
                 matchedField.field_value
-              );
-            } else {
-              console.log(
-                `No matching field found in fullOption.data for label: ${relatedField.label}, form_id: ${fullOption.data.form_id}, record_id: ${fullOption.data.record_id}`
               );
             }
           });
@@ -286,17 +411,46 @@ export default function PublicFormPage() {
 
   const validateForm = (): boolean => {
     if (!form) return false;
+
     const newErrors: Record<string, string> = {};
     let isValid = true;
-    form.sections.forEach((section) => {
-      section.fields.forEach((field) => {
-        const error = validateField(field, formData[field.id]);
-        if (error) {
-          newErrors[field.id] = error;
-          isValid = false;
+
+    // Validate all fields from sections and subforms
+    const validateAllFields = (sections: any[]) => {
+      sections.forEach((section) => {
+        // Validate section fields
+        section.fields.forEach((field: FormField) => {
+          const error = validateField(field, formData[field.id]);
+          if (error) {
+            newErrors[field.id] = error;
+            isValid = false;
+          }
+        });
+
+        // Validate subform fields recursively
+        const validateSubforms = (subforms: Subform[]) => {
+          subforms.forEach((subform) => {
+            subform.fields.forEach((field: FormField) => {
+              const error = validateField(field, formData[field.id]);
+              if (error) {
+                newErrors[field.id] = error;
+                isValid = false;
+              }
+            });
+
+            if (subform.childSubforms && subform.childSubforms.length > 0) {
+              validateSubforms(subform.childSubforms);
+            }
+          });
+        };
+
+        if (section.subforms && section.subforms.length > 0) {
+          validateSubforms(section.subforms);
         }
       });
-    });
+    };
+
+    validateAllFields(form.sections);
     setErrors(newErrors);
     return isValid;
   };
@@ -305,6 +459,7 @@ export default function PublicFormPage() {
     e.preventDefault();
     console.log("Form submission started");
     console.log("Current form data:", formData);
+
     if (!validateForm()) {
       toast({
         title: "Validation Error",
@@ -324,6 +479,7 @@ export default function PublicFormPage() {
     }
 
     setSubmitting(true);
+
     try {
       console.log("Sending form submission with field IDs as keys...");
       const response = await fetch(`/api/forms/${formId}/submit`, {
@@ -335,11 +491,14 @@ export default function PublicFormPage() {
           userAgent: navigator.userAgent,
         }),
       });
+
       const result = await response.json();
       console.log("Submission response:", result);
+
       if (!result.success) {
         throw new Error(result.error);
       }
+
       setSubmitted(true);
       toast({
         title: "Success!",
@@ -361,6 +520,7 @@ export default function PublicFormPage() {
           },
         }),
       });
+
       console.log(
         "Form submitted successfully with field labels:",
         result.data.recordData
@@ -377,7 +537,14 @@ export default function PublicFormPage() {
     }
   };
 
-  const renderField = (field: FormField) => {
+  const toggleSubform = (subformId: string) => {
+    setCollapsedSubforms((prev) => ({
+      ...prev,
+      [subformId]: !prev[subformId],
+    }));
+  };
+
+  const renderField = (field: FormField, isInSubform: boolean = false) => {
     const value = formData[field.id];
     const error = errors[field.id];
     const fieldProps = {
@@ -387,7 +554,6 @@ export default function PublicFormPage() {
     };
 
     const options = Array.isArray(field.options) ? field.options : [];
-
     const lookupFieldData = {
       id: field.id,
       label: field.label,
@@ -411,8 +577,11 @@ export default function PublicFormPage() {
             placeholder={field.placeholder || ""}
             value={value || ""}
             onChange={(e) => handleFieldChange(field.id, e.target.value)}
+            className={`${fieldProps.className} ${isInSubform ? "border-purple-200 focus:border-purple-400" : ""
+              }`}
           />
         );
+
       case "password":
         return (
           <Input
@@ -421,8 +590,11 @@ export default function PublicFormPage() {
             placeholder={field.placeholder || ""}
             value={value || ""}
             onChange={(e) => handleFieldChange(field.id, e.target.value)}
+            className={`${fieldProps.className} ${isInSubform ? "border-purple-200 focus:border-purple-400" : ""
+              }`}
           />
         );
+
       case "textarea":
         return (
           <Textarea
@@ -431,8 +603,11 @@ export default function PublicFormPage() {
             value={value || ""}
             onChange={(e) => handleFieldChange(field.id, e.target.value)}
             rows={3}
+            className={`${fieldProps.className} ${isInSubform ? "border-purple-200 focus:border-purple-400" : ""
+              }`}
           />
         );
+
       case "date":
         return (
           <Input
@@ -440,8 +615,11 @@ export default function PublicFormPage() {
             type="date"
             value={value || ""}
             onChange={(e) => handleFieldChange(field.id, e.target.value)}
+            className={`${fieldProps.className} ${isInSubform ? "border-purple-200 focus:border-purple-400" : ""
+              }`}
           />
         );
+
       case "datetime":
         return (
           <Input
@@ -449,8 +627,11 @@ export default function PublicFormPage() {
             type="datetime-local"
             value={value || ""}
             onChange={(e) => handleFieldChange(field.id, e.target.value)}
+            className={`${fieldProps.className} ${isInSubform ? "border-purple-200 focus:border-purple-400" : ""
+              }`}
           />
         );
+
       case "checkbox":
         return (
           <div className="flex items-center space-x-2">
@@ -467,6 +648,7 @@ export default function PublicFormPage() {
             </Label>
           </div>
         );
+
       case "switch":
         return (
           <div className="flex items-center space-x-2">
@@ -483,6 +665,7 @@ export default function PublicFormPage() {
             </Label>
           </div>
         );
+
       case "radio":
         return (
           <RadioGroup
@@ -506,6 +689,7 @@ export default function PublicFormPage() {
             ))}
           </RadioGroup>
         );
+
       case "select":
         return (
           <Select
@@ -513,7 +697,8 @@ export default function PublicFormPage() {
             onValueChange={(val) => handleFieldChange(field.id, val)}
             disabled={submitting || submitted}
           >
-            <SelectTrigger className={error ? "border-red-500" : ""}>
+            <SelectTrigger className={`${error ? "border-red-500" : ""} ${isInSubform ? "border-purple-200 focus:border-purple-400" : ""
+              }`}>
               <SelectValue
                 placeholder={field.placeholder || "Select an option"}
               />
@@ -530,6 +715,7 @@ export default function PublicFormPage() {
             </SelectContent>
           </Select>
         );
+
       case "slider":
         return (
           <div className="space-y-2">
@@ -547,6 +733,7 @@ export default function PublicFormPage() {
             </div>
           </div>
         );
+
       case "rating":
         return (
           <div className="flex items-center space-x-1">
@@ -559,11 +746,10 @@ export default function PublicFormPage() {
                 className="p-1 hover:scale-110 transition-transform"
               >
                 <Star
-                  className={`h-6 w-6 ${
-                    rating <= (value || 0)
+                  className={`h-6 w-6 ${rating <= (value || 0)
                       ? "fill-yellow-400 text-yellow-400"
                       : "text-gray-300"
-                  }`}
+                    }`}
                 />
               </button>
             ))}
@@ -572,6 +758,7 @@ export default function PublicFormPage() {
             </span>
           </div>
         );
+
       case "lookup":
         return (
           <LookupField
@@ -584,6 +771,7 @@ export default function PublicFormPage() {
             error={error}
           />
         );
+
       case "file":
         return (
           <Input
@@ -596,8 +784,11 @@ export default function PublicFormPage() {
               }
             }}
             multiple={field.properties?.multiple || false}
+            className={`${fieldProps.className} ${isInSubform ? "border-purple-200 focus:border-purple-400" : ""
+              }`}
           />
         );
+
       case "hidden":
         return (
           <Input
@@ -606,6 +797,7 @@ export default function PublicFormPage() {
             value={value || field.defaultValue || ""}
           />
         );
+
       default:
         return (
           <Input
@@ -613,9 +805,160 @@ export default function PublicFormPage() {
             placeholder={field.placeholder || ""}
             value={value || ""}
             onChange={(e) => handleFieldChange(field.id, e.target.value)}
+            className={`${fieldProps.className} ${isInSubform ? "border-purple-200 focus:border-purple-400" : ""
+              }`}
           />
         );
     }
+  };
+
+  const renderSubform = (subform: Subform, level: number = 0, parentPath: string = "") => {
+    const colorScheme = NESTING_COLORS[level % NESTING_COLORS.length];
+    const isCollapsed = collapsedSubforms[subform.id];
+
+    // Build the current path
+    const currentPath = parentPath ? `${parentPath} > ${subform.name}` : subform.name;
+    const pathParts = currentPath.split(' > ');
+
+    // Combine fields and child subforms for rendering
+    const allItems = [
+      ...subform.fields.map(field => ({ type: 'field' as const, item: field, id: field.id, order: field.order })),
+      ...(subform.childSubforms || []).map(childSubform => ({ type: 'subform' as const, item: childSubform, id: childSubform.id, order: childSubform.order }))
+    ].sort((a, b) => a.order - b.order);
+
+    return (
+      <Card
+        key={subform.id}
+        className={`bg-white border border-gray-200 rounded-lg shadow-sm ${colorScheme.leftBorder}`}
+      >
+        <CardHeader className="pb-3 bg-white border-b border-gray-100">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3 flex-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => toggleSubform(subform.id)}
+                className="h-6 w-6 p-0 text-gray-500 hover:text-gray-700"
+              >
+                {isCollapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              </Button>
+
+              <Layers className={`w-4 h-4 ${colorScheme.accent}`} />
+
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <h4 className="text-sm font-semibold">{subform.name}</h4>
+                  <Badge variant="outline" className={`text-xs ${colorScheme.levelBadge} px-2 py-0 font-medium`}>
+                    Level {level}
+                  </Badge>
+                  <Badge variant="outline" className="text-xs bg-blue-50 text-blue-600 border-blue-200 px-2 py-0">
+                    {subform.fields.length} field{subform.fields.length !== 1 ? 's' : ''}
+                  </Badge>
+                  {(subform.childSubforms?.length || 0) > 0 && (
+                    <Badge variant="outline" className="text-xs bg-gray-50 text-gray-600 border-gray-200 px-2 py-0">
+                      {subform.childSubforms?.length} subform{(subform.childSubforms?.length || 0) !== 1 ? 's' : ''}
+                    </Badge>
+                  )}
+                </div>
+
+                {/* Subform Path Display */}
+                {level > 0 && (
+                  <div className="flex items-center gap-1 mb-2">
+                    <span className="text-xs text-gray-500">Path:</span>
+                    <div className="flex items-center gap-1 text-xs">
+                      {pathParts.map((part, index) => (
+                        <div key={index} className="flex items-center gap-1">
+                          <span className={`px-2 py-1 rounded ${index === pathParts.length - 1
+                              ? `${colorScheme.levelBadge} font-medium`
+                              : 'bg-gray-100 text-gray-600'
+                            }`}>
+                            {part}
+                          </span>
+                          {index < pathParts.length - 1 && (
+                            <ChevronRight className="w-3 h-3 text-gray-400" />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Database Path Display (if available) */}
+                {subform.path && (
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs text-gray-500">DB Path:</span>
+                    <Badge variant="secondary" className="text-xs bg-gray-100 text-gray-700 px-2 py-0">
+                      {subform.path}
+                    </Badge>
+                  </div>
+                )}
+
+                {subform.description && (
+                  <p className={`text-sm ${colorScheme.accent} opacity-75`}>{subform.description}</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </CardHeader>
+
+        {!isCollapsed && (
+          <CardContent className="pt-4">
+            {allItems.length > 0 ? (
+              <div className="space-y-4">
+                {allItems.map((item) => (
+                  item.type === 'field' ? (
+                    <div key={item.id} className="space-y-2">
+                      {(item.item as FormField).type !== "checkbox" &&
+                        (item.item as FormField).type !== "switch" &&
+                        (item.item as FormField).type !== "hidden" && (
+                          <div className="flex items-center gap-2">
+                            <Label
+                              htmlFor={(item.item as FormField).id}
+                              className="text-sm font-medium"
+                            >
+                              {(item.item as FormField).label}
+                              {(item.item as FormField).validation?.required && (
+                                <span className="text-red-500 ml-1">*</span>
+                              )}
+                            </Label>
+                            {/* Field Path Indicator */}
+                            <Badge variant="outline" className="text-xs bg-purple-50 text-purple-600 border-purple-200 px-1 py-0">
+                              {currentPath}
+                            </Badge>
+                          </div>
+                        )}
+                      {(item.item as FormField).description && (item.item as FormField).type !== "hidden" && (
+                        <p className="text-xs text-muted-foreground">
+                          {(item.item as FormField).description}
+                        </p>
+                      )}
+                      {renderField(item.item as FormField, true)}
+                      {errors[(item.item as FormField).id] && (
+                        <p className="text-sm text-red-500 flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3" />
+                          {errors[(item.item as FormField).id]}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div key={item.id} className={`ml-6 ${colorScheme.bg} rounded-lg p-2`}>
+                      {renderSubform(item.item as Subform, level + 1, currentPath)}
+                    </div>
+                  )
+                ))}
+              </div>
+            ) : (
+              <div className="border-2 border-dashed rounded-lg p-6 text-center border-gray-300 bg-gray-50">
+                <Layers className={`w-6 h-6 mx-auto mb-2 ${colorScheme.accent}`} />
+                <p className={`text-sm mb-3 ${colorScheme.accent}`}>No fields in this subform</p>
+                <p className="text-xs text-gray-500">Path: {currentPath}</p>
+              </div>
+            )}
+          </CardContent>
+        )}
+      </Card>
+    );
   };
 
   if (loading) {
@@ -711,6 +1054,7 @@ export default function PublicFormPage() {
               <Progress value={completionPercentage} className="h-2" />
             </div>
           </CardHeader>
+
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-8">
               {form.sections.map((section) => (
@@ -723,45 +1067,56 @@ export default function PublicFormPage() {
                       </p>
                     )}
                   </div>
-                  <div
-                    className={`grid gap-6 ${
-                      section.columns > 1
-                        ? `md:grid-cols-${section.columns}`
-                        : ""
-                    }`}
-                  >
-                    {section.fields.map((field) => (
-                      <div key={field.id} className="space-y-2">
-                        {field.type !== "checkbox" &&
-                          field.type !== "switch" &&
-                          field.type !== "hidden" && (
-                            <Label
-                              htmlFor={field.id}
-                              className="text-sm font-medium"
-                            >
-                              {field.label}
-                              {field.validation?.required && (
-                                <span className="text-red-500 ml-1">*</span>
-                              )}
-                            </Label>
+
+                  {/* Section Fields */}
+                  {section.fields.length > 0 && (
+                    <div
+                      className={`grid gap-6 ${section.columns > 1
+                          ? `md:grid-cols-${section.columns}`
+                          : ""
+                        }`}
+                    >
+                      {section.fields.map((field) => (
+                        <div key={field.id} className="space-y-2">
+                          {field.type !== "checkbox" &&
+                            field.type !== "switch" &&
+                            field.type !== "hidden" && (
+                              <Label
+                                htmlFor={field.id}
+                                className="text-sm font-medium"
+                              >
+                                {field.label}
+                                {field.validation?.required && (
+                                  <span className="text-red-500 ml-1">*</span>
+                                )}
+                              </Label>
+                            )}
+                          {field.description && field.type !== "hidden" && (
+                            <p className="text-xs text-muted-foreground">
+                              {field.description}
+                            </p>
                           )}
-                        {field.description && field.type !== "hidden" && (
-                          <p className="text-xs text-muted-foreground">
-                            {field.description}
-                          </p>
-                        )}
-                        {renderField(field)}
-                        {errors[field.id] && (
-                          <p className="text-sm text-red-500 flex items-center gap-1">
-                            <AlertCircle className="h-3 w-3" />
-                            {errors[field.id]}
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                          {renderField(field)}
+                          {errors[field.id] && (
+                            <p className="text-sm text-red-500 flex items-center gap-1">
+                              <AlertCircle className="h-3 w-3" />
+                              {errors[field.id]}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Section Subforms */}
+                  {section.subforms && section.subforms.length > 0 && (
+                    <div className="space-y-4">
+                      {section.subforms.map((subform) => renderSubform(subform, 0, ""))}
+                    </div>
+                  )}
                 </div>
               ))}
+
               <div className="pt-6 border-t">
                 <Button
                   type="submit"
@@ -785,6 +1140,7 @@ export default function PublicFormPage() {
             </CardContent>
           </form>
         </Card>
+
         {process.env.NODE_ENV === "development" && (
           <Card className="mt-4">
             <CardHeader>
@@ -812,6 +1168,74 @@ export default function PublicFormPage() {
             </CardContent>
           </Card>
         )}
+
+        {process.env.NODE_ENV === "development" && (
+          <>
+            <Card className="mt-4">
+              <CardHeader>
+                <CardTitle className="text-sm">
+                  Debug: Subform Hierarchy & Paths
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {form?.sections.map((section) => (
+                    <div key={section.id}>
+                      <h4 className="font-medium text-sm mb-2">Section: {section.title}</h4>
+                      {section.subforms && section.subforms.length > 0 ? (
+                        <div className="ml-4 space-y-2">
+                          {(() => {
+                            const renderSubformHierarchy = (subforms: Subform[], parentPath: string = "", level: number = 0) => {
+                              return subforms.map((subform) => {
+                                const currentPath = parentPath ? `${parentPath} > ${subform.name}` : subform.name;
+                                const indent = "  ".repeat(level);
+
+                                return (
+                                  <div key={subform.id} className="text-xs font-mono">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <span className="text-gray-600">{indent}├─</span>
+                                      <span className="font-medium">{subform.name}</span>
+                                      <Badge variant="outline" className="text-xs px-1 py-0">
+                                        ID: {subform.id}
+                                      </Badge>
+                                      <Badge variant="outline" className="text-xs px-1 py-0">
+                                        Level: {subform.level || 0}
+                                      </Badge>
+                                      {subform.path && (
+                                        <Badge variant="secondary" className="text-xs px-1 py-0">
+                                          DB: {subform.path}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    <div className="ml-4 text-gray-600">
+                                      <div>Path: {currentPath}</div>
+                                      <div>Fields: {subform.fields.length}</div>
+                                      <div>Parent: {subform.parentSubformId || 'Section'}</div>
+                                    </div>
+                                    {subform.childSubforms && subform.childSubforms.length > 0 && (
+                                      <div className="ml-4 mt-2">
+                                        {renderSubformHierarchy(subform.childSubforms, currentPath, level + 1)}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              });
+                            };
+
+                            return renderSubformHierarchy(section.subforms);
+                          })()}
+                        </div>
+                      ) : (
+                        <div className="ml-4 text-xs text-gray-500">No subforms</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        )}
+
         <div className="mt-4 text-center text-xs text-muted-foreground">
           <p className="flex items-center justify-center gap-1">
             <Calendar className="h-3 w-3" />

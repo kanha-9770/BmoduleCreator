@@ -3,27 +3,7 @@
 import { useDraggable } from "@dnd-kit/core";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  Type,
-  AlignLeft,
-  Hash,
-  Mail,
-  Calendar,
-  CheckSquare,
-  Radio,
-  ChevronDown,
-  Upload,
-  Search,
-  Phone,
-  Link,
-  Star,
-  Clock,
-  MapPin,
-  User,
-  CreditCard,
-  ImageIcon,
-  Layers,
-} from "lucide-react";
+import { Type, AlignLeft, Hash, Mail, Calendar, CheckSquare, Radio, ChevronDown, Upload, Search, Phone, Link, Star, Clock, MapPin, User, CreditCard, ImageIcon, Layers } from 'lucide-react';
 
 export const fieldTypes = [
   {
@@ -170,9 +150,10 @@ function PaletteItem({ fieldType }: PaletteItemProps) {
     useDraggable({
       id: fieldType.id,
       data: {
-        type: "PaletteItem",
-        isPaletteItem: true,
+        type: "PaletteField", // Changed from "PaletteItem" to match detection logic
+        isPaletteItem: true, // CRITICAL FLAG - This is what the drop detection looks for
         fieldType: fieldType.id,
+        fieldData: fieldType, // Include full field data for overlay
       },
     });
 
@@ -223,7 +204,6 @@ export function PaletteItemDragOverlay({
   fieldType: (typeof fieldTypes)[0];
 }) {
   const IconComponent = fieldType.icon;
-
   return (
     <Card className="palette-item-drag-overlay border-2 border-blue-500 shadow-2xl bg-blue-50 rotate-6 scale-110 z-[9999]">
       <CardContent className="p-4">
@@ -252,7 +232,6 @@ export default function FieldPalette() {
           Drag fields to add them to your form
         </p>
       </div>
-
       <div className="flex-1 overflow-y-auto p-4 space-y-6 ">
         {categories.map((category) => (
           <div key={category}>
@@ -272,7 +251,6 @@ export default function FieldPalette() {
           </div>
         ))}
       </div>
-
       <div className="p-4 border-t border-gray-200 bg-gray-50">
         <p className="text-xs text-gray-500 text-center">
           Drag any field type to the form canvas to add it to a section

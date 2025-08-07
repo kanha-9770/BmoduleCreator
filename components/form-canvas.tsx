@@ -8,18 +8,23 @@ import {
 } from "@dnd-kit/sortable";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Layers, Loader2 } from "lucide-react";
+import { Plus, Layers, Loader2 } from 'lucide-react';
 import SectionComponent from "./section-component";
-import type { Form, FormSection, FormField } from "@/types/form-builder";
+import type { Form, FormSection, FormField, Subform } from "@/types/form-builder";
 import { useToast } from "@/hooks/use-toast";
-import { v4 as uuidv4 } from "uuid";
 
 interface FormCanvasProps {
   form: Form;
   onFormUpdate: (form: Form) => void;
+  fetchForm: () => Promise<void>;
+  subformHierarchyMap?: Map<string, any>;
+  getSubformPath?: (subformId: string) => string;
+  getFullSubformPath?: (subformId: string) => string;
+  getParentChildDisplay?: (subformId: string) => string;
+  getAncestorPaths?: (subformId: string) => string[];
 }
 
-export default function FormCanvas({ form, onFormUpdate }: FormCanvasProps) {
+export default function FormCanvas({ form, onFormUpdate, fetchForm, subformHierarchyMap, getSubformPath, getFullSubformPath, getParentChildDisplay, getAncestorPaths }: FormCanvasProps) {
   const [isAddingSection, setIsAddingSection] = useState(false);
   const [deletingSections, setDeletingSections] = useState<Set<string>>(
     new Set()
@@ -122,7 +127,6 @@ export default function FormCanvas({ form, onFormUpdate }: FormCanvasProps) {
 
   const deleteSection = async (sectionId: string) => {
     setDeletingSections((prev) => new Set(prev).add(sectionId));
-
     try {
       const response = await fetch(`/api/sections/${sectionId}`, {
         method: "DELETE",
@@ -183,6 +187,14 @@ export default function FormCanvas({ form, onFormUpdate }: FormCanvasProps) {
               ? { ...field, ...updates, updatedAt: new Date() }
               : field
           ),
+          subforms: section.subforms.map((subform) => ({
+            ...subform,
+            fields: subform.fields.map((field) =>
+              field.id === fieldId
+                ? { ...field, ...updates, updatedAt: new Date() }
+                : field
+            ),
+          })),
         }));
 
         onFormUpdate({
@@ -212,6 +224,14 @@ export default function FormCanvas({ form, onFormUpdate }: FormCanvasProps) {
             .filter((field) => field.id !== fieldId)
             .map((field, index) => ({ ...field, order: index }));
 
+          const updatedSubforms = section.subforms.map((subform) => ({
+            ...subform,
+            fields: subform.fields
+              .filter((field) => field.id !== fieldId)
+              .map((field, index) => ({ ...field, order: index })),
+          }));
+
+          // Update field orders in database
           updatedFields.forEach((field) => {
             fetch(`/api/fields/${field.id}`, {
               method: "PUT",
@@ -220,9 +240,20 @@ export default function FormCanvas({ form, onFormUpdate }: FormCanvasProps) {
             });
           });
 
+          updatedSubforms.forEach((subform) => {
+            subform.fields.forEach((field) => {
+              fetch(`/api/fields/${field.id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ order: field.order }),
+              });
+            });
+          });
+
           return {
             ...section,
             fields: updatedFields,
+            subforms: updatedSubforms,
           };
         });
 
@@ -243,21 +274,26 @@ export default function FormCanvas({ form, onFormUpdate }: FormCanvasProps) {
     }
   };
 
-  const addSubform = async (sectionId: string, subformData: Partial<Subform>) => {
+  const addSubform = async (sectionId: string, subformData: Partial<Subform>, parentSubformId?: string) => {
     try {
       const response = await fetch("/api/subforms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(subformData),
-      });
+      })
 
-      if (!response.ok) throw new Error("Failed to create subform");
+      if (!response.ok) throw new Error("Failed to create subform")
 
-      const result = await response.json();
+      const result = await response.json()
       if (result.success) {
-        return result.data;
+        await fetchForm() // Refresh the entire form to get updated structure with nested subforms
+        toast({
+          title: "Success",
+          description: `Subform created successfully${parentSubformId ? ' as nested subform' : ''}`,
+        })
+        return result.data // Return the created subform data
       } else {
-        throw new Error(result.error || "Failed to create subform");
+        throw new Error(result.error || "Failed to create subform")
       }
     } catch (error: any) {
       console.error("Error adding subform:", error);
@@ -276,34 +312,46 @@ export default function FormCanvas({ form, onFormUpdate }: FormCanvasProps) {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),
-      });
+      })
 
       if (response.ok) {
+        // Helper function to update subform recursively
+        const updateSubformRecursively = (subforms: Subform[]): Subform[] => {
+          return subforms.map((subform) => {
+            if (subform.id === subformId) {
+              return { ...subform, ...updates, updatedAt: new Date() }
+            }
+            if (subform.childSubforms && subform.childSubforms.length > 0) {
+              return {
+                ...subform,
+                childSubforms: updateSubformRecursively(subform.childSubforms)
+              }
+            }
+            return subform
+          })
+        }
+
         const updatedSections = form.sections.map((section) =>
           section.id === sectionId
             ? {
                 ...section,
-                subforms: section.subforms.map((subform) =>
-                  subform.id === subformId
-                    ? { ...subform, ...updates, updatedAt: new Date() }
-                    : subform
-                ),
+                subforms: updateSubformRecursively(section.subforms),
               }
             : section
-        );
+        )
 
         onFormUpdate({
           ...form,
           sections: updatedSections,
-        });
+        })
       }
     } catch (error) {
-      console.error("Error updating subform:", error);
+      console.error("Error updating subform:", error)
       toast({
         title: "Error",
         description: "Failed to update subform",
         variant: "destructive",
-      });
+      })
     }
   };
 
@@ -353,157 +401,6 @@ export default function FormCanvas({ form, onFormUpdate }: FormCanvasProps) {
       });
     }
   };
-
-  useDndMonitor({
-    onDragEnd(event) {
-      const { active, over } = event;
-      if (!over) return;
-
-      const draggedItem = active.data.current;
-      const dropTarget = over.data.current;
-
-      if (draggedItem?.type === "Field" && dropTarget?.type) {
-        const fieldType = draggedItem.fieldType;
-
-        if (dropTarget.type === "Section" && dropTarget.isSectionDropzone) {
-          const sectionId = dropTarget.sectionId;
-          const targetSection = form.sections.find((s) => s.id === sectionId);
-
-          if (targetSection) {
-            const newFieldData = {
-              sectionId: sectionId,
-              type: fieldType,
-              label: `New ${fieldType.charAt(0).toUpperCase() + fieldType.slice(1)}`,
-              placeholder: "",
-              description: "",
-              defaultValue: "",
-              options: [],
-              validation: {},
-              visible: true,
-              readonly: false,
-              width: "full" as const,
-              order: targetSection.fields.length,
-            };
-
-            fetch("/api/fields", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(newFieldData),
-            })
-              .then((response) => response.json())
-              .then((result) => {
-                if (result.success) {
-                  const newField: FormField = {
-                    ...result.data,
-                    conditional: null,
-                    styling: null,
-                    properties: null,
-                    rollup: null,
-                    lookup: null,
-                    formula: null,
-                    options: [],
-                    validation: {},
-                  };
-
-                  const updatedSections = form.sections.map((section) =>
-                    section.id === sectionId
-                      ? { ...section, fields: [...section.fields, newField] }
-                      : section
-                  );
-
-                  onFormUpdate({
-                    ...form,
-                    sections: updatedSections,
-                  });
-
-                  toast({ title: "Success", description: "Field added to section" });
-                }
-              })
-              .catch((error) => {
-                console.error("Error adding field to section:", error);
-                toast({
-                  title: "Error",
-                  description: "Failed to add field to section",
-                  variant: "destructive",
-                });
-              });
-          }
-        } else if (dropTarget.type === "Subform" && dropTarget.subformId) {
-          const sectionId = dropTarget.sectionId;
-          const subformId = dropTarget.subformId;
-          const targetSection = form.sections.find((s) => s.id === sectionId);
-          const targetSubform = targetSection?.subforms.find((s) => s.id === subformId);
-
-          if (targetSection && targetSubform) {
-            const newFieldData = {
-              subformId: subformId,
-              type: fieldType,
-              label: `New ${fieldType.charAt(0).toUpperCase() + fieldType.slice(1)}`,
-              placeholder: "",
-              description: "",
-              defaultValue: "",
-              options: [],
-              validation: {},
-              visible: true,
-              readonly: false,
-              width: "full" as const,
-              order: targetSubform.fields.length,
-            };
-
-            fetch("/api/fields", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(newFieldData),
-            })
-              .then((response) => response.json())
-              .then((result) => {
-                if (result.success) {
-                  const newField: FormField = {
-                    ...result.data,
-                    conditional: null,
-                    styling: null,
-                    properties: null,
-                    rollup: null,
-                    lookup: null,
-                    formula: null,
-                    options: [],
-                    validation: {},
-                  };
-
-                  const updatedSections = form.sections.map((section) =>
-                    section.id === sectionId
-                      ? {
-                          ...section,
-                          subforms: section.subforms.map((subform) =>
-                            subform.id === subformId
-                              ? { ...subform, fields: [...subform.fields, newField] }
-                              : subform
-                          ),
-                        }
-                      : section
-                  );
-
-                  onFormUpdate({
-                    ...form,
-                    sections: updatedSections,
-                  });
-
-                  toast({ title: "Success", description: "Field added to subform" });
-                }
-              })
-              .catch((error) => {
-                console.error("Error adding field to subform:", error);
-                toast({
-                  title: "Error",
-                  description: "Failed to add field to subform",
-                  variant: "destructive",
-                });
-              });
-          }
-        }
-      }
-    },
-  });
 
   const visibleSections = form.sections.filter(
     (section) => !deletingSections.has(section.id)

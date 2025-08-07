@@ -28,11 +28,10 @@ model FormModule {
   forms       Form[]
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
-
+  
   // Lookup relations
   lookupSources LookupSource[]
-
-
+  
   @@map("form_modules")
   @@index([parentId])
   @@index([level])
@@ -76,12 +75,12 @@ model Form {
   styling           Json?    // GIN index to be added
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
-
+  
   // Lookup relations
   lookupSources     LookupSource[]
   isUserForm        Boolean? @default(false)
   isEmployeeForm    Boolean? @default(false)
-
+  
   @@map("forms")
   @@index([moduleId])
   @@index([isPublished])
@@ -96,7 +95,7 @@ model FormTableMapping {
   storageTable String   @map("storage_table") // e.g., 'form_records_1'
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-
+  
   @@map("form_table_mappings")
   @@index([formId])
   @@index([storageTable])
@@ -119,7 +118,7 @@ model FormSection {
   subforms    Subform[]
   createdAt   DateTime    @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
-
+  
   @@map("form_sections")
   @@index([formId])
   @@index([order])
@@ -151,10 +150,10 @@ model FormField {
   
   createdAt    DateTime     @default(now()) @map("created_at")
   updatedAt    DateTime     @updatedAt @map("updated_at")
-
+  
   // Lookup relations
   lookupRelations LookupFieldRelation[]
-
+  
   @@map("form_fields")
   @@index([sectionId])
   @@index([subformId])
@@ -162,20 +161,45 @@ model FormField {
   @@index([order])
 }
 
+// UPDATED: Enhanced Subform model with nested support
 model Subform {
-  id        String      @id @default(cuid())
-  sectionId String      @map("section_id")
-  section   FormSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-  name      String
-  order     Int         @default(0)
-  fields    FormField[]
-  records   SubformRecord[]
-  createdAt DateTime    @default(now()) @map("created_at")
-  updatedAt DateTime    @updatedAt @map("updated_at")
-
+  id              String      @id @default(cuid())
+  sectionId       String?     @map("section_id")
+  section         FormSection? @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  
+  // NEW: Support for nested subforms
+  parentSubformId String?     @map("parent_subform_id")
+  parentSubform   Subform?    @relation("SubformHierarchy", fields: [parentSubformId], references: [id], onDelete: Cascade)
+  childSubforms   Subform[]   @relation("SubformHierarchy")
+  
+  name            String
+  description     String?
+  order           Int         @default(0)
+  level           Int         @default(0) // NEW: Nesting level (0 = root, 1 = first nested, etc.)
+  path            String?     // NEW: Hierarchical path like "1.2.3"
+  
+  // Visual and behavior properties
+  columns         Int         @default(1)
+  visible         Boolean     @default(true)
+  collapsible     Boolean     @default(true)
+  collapsed       Boolean     @default(false)
+  
+  // Styling for different nesting levels
+  styling         Json?       // Custom styling based on nesting level
+  conditional     Json?       // Conditional logic
+  
+  fields          FormField[]
+  records         SubformRecord[]
+  
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+  
   @@map("subforms")
   @@index([sectionId])
+  @@index([parentSubformId])
   @@index([order])
+  @@index([level])
+  @@index([path])
 }
 
 model SubformRecord {
@@ -188,7 +212,7 @@ model SubformRecord {
   date        DateTime? // For attendance dates
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
-
+  
   @@map("subform_records")
   @@index([subformId])
   @@index([employee_id])
@@ -210,7 +234,7 @@ model FormRecord1 {
   status       String   @default("submitted")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-
+  
   @@map("form_records_1")
   @@index([formId])
   @@index([submittedAt])
@@ -234,7 +258,7 @@ model FormRecord2 {
   status       String   @default("submitted")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-
+  
   @@map("form_records_2")
   @@index([formId])
   @@index([submittedAt])
@@ -258,7 +282,7 @@ model FormRecord3 {
   status       String   @default("submitted")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-
+  
   @@map("form_records_3")
   @@index([formId])
   @@index([submittedAt])
@@ -282,7 +306,7 @@ model FormRecord4 {
   status       String   @default("submitted")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-
+  
   @@map("form_records_4")
   @@index([formId])
   @@index([submittedAt])
@@ -306,7 +330,7 @@ model FormRecord5 {
   status       String   @default("submitted")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-
+  
   @@map("form_records_5")
   @@index([formId])
   @@index([submittedAt])
@@ -330,7 +354,7 @@ model FormRecord6 {
   status       String   @default("submitted")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-
+  
   @@map("form_records_6")
   @@index([formId])
   @@index([submittedAt])
@@ -354,7 +378,7 @@ model FormRecord7 {
   status       String   @default("submitted")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-
+  
   @@map("form_records_7")
   @@index([formId])
   @@index([submittedAt])
@@ -378,7 +402,7 @@ model FormRecord8 {
   status       String   @default("submitted")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-
+  
   @@map("form_records_8")
   @@index([formId])
   @@index([submittedAt])
@@ -402,7 +426,7 @@ model FormRecord9 {
   status       String   @default("submitted")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-
+  
   @@map("form_records_9")
   @@index([formId])
   @@index([submittedAt])
@@ -426,7 +450,7 @@ model FormRecord10 {
   status       String   @default("submitted")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-
+  
   @@map("form_records_10")
   @@index([formId])
   @@index([submittedAt])
@@ -450,7 +474,7 @@ model FormRecord11 {
   status       String   @default("submitted")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-
+  
   @@map("form_records_11")
   @@index([formId])
   @@index([submittedAt])
@@ -474,7 +498,7 @@ model FormRecord12 {
   status       String   @default("submitted")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-
+  
   @@map("form_records_12")
   @@index([formId])
   @@index([submittedAt])
@@ -498,7 +522,7 @@ model FormRecord13 {
   status       String   @default("submitted")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-
+  
   @@map("form_records_13")
   @@index([formId])
   @@index([submittedAt])
@@ -522,7 +546,7 @@ model FormRecord14 {
   status       String   @default("submitted")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-
+  
   @@map("form_records_14")
   @@index([formId])
   @@index([submittedAt])
@@ -546,7 +570,7 @@ model FormRecord15 {
   status       String   @default("submitted")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-
+  
   @@map("form_records_15")
   @@index([formId])
   @@index([submittedAt])
@@ -565,7 +589,7 @@ model FormEvent {
   userAgent String?  @map("user_agent")
   ipAddress String?  @map("ip_address")
   createdAt DateTime @default(now()) @map("created_at")
-
+  
   @@map("form_events")
   @@index([formId])
   @@index([eventType])
@@ -583,7 +607,7 @@ model FieldType {
   active       Boolean  @default(true)
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-
+  
   @@map("field_types")
   @@index([category])
   @@index([active])
@@ -603,9 +627,9 @@ model LookupSource {
   active          Boolean  @default(true)
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
-
+  
   fieldRelations  LookupFieldRelation[]
-
+  
   @@map("lookup_sources")
   @@index([type])
   @@index([active])
@@ -628,7 +652,7 @@ model LookupFieldRelation {
   filters         Json        @default("{}") // GIN index to be added
   createdAt       DateTime    @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
-
+  
   @@map("lookup_field_relations")
   @@index([lookupSourceId])
   @@index([formFieldId])
@@ -643,7 +667,7 @@ model Role {
   description String?         // Optional description of the role
   createdAt   DateTime        @default(now()) @map("created_at")
   updatedAt   DateTime        @updatedAt @map("updated_at")
-
+  
   @@map("roles")
   @@index([name])
 }
@@ -657,7 +681,7 @@ model Permission {
   resourceType String?
   createdAt    DateTime        @default(now()) @map("created_at")
   updatedAt    DateTime        @updatedAt @map("updated_at")
-
+  
   @@map("permissions")
   @@index([name])
   @@index([resourceId])
@@ -671,7 +695,7 @@ model RolePermission {
   permissionId String     @map("permission_id")
   createdAt    DateTime   @default(now()) @map("created_at")
   updatedAt    DateTime   @updatedAt @map("updated_at")
-
+  
   @@map("role_permissions")
   @@index([roleId])
   @@index([permissionId])
@@ -702,7 +726,7 @@ model UserPermission {
   
   createdAt    DateTime    @default(now()) @map("created_at")
   updatedAt    DateTime    @updatedAt @map("updated_at")
-
+  
   @@map("user_permissions")
   @@unique([userId, resourceType, resourceId], name: "unique_user_resource_permission")
   @@index([userId])

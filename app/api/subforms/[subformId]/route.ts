@@ -1,117 +1,256 @@
-import { type NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { NextRequest, NextResponse } from "next/server"
 
-export async function GET(request: NextRequest, { params }: { params: { subformId: string } }) {
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { subformId: string } }
+) {
   try {
+    const { subformId } = params
+    const { searchParams } = new URL(request.url)
+    const includeNested = searchParams.get('includeNested') === 'true'
+
     const subform = await prisma.subform.findUnique({
-      where: { id: params.subformId },
+      where: { id: subformId },
       include: {
         fields: {
-          orderBy: { order: "asc" },
+          orderBy: { order: 'asc' }
         },
-      },
-    })
-
-    if (!subform) {
-      return NextResponse.json({ success: false, error: "Subform not found" }, { status: 404 })
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: subform,
-    })
-  } catch (error: any) {
-    console.error("Error fetching subform:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message || "Failed to fetch subform",
-      },
-      { status: 500 },
-    )
-  }
-}
-
-export async function PUT(request: NextRequest, { params }: { params: { subformId: string } }) {
-  try {
-    const body = await request.json()
-    const { name, order, fields, ...otherData } = body
-
-    console.log("[Subform API] Updating subform:", params.subformId, "with data:", { name, order })
-
-    // Update only the subform properties, not the fields
-    const updateData: any = {
-      updatedAt: new Date(),
-    }
-
-    if (name !== undefined) updateData.name = name
-    if (order !== undefined) updateData.order = order
-
-    // Add any other non-relational fields
-    Object.keys(otherData).forEach((key) => {
-      if (key !== "fields" && key !== "id" && key !== "createdAt" && key !== "updatedAt") {
-        updateData[key] = otherData[key]
+        childSubforms: includeNested ? {
+          include: {
+            fields: {
+              orderBy: { order: 'asc' }
+            },
+            childSubforms: {
+              include: {
+                fields: {
+                  orderBy: { order: 'asc' }
+                },
+                childSubforms: true
+              }
+            }
+          },
+          orderBy: { order: 'asc' }
+        } : true,
+        parentSubform: true
       }
     })
 
-    const subform = await prisma.subform.update({
-      where: { id: params.subformId },
-      data: updateData,
-      include: {
-        fields: {
-          orderBy: { order: "asc" },
-        },
-      },
-    })
-
-    console.log("[Subform API] Subform updated successfully:", subform.id)
+    if (!subform) {
+      return NextResponse.json(
+        { success: false, error: "Subform not found" },
+        { status: 404 }
+      )
+    }
 
     return NextResponse.json({
       success: true,
-      data: subform,
+      data: subform
     })
-  } catch (error: any) {
-    console.error("Error updating subform:", error)
+
+  } catch (error) {
+    console.error("Error fetching subform:", error)
     return NextResponse.json(
-      {
-        success: false,
-        error: error.message || "Failed to update subform",
-      },
-      { status: 500 },
+      { success: false, error: "Failed to fetch subform" },
+      { status: 500 }
     )
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { subformId: string } }) {
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: { subformId: string } }
+) {
   try {
-    console.log("[Subform API] Deleting subform:", params.subformId)
+    const { subformId } = params
+    const body = await request.json()
+    const { name, description, order, collapsed, columns, visible, parentSubformId } = body
 
-    // First delete all fields in the subform
-    const deletedFields = await prisma.formField.deleteMany({
-      where: { subformId: params.subformId },
+    // Check if subform exists
+    const existingSubform = await prisma.subform.findUnique({
+      where: { id: subformId },
+      include: { parentSubform: true }
     })
 
-    console.log("[Subform API] Deleted", deletedFields.count, "fields from subform")
+    if (!existingSubform) {
+      return NextResponse.json(
+        { success: false, error: "Subform not found" },
+        { status: 404 }
+      )
+    }
 
-    // Then delete the subform
-    await prisma.subform.delete({
-      where: { id: params.subformId },
+    // If moving to a different parent, recalculate level and path
+    let updateData: any = {
+      ...(name !== undefined && { name }),
+      ...(description !== undefined && { description }),
+      ...(order !== undefined && { order }),
+      ...(collapsed !== undefined && { collapsed }),
+      ...(columns !== undefined && { columns }),
+      ...(visible !== undefined && { visible }),
+    }
+
+    if (parentSubformId !== undefined && parentSubformId !== existingSubform.parentSubformId) {
+      let newLevel = 0
+      let newPath = ""
+
+      if (parentSubformId) {
+        const newParent = await prisma.subform.findUnique({
+          where: { id: parentSubformId }
+        })
+
+        if (!newParent) {
+          return NextResponse.json(
+            { success: false, error: "New parent subform not found" },
+            { status: 404 }
+          )
+        }
+
+        newLevel = (newParent.level || 0) + 1
+        const siblingCount = await prisma.subform.count({
+          where: { parentSubformId }
+        })
+        newPath = newParent.path ? `${newParent.path}.${siblingCount + 1}` : `${siblingCount + 1}`
+      } else {
+        // Moving to root level
+        const siblingCount = await prisma.subform.count({
+          where: { 
+            sectionId: existingSubform.sectionId,
+            parentSubformId: null 
+          }
+        })
+        newPath = `${siblingCount + 1}`
+      }
+
+      updateData = {
+        ...updateData,
+        parentSubformId,
+        level: newLevel,
+        path: newPath
+      }
+    }
+
+    // Update the subform
+    const updatedSubform = await prisma.subform.update({
+      where: { id: subformId },
+      data: updateData,
+      include: {
+        fields: {
+          orderBy: { order: 'asc' }
+        },
+        childSubforms: {
+          include: {
+            fields: {
+              orderBy: { order: 'asc' }
+            },
+            childSubforms: true
+          },
+          orderBy: { order: 'asc' }
+        },
+        parentSubform: true
+      }
     })
-
-    console.log("[Subform API] Subform deleted successfully")
 
     return NextResponse.json({
       success: true,
-      message: "Subform deleted successfully",
+      data: updatedSubform
     })
-  } catch (error: any) {
-    console.error("Error deleting subform:", error)
+
+  } catch (error) {
+    console.error("Error updating subform:", error)
     return NextResponse.json(
-      {
-        success: false,
-        error: error.message || "Failed to delete subform",
-      },
-      { status: 500 },
+      { success: false, error: "Failed to update subform" },
+      { status: 500 }
+    )
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { subformId: string } }
+) {
+  try {
+    const { subformId } = params
+
+    console.log("[Subform API] DELETE request for subform:", subformId)
+
+    // Check if subform exists and get all nested data
+    const existingSubform = await prisma.subform.findUnique({
+      where: { id: subformId },
+      include: {
+        fields: true,
+        childSubforms: {
+          include: {
+            fields: true,
+            childSubforms: {
+              include: {
+                fields: true,
+                childSubforms: {
+                  include: {
+                    fields: true,
+                    childSubforms: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    })
+
+    if (!existingSubform) {
+      console.error("[Subform API] Subform not found:", subformId)
+      return NextResponse.json(
+        { success: false, error: "Subform not found" },
+        { status: 404 }
+      )
+    }
+
+    console.log("[Subform API] Found subform to delete:", existingSubform.name, "with", existingSubform.fields.length, "fields and", existingSubform.childSubforms.length, "child subforms")
+
+    // Recursively collect all subform IDs and field IDs for deletion
+    const collectIds = (subform: any): { subformIds: string[], fieldIds: string[] } => {
+      const subformIds = [subform.id]
+      const fieldIds = subform.fields.map((f: any) => f.id)
+
+      for (const child of subform.childSubforms || []) {
+        const childIds = collectIds(child)
+        subformIds.push(...childIds.subformIds)
+        fieldIds.push(...childIds.fieldIds)
+      }
+
+      return { subformIds, fieldIds }
+    }
+
+    const { subformIds, fieldIds } = collectIds(existingSubform)
+    console.log("[Subform API] Will delete", subformIds.length, "subforms and", fieldIds.length, "fields")
+
+    // Delete all fields in all nested subforms
+    if (fieldIds.length > 0) {
+      await prisma.formField.deleteMany({
+        where: { id: { in: fieldIds } }
+      })
+      console.log("[Subform API] Deleted", fieldIds.length, "fields")
+    }
+
+    // Delete all subforms (cascade will handle the hierarchy)
+    await prisma.subform.deleteMany({
+      where: { id: { in: subformIds } }
+    })
+    console.log("[Subform API] Deleted", subformIds.length, "subforms")
+
+    return NextResponse.json({
+      success: true,
+      message: "Subform and all nested subforms/fields deleted successfully",
+      deletedSubformIds: subformIds,
+      deletedFieldIds: fieldIds
+    })
+
+  } catch (error) {
+    console.error("[Subform API] Error deleting subform:", error)
+    return NextResponse.json(
+      { success: false, error: "Failed to delete subform" },
+      { status: 500 }
     )
   }
 }

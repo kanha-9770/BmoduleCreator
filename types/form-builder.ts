@@ -1,3 +1,117 @@
+export interface FieldOption {
+  id: string
+  label: string
+  value: string
+}
+
+export interface FormField {
+  id: string
+  sectionId?: string
+  subformId?: string
+  type: string
+  label: string
+  placeholder?: string
+  description?: string
+  defaultValue?: string
+  options: FieldOption[]
+  validation: Record<string, any>
+  visible: boolean
+  readonly: boolean
+  width: "full" | "half" | "third" | "quarter"
+  order: number
+  conditional?: Record<string, any> | null
+  styling?: Record<string, any> | null
+  properties?: Record<string, any> | null
+  formula?: string | null
+  rollup?: Record<string, any> | null
+  lookup?: Record<string, any> | null
+  createdAt: Date
+  updatedAt: Date
+}
+
+// ENHANCED: Subform with nested support - matches Prisma schema
+export interface Subform {
+  id: string
+  sectionId?: string
+  parentSubformId?: string // NEW: For nested subforms
+  name: string
+  description?: string
+  order: number
+  level: number // NEW: Nesting level (0 = root, 1 = first nested, etc.)
+  path?: string // NEW: Hierarchical path like "1.2.3"
+  
+  // Visual and behavior properties
+  columns: number
+  visible: boolean
+  collapsible: boolean
+  collapsed?: boolean
+  
+  // Styling for different nesting levels
+  styling?: Record<string, any> | null
+  conditional?: Record<string, any> | null
+  
+  fields: FormField[]
+  childSubforms: Subform[] // NEW: Nested subforms
+  parentSubform?: Subform // NEW: Parent subform reference
+  
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface FormSection {
+  id: string
+  formId: string
+  title: string
+  description?: string
+  order: number
+  columns: number
+  visible: boolean
+  collapsible: boolean
+  collapsed: boolean
+  conditional?: Record<string, any> | null
+  styling?: Record<string, any> | null
+  fields: FormField[]
+  subforms: Subform[]
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface Form {
+  id: string
+  moduleId: string
+  name: string
+  description?: string
+  settings: Record<string, any>
+  sections: FormSection[]
+  isPublished: boolean
+  publishedAt?: Date | null
+  formUrl?: string | null
+  allowAnonymous: boolean
+  requireLogin: boolean
+  maxSubmissions?: number | null
+  submissionMessage?: string | null
+  conditional?: Record<string, any> | null
+  styling?: Record<string, any> | null
+  isUserForm?: boolean
+  isEmployeeForm?: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+
+// NEW: Helper types for nested operations
+export interface SubformHierarchy {
+  subform: Subform
+  children: SubformHierarchy[]
+  depth: number
+}
+
+export interface NestedDropTarget {
+  type: 'section' | 'subform'
+  id: string
+  level: number
+  path: string
+}
+
 export interface FormModule {
   id: string
   name: string
@@ -16,120 +130,6 @@ export interface FormModule {
   sortOrder: number
   forms: Form[]
   isPublished?: any
-  createdAt: Date
-  updatedAt: Date
-}
-
-export interface Form {
-  id: string
-  moduleId: string
-  name: string
-  description?: string | null
-  settings: Record<string, any>
-  sections: FormSection[]
-  subforms: Subform[]
-  isPublished?: boolean
-  publishedAt?: Date | null
-  formUrl?: string | null
-  allowAnonymous: boolean
-  requireLogin: boolean
-  maxSubmissions?: number | null
-  submissionMessage?: string | null
-  conditional?: Record<string, any> | null
-  styling?: Record<string, any> | null
-  recordCount?: number
-  createdAt: Date
-  updatedAt: Date
-  records?: FormRecord[]
-  isUserForm?: boolean // Indicates if this is a user-specific form
-  isEmployeeForm?: boolean // Indicates if this is an employee-specific form
-}
-
-export interface FormSection {
-  id: string
-  formId: string
-  title: string
-  description?: string | null
-  order: number
-  columns: number
-  visible: boolean
-  collapsible: boolean
-  collapsed: boolean
-  conditional?: Record<string, any> | null
-  styling?: Record<string, any> | null
-  fields: FormField[]
-  subforms: Subform[]
-  createdAt: Date
-  updatedAt: Date
-}
-
-export interface Subform {
-  id: string
-  formId?: string | null
-  sectionId?: string | null
-  name: string
-  description?: string | null
-  order: number
-  columns: number
-  visible: boolean
-  collapsible: boolean
-  collapsed: boolean
-  fields: FormField[]
-  conditional?: Record<string, any> | null
-  styling?: Record<string, any> | null
-  integration?: {
-    enabled: boolean
-    type: "webhook" | "database" | "api" | null
-    config: Record<string, any>
-  } | null
-  createdAt: Date
-  updatedAt: Date
-}
-
-export interface FormField {
-  id: string
-  sectionId?: string | null
-  subformId?: string | null
-  type: string
-  label: string
-  placeholder?: string | null
-  description?: string | null
-  defaultValue?: string | null
-  options: FieldOption[]
-  validation: Record<string, any>
-  visible: boolean
-  readonly: boolean
-  width: "full" | "half" | "third" | "quarter"
-  order: number
-  conditional?: Record<string, any> | null
-  styling?: Record<string, any> | null
-  properties?: Record<string, any> | null
-  formula?: string | null
-  rollup?: Record<string, any> | null
-  lookup?: {
-    sourceId?: string
-    sourceType?: "form" | "module" | "static"
-    displayField?: string
-    valueField?: string
-    storeField?: string // What field value to actually store
-    multiple?: boolean
-    searchable?: boolean
-    searchPlaceholder?: string
-    fieldMapping?: {
-      display: string // Field to show in dropdown
-      value: string // Field to use as option value
-      store: string // Field value to store in record
-      description?: string // Optional description field
-    }
-  } | null
-  // Legacy fields for backward compatibility
-  sourceModule?: string | null
-  sourceForm?: string | null
-  displayField?: string | null
-  valueField?: string | null
-  multiple?: boolean | null
-  searchable?: boolean | null
-  filters?: string | Record<string, any> | null
   createdAt: Date
   updatedAt: Date
 }

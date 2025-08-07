@@ -27,23 +27,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  GripVertical,
-  MoreHorizontal,
-  Settings,
-  Trash2,
-  Eye,
-  EyeOff,
-  ChevronDown,
-  ChevronUp,
-  Plus,
-  Check,
-  X,
-  Edit3,
-  Loader2,
-  AlertTriangle,
-} from "lucide-react";
+import { GripVertical, MoreHorizontal, Settings, Trash2, Eye, EyeOff, ChevronDown, ChevronUp, Plus, Check, X, Edit3, Loader2, AlertTriangle, Layers } from 'lucide-react';
 import FieldComponent from "./field-component";
+import SubformComponent from "./subform-component";
 import SectionSettings from "./section-settings";
 import type { FormSection, FormField, Subform } from "@/types/form-builder";
 import { v4 as uuidv4 } from "uuid";
@@ -157,7 +143,6 @@ export default function SectionComponent({
 
   const handleDeleteSection = async () => {
     if (isDeleting) return;
-
     try {
       setShowDeleteDialog(false);
       toast({
@@ -179,11 +164,10 @@ export default function SectionComponent({
     }
   };
 
-  const addField = async (fieldType: string, subformId?: string) => {
+  const addField = async (fieldType: string) => {
     try {
       const newFieldData = {
-        sectionId: subformId ? undefined : section.id,
-        subformId: subformId || undefined,
+        sectionId: section.id,
         type: fieldType,
         label: `New ${fieldType.charAt(0).toUpperCase() + fieldType.slice(1)}`,
         placeholder: "",
@@ -194,9 +178,7 @@ export default function SectionComponent({
         visible: true,
         readonly: false,
         width: "full" as const,
-        order: subformId
-          ? (section.subforms.find((s: Subform) => s.id === subformId)?.fields.length || 0)
-          : section.fields.length,
+        order: section.fields.length,
       };
 
       const response = await fetch("/api/fields", {
@@ -221,17 +203,7 @@ export default function SectionComponent({
           validation: {},
         };
 
-        if (subformId) {
-          const updatedSubforms = section.subforms.map((subform: Subform) =>
-            subform.id === subformId
-              ? { ...subform, fields: [...(subform.fields || []), newField] }
-              : subform
-          );
-          onUpdateSection({ subforms: updatedSubforms });
-        } else {
-          onUpdateSection({ fields: [...section.fields, newField] });
-        }
-
+        onUpdateSection({ fields: [...section.fields, newField] });
         toast({ title: "Success", description: "Field added successfully" });
       } else {
         throw new Error(result.error || "Failed to create field");
@@ -247,124 +219,49 @@ export default function SectionComponent({
       const newSubformData = {
         sectionId: section.id,
         name: `New Subform ${section.subforms.length + 1}`,
-        description: "",
         order: section.subforms.length,
         columns: 1,
         visible: true,
-        collapsible: false,
+        collapsible: true,
         collapsed: false,
-        fields: [],
       };
 
-      const response = await fetch("/api/subforms", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newSubformData),
-      });
-
-      if (!response.ok) throw new Error("Failed to create subform");
-
-      const result = await response.json();
-      if (result.success) {
-        const newSubform: Subform = result.data;
-        const newSubformField: FormField = {
-          id: `field_${uuidv4()}`,
-          sectionId: section.id,
-          type: "subform",
-          label: newSubform.name,
-          subformId: newSubform.id,
-          placeholder: "",
-          description: "",
-          defaultValue: "",
-          options: [],
-          validation: {},
-          visible: true,
-          readonly: false,
-          width: "full",
-          order: section.fields.length,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          conditional: null,
-          styling: null,
-          properties: null,
-          rollup: null,
-          lookup: null,
-          formula: null,
-        };
-
-        await onAddSubform(newSubform);
-        onUpdateSection({ fields: [...section.fields, newSubformField] });
-        toast({ title: "Success", description: "Subform added successfully" });
-      } else {
-        throw new Error(result.error || "Failed to create subform");
-      }
+      await onAddSubform(newSubformData);
     } catch (error: any) {
       console.error("Error adding subform:", error);
       toast({ title: "Error", description: error.message, variant: "destructive" });
     }
   };
 
-  const updateSubformField = async (subformId: string, fieldId: string, updates: Partial<FormField>) => {
+  const addNestedSubform = async (parentSubformId: string) => {
     try {
-      const response = await fetch(`/api/fields/${fieldId}`, {
-        method: "PUT",
+      const response = await fetch("/api/subforms", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updates),
+        body: JSON.stringify({
+          parentSubformId,
+          name: `New Nested Subform`,
+          order: 0,
+          columns: 1,
+          visible: true,
+          collapsible: true,
+          collapsed: false,
+        }),
       });
 
-      if (response.ok) {
-        const updatedSubforms = section.subforms.map((subform: Subform) =>
-          subform.id === subformId
-            ? {
-                ...subform,
-                fields: (subform.fields || []).map((subField: FormField) =>
-                  subField.id === fieldId ? { ...subField, ...updates, updatedAt: new Date() } : subField
-                ),
-              }
-            : subform
-        );
-        onUpdateSection({ subforms: updatedSubforms });
+      if (!response.ok) throw new Error("Failed to create nested subform");
+
+      const result = await response.json();
+      if (result.success) {
+        // Refresh the section to get updated nested structure
+        window.location.reload(); // Temporary solution - in production, you'd want to update state properly
+        toast({ title: "Success", description: "Nested subform added successfully" });
+      } else {
+        throw new Error(result.error || "Failed to create nested subform");
       }
-    } catch (error) {
-      console.error("Error updating subform field:", error);
-      toast({ title: "Error", description: "Failed to update subform field", variant: "destructive" });
-    }
-  };
-
-  const deleteSubformField = async (subformId: string, fieldId: string) => {
-    try {
-      const response = await fetch(`/api/fields/${fieldId}`, {
-        method: "DELETE",
-      });
-
-      if (response.ok) {
-        const updatedSubforms = section.subforms.map((subform: Subform) =>
-          subform.id === subformId
-            ? {
-                ...subform,
-                fields: (subform.fields || [])
-                  .filter((subField: FormField) => subField.id !== fieldId)
-                  .map((subField: FormField, index: number) => ({ ...subField, order: index })),
-              }
-            : subform
-        );
-
-        updatedSubforms
-          .find((subform: Subform) => subform.id === subformId)
-          ?.fields.forEach((subField: FormField) => {
-            fetch(`/api/fields/${subField.id}`, {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ order: subField.order }),
-            });
-          });
-
-        onUpdateSection({ subforms: updatedSubforms });
-        toast({ title: "Success", description: "Subform field deleted successfully" });
-      }
-    } catch (error) {
-      console.error("Error deleting subform field:", error);
-      toast({ title: "Error", description: "Failed to delete subform field", variant: "destructive" });
+    } catch (error: any) {
+      console.error("Error adding nested subform:", error);
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     }
   };
 
@@ -396,6 +293,25 @@ export default function SectionComponent({
     }
   };
 
+  // Helper function to count total nested items
+  const countNestedItems = (subforms: Subform[]): { fields: number, subforms: number } => {
+    let totalFields = 0;
+    let totalSubforms = subforms.length;
+
+    subforms.forEach(subform => {
+      totalFields += subform.fields.length;
+      if (subform.childSubforms) {
+        const nested = countNestedItems(subform.childSubforms);
+        totalFields += nested.fields;
+        totalSubforms += nested.subforms;
+      }
+    });
+
+    return { fields: totalFields, subforms: totalSubforms };
+  };
+
+  const nestedCounts = countNestedItems(section.subforms);
+
   if (!section.visible) {
     return (
       <Card className="border-dashed border-gray-300 opacity-50">
@@ -417,6 +333,9 @@ export default function SectionComponent({
             <Badge variant="secondary" className="text-xs bg-blue-200 text-blue-800">
               {section.fields.length} field{section.fields.length !== 1 ? "s" : ""}
             </Badge>
+            <Badge variant="secondary" className="text-xs bg-blue-200 text-blue-800">
+              {nestedCounts.subforms} subform{nestedCounts.subforms !== 1 ? "s" : ""}
+            </Badge>
           </div>
           {section.description && <p className="text-sm text-blue-700">{section.description}</p>}
         </CardHeader>
@@ -436,13 +355,19 @@ export default function SectionComponent({
             <span className="font-medium">Deleting "{section.title}"...</span>
           </div>
           <p className="text-sm text-red-500 mt-2">
-            Removing section, {section.fields.length} field{section.fields.length !== 1 ? "s" : ""}, and cleaning up all
-            record data
+            Removing section, {section.fields.length + nestedCounts.fields} field{section.fields.length + nestedCounts.fields !== 1 ? "s" : ""}, 
+            {nestedCounts.subforms} subform{nestedCounts.subforms !== 1 ? "s" : ""}, and cleaning up all record data
           </p>
         </CardContent>
       </Card>
     );
   }
+
+  // Combine fields and subforms for rendering
+  const allItems = [
+    ...section.fields.map(field => ({ type: 'field' as const, item: field, id: field.id, order: field.order })),
+    ...section.subforms.map(subform => ({ type: 'subform' as const, item: subform, id: subform.id, order: subform.order }))
+  ].sort((a, b) => a.order - b.order);
 
   return (
     <>
@@ -526,9 +451,17 @@ export default function SectionComponent({
                       <Badge variant="outline" className="text-xs">
                         {section.fields.length} field{section.fields.length !== 1 ? "s" : ""}
                       </Badge>
+                      <Badge variant="outline" className="text-xs">
+                        {nestedCounts.subforms} subform{nestedCounts.subforms !== 1 ? "s" : ""}
+                      </Badge>
                       <Badge variant="secondary" className="text-xs">
                         {section.columns} col{section.columns !== 1 ? "s" : ""}
                       </Badge>
+                      {nestedCounts.fields > 0 && (
+                        <Badge variant="secondary" className="text-xs bg-purple-100 text-purple-800">
+                          {nestedCounts.fields} nested field{nestedCounts.fields !== 1 ? "s" : ""}
+                        </Badge>
+                      )}
                     </div>
                   )}
                 </div>
@@ -575,8 +508,8 @@ export default function SectionComponent({
                       Add Text Field
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => addSubform()}>
-                      <Plus className="w-4 h-4 mr-2" />
-                      Add Subform Field
+                      <Layers className="w-4 h-4 mr-2" />
+                      Add Subform
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
@@ -592,31 +525,38 @@ export default function SectionComponent({
             )}
           </div>
         </CardHeader>
+
         {(!section.collapsible || !section.collapsed) && (
           <CardContent className="pt-0">
-            {section.fields.length > 0 || section.subforms.length > 0 ? (
+            {allItems.length > 0 ? (
               <>
-                <SortableContext items={section.fields.map((f: FormField) => f.id)} strategy={verticalListSortingStrategy}>
+                <SortableContext 
+                  items={allItems.map(item => item.id)} 
+                  strategy={verticalListSortingStrategy}
+                >
                   <div className={`grid gap-4 ${getColumnClass()}`}>
-                    {section.fields
-                      .sort((a: FormField, b: FormField) => a.order - b.order)
-                      .map((field: FormField) => (
+                    {allItems.map((item) => (
+                      item.type === 'field' ? (
                         <FieldComponent
-                          key={field.id}
-                          field={field}
-                          onUpdate={(updates) => onUpdateField(field.id, updates)}
-                          onDelete={() => onDeleteField(field.id)}
-                          onCopy={() => duplicateField(field)}
-                          subformFields={
-                            field.type === "subform"
-                              ? section.subforms.find((s: Subform) => s.id === field.subformId)?.fields || []
-                              : undefined
-                          }
-                          onAddField={addField}
-                          onUpdateField={(fieldId, updates) => updateSubformField(field.subformId!, fieldId, updates)}
-                          onDeleteField={(fieldId) => deleteSubformField(field.subformId!, fieldId)}
+                          key={item.id}
+                          field={item.item as FormField}
+                          onUpdate={(updates) => onUpdateField(item.id, updates)}
+                          onDelete={() => onDeleteField(item.id)}
+                          onCopy={() => duplicateField(item.item as FormField)}
                         />
-                      ))}
+                      ) : (
+                        <div key={item.id} className="relative">
+                          <SubformComponent
+                            subform={item.item as Subform}
+                            onUpdateSubform={(updates) => onUpdateSubform(item.id, updates)}
+                            onDeleteSubform={() => onDeleteSubform(item.id)}
+                            onUpdateField={onUpdateField}
+                            onDeleteField={onDeleteField}
+                            maxNestingLevel={5}
+                          />
+                        </div>
+                      )
+                    ))}
                   </div>
                 </SortableContext>
               </>
@@ -629,19 +569,22 @@ export default function SectionComponent({
                 <Plus className="w-8 h-8 mx-auto mb-2 text-gray-400" />
                 <p className="text-sm text-gray-500 mb-4">No fields or subforms in this section yet</p>
                 <p className="text-xs text-gray-400">Drag fields or subforms from the palette or drop them here to get started</p>
-                <Button variant="outline" size="sm" onClick={() => addField("text")} className="mt-4">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Field
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => addSubform()} className="mt-4 ml-2">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Subform Field
-                </Button>
+                <div className="flex gap-2 justify-center mt-4">
+                  <Button variant="outline" size="sm" onClick={() => addField("text")}>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Field
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => addSubform()}>
+                    <Layers className="w-4 h-4 mr-2" />
+                    Add Subform
+                  </Button>
+                </div>
               </div>
             )}
           </CardContent>
         )}
       </Card>
+
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -653,48 +596,25 @@ export default function SectionComponent({
               <p>
                 Are you sure you want to delete the section <strong>"{section.title}"</strong>?
               </p>
-              {(section.fields.length > 0 || section.subforms.length > 0) && (
+              {(section.fields.length > 0 || nestedCounts.subforms > 0) && (
                 <div className="bg-red-50 border border-red-200 rounded-md p-3">
                   <p className="text-red-800 font-medium">This will permanently delete:</p>
                   <ul className="mt-2 text-sm text-red-700 list-disc list-inside space-y-1">
                     <li>The section and all its settings</li>
                     {section.fields.length > 0 && (
                       <li>
-                        All {section.fields.length} field{section.fields.length !== 1 ? "s" : ""} in this section:
+                        All {section.fields.length} direct field{section.fields.length !== 1 ? "s" : ""} in this section
                       </li>
                     )}
-                    {section.fields.length > 0 && (
-                      <div className="ml-4 mt-1 space-y-1">
-                        {section.fields.slice(0, 5).map((field: FormField) => (
-                          <li key={field.id} className="text-xs">
-                            - {field.label} ({field.type})
-                          </li>
-                        ))}
-                        {section.fields.length > 5 && (
-                          <li className="text-xs text-red-600">
-                            ... and {section.fields.length - 5} more field{section.fields.length - 5 !== 1 ? "s" : ""}
-                          </li>
-                        )}
-                      </div>
-                    )}
-                    {section.subforms.length > 0 && (
+                    {nestedCounts.subforms > 0 && (
                       <li>
-                        All {section.subforms.length} subform{section.subforms.length !== 1 ? "s" : ""}:
+                        All {nestedCounts.subforms} subform{nestedCounts.subforms !== 1 ? "s" : ""} (including nested ones)
                       </li>
                     )}
-                    {section.subforms.length > 0 && (
-                      <div className="ml-4 mt-1 space-y-1">
-                        {section.subforms.slice(0, 5).map((subform: Subform) => (
-                          <li key={subform.id} className="text-xs">
-                            - {subform.name} ({subform.fields.length} field{subform.fields.length !== 1 ? "s" : ""})
-                          </li>
-                        ))}
-                        {section.subforms.length > 5 && (
-                          <li className="text-xs text-red-600">
-                            ... and {section.subforms.length - 5} more subform{section.subforms.length - 5 !== 1 ? "s" : ""}
-                          </li>
-                        )}
-                      </div>
+                    {nestedCounts.fields > 0 && (
+                      <li>
+                        All {nestedCounts.fields} field{nestedCounts.fields !== 1 ? "s" : ""} within subforms
+                      </li>
                     )}
                     <li>All form record data for these fields and subforms</li>
                     <li>Any lookup relations involving these fields</li>
@@ -715,6 +635,7 @@ export default function SectionComponent({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
       {showSettings && (
         <SectionSettings
           section={section}
