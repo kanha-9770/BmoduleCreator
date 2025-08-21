@@ -1,102 +1,205 @@
 import { prisma } from "@/lib/prisma"
+import type {
+  FormModule,
+  Form,
+  FormSection,
+  FormField,
+  Subform,
+} from "@/types/form-builder";
 
 export class DatabaseTransforms {
-  // Transform database module to frontend format
-  static transformModule(rawModule: any, level?: number): any {
+  // Transform database module to application format
+  static transformModule(module: any, level?: number): FormModule {
     return {
-      id: rawModule.id,
-      name: rawModule.name,
-      description: rawModule.description,
-      icon: rawModule.icon,
-      color: rawModule.color,
-      moduleType: rawModule.moduleType || "standard",
-      level: level !== undefined ? level : rawModule.level || 0,
-      path: rawModule.path || rawModule.name.toLowerCase().replace(/\s+/g, '-'),
-      isActive: rawModule.isActive !== false,
-      sortOrder: rawModule.sortOrder || 0,
-      parentId: rawModule.parentId,
-      forms: rawModule.forms ? rawModule.forms.map((form: any) => this.transformForm(form)) : [],
-      children: rawModule.children ? rawModule.children.map((child: any) => this.transformModule(child, (level || 0) + 1)) : [],
-      createdAt: rawModule.createdAt,
-      updatedAt: rawModule.updatedAt,
-      recordCount: this.calculateRecordCount(rawModule)
-    }
+      id: module.id,
+      name: module.name,
+      description: module.description,
+      icon: module.icon,
+      color: module.color,
+      settings: (module.settings || {}) as Record<string, any>,
+      parentId: module.parentId,
+      moduleType: module.moduleType,
+      level: level ?? module.level,
+      path: module.path,
+      isActive: module.isActive,
+      sortOrder: module.sortOrder,
+      createdAt: module.createdAt,
+      updatedAt: module.updatedAt,
+      forms: module.forms
+        ? module.forms.map((form: any) => this.transformForm(form))
+        : [],
+      children: module.children || [],
+    };
   }
 
-  // Transform database form to frontend format
-  static transformForm(rawForm: any): any {
-    return {
-      id: rawForm.id,
-      moduleId: rawForm.moduleId,
-      name: rawForm.name,
-      description: rawForm.description,
-      settings: rawForm.settings || {},
-      isPublished: rawForm.isPublished || false,
-      publishedAt: rawForm.publishedAt,
-      formUrl: rawForm.formUrl,
-      allowAnonymous: rawForm.allowAnonymous !== false,
-      requireLogin: rawForm.requireLogin || false,
-      maxSubmissions: rawForm.maxSubmissions,
-      submissionMessage: rawForm.submissionMessage,
-      conditional: rawForm.conditional,
-      styling: rawForm.styling,
-      isUserForm: rawForm.isUserForm || false,
-      isEmployeeForm: rawForm.isEmployeeForm || false,
-      sections: rawForm.sections ? rawForm.sections.map((section: any) => this.transformSection(section)) : [],
-      createdAt: rawForm.createdAt,
-      updatedAt: rawForm.updatedAt,
-      recordCount: this.calculateRecordCount(rawForm),
-      tableMapping: rawForm.tableMapping
+  // Transform module hierarchy recursively
+  static transformModuleHierarchy(module: any, level: number): FormModule {
+    const transformed = this.transformModule(module, level);
+
+    if (module.children && module.children.length > 0) {
+      transformed.children = module.children.map((child: any) =>
+        this.transformModuleHierarchy(child, level + 1)
+      );
     }
+
+    return transformed;
   }
 
-  // Transform database section to frontend format
-  static transformSection(rawSection: any): any {
-    return {
-      id: rawSection.id,
-      formId: rawSection.formId,
-      title: rawSection.title,
-      description: rawSection.description,
-      order: rawSection.order || 0,
-      columns: rawSection.columns || 1,
-      visible: rawSection.visible !== false,
-      collapsible: rawSection.collapsible || false,
-      collapsed: rawSection.collapsed || false,
-      conditional: rawSection.conditional,
-      styling: rawSection.styling,
-      fields: rawSection.fields ? rawSection.fields.map((field: any) => this.transformField(field)) : [],
-      subforms: rawSection.subforms ? rawSection.subforms.map((subform: any) => this.transformSubform(subform)) : [],
-      createdAt: rawSection.createdAt,
-      updatedAt: rawSection.updatedAt
+  // Flatten module hierarchy to a simple list
+  static flattenModuleHierarchy(modules: FormModule[]): FormModule[] {
+    const flattened: FormModule[] = [];
+
+    function flatten(moduleList: FormModule[]) {
+      for (const module of moduleList) {
+        flattened.push(module);
+        if (module.children && module.children.length > 0) {
+          flatten(module.children);
+        }
+      }
     }
+
+    flatten(modules);
+    return flattened;
   }
 
-  // Transform database field to frontend format
-  static transformField(rawField: any): any {
-    return {
-      id: rawField.id,
-      sectionId: rawField.sectionId,
-      subformId: rawField.subformId,
-      type: rawField.type,
-      label: rawField.label,
-      placeholder: rawField.placeholder,
-      description: rawField.description,
-      defaultValue: rawField.defaultValue,
-      options: rawField.options || [],
-      validation: rawField.validation || {},
-      visible: rawField.visible !== false,
-      readonly: rawField.readonly || false,
-      width: rawField.width || "full",
-      order: rawField.order || 0,
-      conditional: rawField.conditional,
-      styling: rawField.styling,
-      properties: rawField.properties,
-      formula: rawField.formula,
-      rollup: rawField.rollup,
-      lookup: rawField.lookup,
-      createdAt: rawField.createdAt,
-      updatedAt: rawField.updatedAt
+  // Transform database form to application format
+  static transformForm(form: any): Form {
+    // Calculate total records count across all record tables
+    let totalRecords = 0;
+    if (form._count) {
+      totalRecords =
+        (form._count.records1 || 0) +
+        (form._count.records2 || 0) +
+        (form._count.records3 || 0) +
+        (form._count.records4 || 0) +
+        (form._count.records5 || 0) +
+        (form._count.records6 || 0) +
+        (form._count.records7 || 0) +
+        (form._count.records8 || 0) +
+        (form._count.records9 || 0) +
+        (form._count.records10 || 0) +
+        (form._count.records11 || 0) +
+        (form._count.records12 || 0) +
+        (form._count.records13 || 0) +
+        (form._count.records14 || 0) +
+        (form._count.records15 || 0);
     }
+
+    return {
+      id: form.id,
+      moduleId: form.moduleId,
+      name: form.name,
+      description: form.description,
+      settings: (form.settings || {}) as Record<string, any>,
+      isPublished: form.isPublished,
+      publishedAt: form.publishedAt,
+      formUrl: form.formUrl,
+      allowAnonymous: form.allowAnonymous,
+      requireLogin: form.requireLogin,
+      maxSubmissions: form.maxSubmissions,
+      submissionMessage: form.submissionMessage,
+      conditional: form.conditional as Record<string, any> | null,
+      styling: form.styling as Record<string, any> | null,
+      createdAt: form.createdAt,
+      updatedAt: form.updatedAt,
+      sections: form.sections
+        ? form.sections.map((section: any) => this.transformSection(section))
+        : [],
+      tableMapping: form.tableMapping,
+      totalRecords,
+      isUserForm: form.isUserForm || false,
+      isEmployeeForm: form.isEmployeeForm || false,
+    };
+  }
+
+  // Enhanced transform section to handle complete subform hierarchy
+  static transformSection(section: any): FormSection {
+    return {
+      id: section.id,
+      formId: section.formId,
+      title: section.title,
+      description: section.description,
+      order: section.order,
+      columns: section.columns,
+      visible: section.visible,
+      collapsible: section.collapsible,
+      collapsed: section.collapsed,
+      conditional: section.conditional as Record<string, any> | null,
+      styling: section.styling as Record<string, any> | null,
+      createdAt: section.createdAt,
+      updatedAt: section.updatedAt,
+      fields: section.fields
+        ? section.fields.map((field: any) => this.transformField(field))
+        : [],
+      subforms: section.subforms
+        ? section.subforms.map((subform: any) => this.transformSubform(subform))
+        : [],
+    };
+  }
+
+  // Enhanced transform subform with complete hierarchy support
+  static transformSubform(subform: any): Subform {
+    return {
+      id: subform.id,
+      sectionId: subform.sectionId,
+      parentSubformId: subform.parentSubformId,
+      name: subform.name,
+      description: subform.description,
+      order: subform.order,
+      level: subform.level,
+      path: subform.path,
+      columns: subform.columns,
+      visible: subform.visible,
+      collapsible: subform.collapsible,
+      collapsed: subform.collapsed,
+      styling: subform.styling as Record<string, any> | null,
+      conditional: subform.conditional as Record<string, any> | null,
+      createdAt: subform.createdAt,
+      updatedAt: subform.updatedAt,
+      fields: subform.fields
+        ? subform.fields.map((field: any) => this.transformField(field))
+        : [],
+      records: subform.records || [],
+      // Include parent information for context
+      parentSubform: subform.parentSubform ? {
+        id: subform.parentSubform.id,
+        name: subform.parentSubform.name,
+        level: subform.parentSubform.level,
+        path: subform.parentSubform.path,
+      } : null,
+      // Recursively transform child subforms
+      childSubforms: subform.childSubforms
+        ? subform.childSubforms.map((child: any) => this.transformSubform(child))
+        : [],
+    };
+  }
+
+  // Transform database field to application format
+  static transformField(field: any): FormField {
+    return {
+      id: field.id,
+      sectionId: field.sectionId,
+      subformId: field.subformId,
+      type: field.type,
+      label: field.label,
+      placeholder: field.placeholder,
+      description: field.description,
+      defaultValue: field.defaultValue,
+      options: Array.isArray(field.options) ? field.options : [],
+      validation: (field.validation || {}) as Record<string, any>,
+      visible: field.visible,
+      readonly: field.readonly,
+      width: field.width,
+      order: field.order,
+      conditional: field.conditional as Record<string, any> | null,
+      styling: field.styling as Record<string, any> | null,
+      properties: field.properties as Record<string, any> | null,
+      formula: field.formula,
+      rollup: field.rollup as Record<string, any> | null,
+      lookup: field.lookup as Record<string, any> | null,
+      createdAt: field.createdAt,
+      updatedAt: field.updatedAt,
+    };
   }
 
   // Transform database record to frontend format
@@ -118,20 +221,6 @@ export class DatabaseTransforms {
     }
   }
 
-  // Transform database subform to frontend format
-  static transformSubform(rawSubform: any): any {
-    return {
-      id: rawSubform.id,
-      sectionId: rawSubform.sectionId,
-      name: rawSubform.name,
-      order: rawSubform.order || 0,
-      fields: rawSubform.fields ? rawSubform.fields.map((field: any) => this.transformField(field)) : [],
-      records: rawSubform.records ? rawSubform.records.map((record: any) => this.transformRecord(record)) : [],
-      createdAt: rawSubform.createdAt,
-      updatedAt: rawSubform.updatedAt
-    }
-  }
-
   // Calculate record count from _count or records array
   static calculateRecordCount(entity: any): number {
     if (entity._count) {
@@ -140,47 +229,17 @@ export class DatabaseTransforms {
         .filter(key => key.startsWith('records'))
         .reduce((sum, key) => sum + (entity._count[key] || 0), 0)
     }
-    
+
     if (entity.records && Array.isArray(entity.records)) {
       return entity.records.length
     }
-    
+
     return 0
   }
 
   // Transform multiple records
   static transformRecords(rawRecords: any[]): any[] {
     return rawRecords.map(record => this.transformRecord(record))
-  }
-
-  // Transform module hierarchy recursively
-  static transformModuleHierarchy(rawModule: any, level: number = 0): any {
-    const transformedModule = this.transformModule(rawModule, level)
-    
-    if (rawModule.children && rawModule.children.length > 0) {
-      transformedModule.children = rawModule.children.map((child: any) => 
-        this.transformModuleHierarchy(child, level + 1)
-      )
-    }
-    
-    return transformedModule
-  }
-
-  // Flatten module hierarchy to a flat array
-  static flattenModuleHierarchy(modules: any[]): any[] {
-    const flattened: any[] = []
-    
-    const flatten = (moduleList: any[]) => {
-      moduleList.forEach(module => {
-        flattened.push(module)
-        if (module.children && module.children.length > 0) {
-          flatten(module.children)
-        }
-      })
-    }
-    
-    flatten(modules)
-    return flattened
   }
 
   // Get the appropriate table name for form records
@@ -240,7 +299,7 @@ export class DatabaseTransforms {
 
       // Create mapping
       await this.createTableMapping(formId, tableName)
-      
+
       console.log(`Assigned form ${formId} to table: ${tableName}`)
       return tableName
     } catch (error: any) {

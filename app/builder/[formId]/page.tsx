@@ -23,9 +23,8 @@ import PublishFormDialog from "@/components/publish-form-dialog"
 import LookupConfigurationDialog from "@/components/lookup-configuration-dialog"
 import UserFormSettingsDialog from "@/components/user-form-settings-dialog"
 import type { Form, FormSection, FormField, Subform } from "@/types/form-builder"
-import { Save, Eye, ArrowLeft, Loader2, Share2, Users, Settings, UserCheck } from 'lucide-react'
+import { Save, Eye, ArrowLeft, Loader2, Share2, Users, Settings, UserCheck } from "lucide-react"
 import Link from "next/link"
-import { v4 as uuidv4 } from "uuid"
 import FieldComponent from "@/components/field-component"
 import SectionComponent from "@/components/section-component"
 import SubformComponent from "@/components/subform-component"
@@ -35,7 +34,7 @@ import { Badge } from "@/components/ui/badge"
 interface SubformHierarchy {
   id: string
   name: string
-  path: string // e.g., "1", "1.1", "1.2.1"
+  path: string
   level: number
   parentPath?: string
   sectionId: string
@@ -47,7 +46,6 @@ export default function FormBuilderPage() {
   const params = useParams()
   const formId = params.formId as string
   const { toast } = useToast()
-
   const [form, setForm] = useState<Form | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -55,6 +53,7 @@ export default function FormBuilderPage() {
   const [isLookupDialogOpen, setIsLookupDialogOpen] = useState(false)
   const [isUserFormSettingsOpen, setIsUserFormSettingsOpen] = useState(false)
   const [pendingLookupSectionId, setPendingLookupSectionId] = useState<string | null>(null)
+  const [pendingLookupSubformId, setPendingLookupSubformId] = useState<string | null>(null)
   const [activeItem, setActiveItem] = useState<FormField | FormSection | Subform | null>(null)
   const [activePaletteItem, setActivePaletteItem] = useState<string | null>(null)
   const [subformHierarchyMap, setSubformHierarchyMap] = useState<Map<string, SubformHierarchy>>(new Map())
@@ -80,13 +79,11 @@ export default function FormBuilderPage() {
     const processSubforms = (
       subforms: Subform[],
       sectionId: string,
-      parentPath: string = "",
-      level: number = 0
+      parentPath = "",
+      level = 0,
     ): SubformHierarchy[] => {
       return subforms.map((subform, index) => {
-        // Generate hierarchical path (1, 1.1, 1.2, 1.1.1, etc.)
         const currentPath = parentPath ? `${parentPath}.${index + 1}` : `${index + 1}`
-
         const hierarchy: SubformHierarchy = {
           id: subform.id,
           name: subform.name,
@@ -95,17 +92,12 @@ export default function FormBuilderPage() {
           parentPath: parentPath || undefined,
           sectionId,
           parentSubformId: subform.parentSubformId,
-          children: []
+          children: [],
         }
 
         // Process child subforms recursively
         if (subform.childSubforms && subform.childSubforms.length > 0) {
-          hierarchy.children = processSubforms(
-            subform.childSubforms,
-            sectionId,
-            currentPath,
-            level + 1
-          )
+          hierarchy.children = processSubforms(subform.childSubforms, sectionId, currentPath, level + 1)
         }
 
         hierarchyMap.set(subform.id, hierarchy)
@@ -114,7 +106,7 @@ export default function FormBuilderPage() {
     }
 
     // Process all sections
-    form.sections.forEach(section => {
+    form.sections.forEach((section) => {
       if (section.subforms && section.subforms.length > 0) {
         processSubforms(section.subforms, section.id)
       }
@@ -136,7 +128,7 @@ export default function FormBuilderPage() {
     const hierarchy = subformHierarchyMap.get(subformId)
     if (!hierarchy) return ""
 
-    const section = form.sections.find(s => s.id === hierarchy.sectionId)
+    const section = form.sections.find((s) => s.id === hierarchy.sectionId)
     const sectionName = section?.name || "Unknown Section"
 
     return `${sectionName} → ${hierarchy.path}`
@@ -165,8 +157,7 @@ export default function FormBuilderPage() {
     while (currentPath) {
       ancestors.unshift(currentPath)
       // Find parent hierarchy to get its parent
-      const parentHierarchy = Array.from(subformHierarchyMap.values())
-        .find(h => h.path === currentPath)
+      const parentHierarchy = Array.from(subformHierarchyMap.values()).find((h) => h.path === currentPath)
       currentPath = parentHierarchy?.parentPath
     }
 
@@ -321,20 +312,20 @@ export default function FormBuilderPage() {
   }
 
   // Helper function to find parent container (section or subform) for a subform
-  const findParentContainer = (targetSubformId: string): { type: 'section' | 'subform', id: string } | null => {
+  const findParentContainer = (targetSubformId: string): { type: "section" | "subform"; id: string } | null => {
     if (!form) return null
 
     for (const section of form.sections) {
       // Check if it's a direct child of section
-      if (section.subforms.some(sub => sub.id === targetSubformId)) {
-        return { type: 'section', id: section.id }
+      if (section.subforms.some((sub) => sub.id === targetSubformId)) {
+        return { type: "section", id: section.id }
       }
 
       // Check nested subforms recursively
-      const checkNested = (subforms: Subform[]): { type: 'section' | 'subform', id: string } | null => {
+      const checkNested = (subforms: Subform[]): { type: "section" | "subform"; id: string } | null => {
         for (const subform of subforms) {
           if (subform.childSubforms && subform.childSubforms.some((child: Subform) => child.id === targetSubformId)) {
-            return { type: 'subform', id: subform.id }
+            return { type: "subform", id: subform.id }
           }
           if (subform.childSubforms && subform.childSubforms.length > 0) {
             const found = checkNested(subform.childSubforms)
@@ -349,6 +340,66 @@ export default function FormBuilderPage() {
     }
 
     return null
+  }
+
+  // FIXED: Enhanced function to extract subform ID from various drop zone patterns
+  const extractSubformIdFromDropZone = (dropZoneId: string): string | null => {
+    console.log("🔍 Extracting subform ID from:", dropZoneId)
+
+    // Pattern 1: subform-dropzone-{id}
+    if (dropZoneId.startsWith("subform-dropzone-")) {
+      const id = dropZoneId.replace("subform-dropzone-", "")
+      console.log("✅ Pattern 1 match:", id)
+      return id
+    }
+
+    // Pattern 2: subform-empty-dropzone-{id}
+    if (dropZoneId.startsWith("subform-empty-dropzone-")) {
+      const id = dropZoneId.replace("subform-empty-dropzone-", "")
+      console.log("✅ Pattern 2 match:", id)
+      return id
+    }
+
+    // Pattern 3: Just the subform ID (validate it exists)
+    if (subformHierarchyMap.has(dropZoneId)) {
+      console.log("✅ Pattern 3 match (direct ID):", dropZoneId)
+      return dropZoneId
+    }
+
+    console.log("❌ No pattern match found")
+    return null
+  }
+
+  // FIXED: Enhanced function to validate if a subform exists in the form structure
+  const validateSubformExists = (subformId: string): boolean => {
+    if (!form) return false
+
+    // Check hierarchy map first (fastest)
+    if (subformHierarchyMap.has(subformId)) {
+      console.log("✅ Subform found in hierarchy map:", subformId)
+      return true
+    }
+
+    // Fallback: search form structure
+    const searchSubforms = (subforms: Subform[]): boolean => {
+      for (const subform of subforms) {
+        if (subform.id === subformId) return true
+        if (subform.childSubforms && searchSubforms(subform.childSubforms)) {
+          return true
+        }
+      }
+      return false
+    }
+
+    for (const section of form.sections) {
+      if (searchSubforms(section.subforms)) {
+        console.log("✅ Subform found in form structure:", subformId)
+        return true
+      }
+    }
+
+    console.log("❌ Subform not found:", subformId)
+    return false
   }
 
   const onDragStart = (event: DragStartEvent) => {
@@ -398,7 +449,7 @@ export default function FormBuilderPage() {
           targetSectionId = over.data.current?.field.sectionId
           targetSubformId = over.data.current?.field.subformId
         } else if (isOverASection) {
-          targetSectionId = String(over.id).replace('section-dropzone-', '')
+          targetSectionId = String(over.id).replace("section-dropzone-", "")
         } else if (isOverASubform) {
           const targetSubform = over.data.current?.subform
           targetSectionId = targetSubform?.sectionId
@@ -491,7 +542,7 @@ export default function FormBuilderPage() {
 
         // Determine target container
         if (isOverASection) {
-          targetSectionId = String(over.id).replace('section-dropzone-', '')
+          targetSectionId = String(over.id).replace("section-dropzone-", "")
         } else if (isOverASubform) {
           const targetSubform = over.data.current?.subform
           targetSectionId = targetSubform?.sectionId
@@ -507,7 +558,9 @@ export default function FormBuilderPage() {
         // Check if target is a child of active subform (prevent circular nesting)
         const isChildOfActive = (subform: Subform, targetId: string): boolean => {
           if (subform.id === targetId) return true
-          return subform.childSubforms ? subform.childSubforms.some((child: Subform) => isChildOfActive(child, targetId)) : false
+          return subform.childSubforms
+            ? subform.childSubforms.some((child: Subform) => isChildOfActive(child, targetId))
+            : false
         }
 
         if (targetSubformId && activeSubform && isChildOfActive(activeSubform, targetSubformId)) {
@@ -519,7 +572,7 @@ export default function FormBuilderPage() {
 
         // Remove from source
         const removeSubform = (subforms: Subform[], targetId: string): Subform | null => {
-          const index = subforms.findIndex(sub => sub.id === targetId)
+          const index = subforms.findIndex((sub) => sub.id === targetId)
           if (index !== -1) {
             return subforms.splice(index, 1)[0]
           }
@@ -536,7 +589,7 @@ export default function FormBuilderPage() {
 
         let movedSubform: Subform | null = null
         for (const section of newSections) {
-          movedSubform = removeSubform(section.subforms, activeSubform?.id || '')
+          movedSubform = removeSubform(section.subforms, activeSubform?.id || "")
           if (movedSubform) break
         }
 
@@ -586,8 +639,6 @@ export default function FormBuilderPage() {
       overId: event.over?.id,
       overType: event.over?.data.current?.type,
       overData: event.over?.data.current,
-      isSubformDropzone: event.over?.data.current?.isSubformDropzone,
-      subformData: event.over?.data.current?.subform
     })
 
     setActiveItem(null)
@@ -610,151 +661,103 @@ export default function FormBuilderPage() {
       let targetSectionId: string | undefined
       let targetSubformId: string | undefined
 
-      console.log("🔍 COMPREHENSIVE DROP TARGET ANALYSIS:", {
+      console.log("🔍 ENHANCED DROP TARGET ANALYSIS:", {
         overId: over.id,
         overIdString: String(over.id),
         overData: overData,
-        isSubformDropzone: overData?.isSubformDropzone,
-        hasSubformData: !!overData?.subform,
-        subformId: overData?.subform?.id,
-        subformSectionId: overData?.subform?.sectionId,
+        overDataType: overData?.type,
         hierarchyMapSize: subformHierarchyMap.size,
         hierarchyMapKeys: Array.from(subformHierarchyMap.keys()),
-        formSectionsCount: form?.sections.length || 0
       })
 
-      // ENHANCED METHOD 1: Check for explicit subform dropzone flag (HIGHEST PRIORITY)
-      if (overData?.isSubformDropzone === true && overData?.subform?.id) {
-        targetSubformId = overData.subform.id
-        targetSectionId = overData.subform.sectionId
-        console.log("✅ METHOD 1 SUCCESS - Explicit subform dropzone:", { targetSubformId, targetSectionId })
-      }
-      // ENHANCED METHOD 2: Check if over ID starts with 'subform-' (HIGH PRIORITY)
-      else if (String(over.id).startsWith('subform-')) {
-        const extractedSubformId = String(over.id).replace('subform-', '')
-        console.log("🔍 METHOD 2 - Extracted subform ID:", extractedSubformId)
+      // FIXED: Improved subform detection logic with better error handling
+      // Method 1: Check for SubformDropzone or SubformEmptyDropzone types
+      if (overData?.type === "SubformDropzone" || overData?.type === "SubformEmptyDropzone") {
+        console.log("✅ METHOD 1 - Detected subform dropzone type:", overData.type)
 
-        // Use hierarchy map for fast lookup
-        const hierarchy = subformHierarchyMap.get(extractedSubformId)
-        if (hierarchy) {
-          targetSubformId = extractedSubformId
-          targetSectionId = hierarchy.sectionId
-          console.log("✅ METHOD 2A SUCCESS - Found via hierarchy map:", { targetSubformId, targetSectionId })
-        } else {
-          // Enhanced fallback: comprehensive form structure search
-          console.log("🔍 METHOD 2B - Comprehensive form search...")
-          if (form) {
-            let found = false
-            searchLoop: for (const section of form.sections) {
-              console.log(`Searching section ${section.id} with ${section.subforms.length} subforms`)
-
-              // Search direct subforms
-              for (const subform of section.subforms) {
-                console.log(`Checking direct subform: ${subform.id}`)
-                if (subform.id === extractedSubformId) {
-                  targetSubformId = subform.id
-                  targetSectionId = section.id
-                  console.log("✅ METHOD 2B SUCCESS - Found in direct subforms:", { targetSubformId, targetSectionId })
-                  found = true
-                  break searchLoop
-                }
-              }
-
-              // Search nested subforms recursively
-              const searchNested = (subforms: Subform[], depth: number = 0): boolean => {
-                console.log(`Searching nested subforms at depth ${depth}`)
-                for (const subform of subforms) {
-                  console.log(`Checking nested subform: ${subform.id} at depth ${depth}`)
-                  if (subform.id === extractedSubformId) {
-                    targetSubformId = subform.id
-                    targetSectionId = section.id
-                    console.log("✅ METHOD 2B SUCCESS - Found in nested subforms:", { targetSubformId, targetSectionId, depth })
-                    return true
-                  }
-                  if (subform.childSubforms && subform.childSubforms.length > 0) {
-                    console.log(`Subform ${subform.id} has ${subform.childSubforms.length} children`)
-                    if (searchNested(subform.childSubforms, depth + 1)) {
-                      return true
-                    }
-                  }
-                }
-                return false
-              }
-
-              if (searchNested(section.subforms)) {
-                found = true
-                break searchLoop
-              }
-            }
-
-            if (!found) {
-              console.log("❌ METHOD 2B FAILED - Subform not found in form structure")
-            }
+        // First try to get subform data from overData.subform
+        if (overData.subform?.id) {
+          targetSubformId = overData.subform.id
+          targetSectionId = overData.subform.sectionId
+          console.log("✅ METHOD 1A SUCCESS - From subform object:", { targetSubformId, targetSectionId })
+        }
+        // Fallback to overData.subformId
+        else if (overData.subformId) {
+          targetSubformId = overData.subformId
+          const hierarchy = subformHierarchyMap.get(targetSubformId)
+          targetSectionId = hierarchy?.sectionId
+          console.log("✅ METHOD 1B SUCCESS - From subformId:", { targetSubformId, targetSectionId })
+        }
+        // Last resort: extract from over.id
+        else {
+          const extractedId = extractSubformIdFromDropZone(String(over.id))
+          if (extractedId && validateSubformExists(extractedId)) {
+            targetSubformId = extractedId
+            const hierarchy = subformHierarchyMap.get(targetSubformId)
+            targetSectionId = hierarchy?.sectionId
+            console.log("✅ METHOD 1C SUCCESS - From over.id extraction:", { targetSubformId, targetSectionId })
           }
         }
       }
-      // METHOD 3: Check if overData contains subform information (MEDIUM PRIORITY)
-      else if (overData?.subform?.id) {
-        targetSubformId = overData.subform.id
-        targetSectionId = overData.subform.sectionId
-        console.log("✅ METHOD 3 SUCCESS - Subform from overData:", { targetSubformId, targetSectionId })
-      }
-      // METHOD 4: Check for section dropzone (LOW PRIORITY)
-      else if (overData?.isSectionDropzone === true || String(over.id).includes('section-dropzone-')) {
-        targetSectionId = String(over.id).replace('section-dropzone-', '')
-        console.log("✅ METHOD 4 SUCCESS - Section dropzone:", { targetSectionId })
-      }
-      // METHOD 5: Check if dropping near a field (LOWEST PRIORITY)
-      else if (overData?.field?.sectionId) {
+
+      // Method 2: Field proximity (handle dropping near existing fields)
+      if (!targetSubformId && overData?.field) {
         targetSectionId = overData.field.sectionId
         targetSubformId = overData.field.subformId
-        console.log("✅ METHOD 5 SUCCESS - Near field:", { targetSectionId, targetSubformId })
+        console.log("✅ METHOD 2 SUCCESS - Near field:", { targetSectionId, targetSubformId })
+
+        // If field is in a subform but has no sectionId, get it from hierarchy
+        if (targetSubformId && !targetSectionId) {
+          const hierarchy = subformHierarchyMap.get(targetSubformId)
+          targetSectionId = hierarchy?.sectionId
+          console.log("✅ METHOD 2B SUCCESS - Got section from hierarchy:", { targetSectionId, targetSubformId })
+        }
       }
 
-      // COMPREHENSIVE VALIDATION AND ERROR REPORTING
+      // Method 3: Extract from drop zone ID patterns (only if previous methods failed)
+      if (!targetSubformId && !targetSectionId) {
+        const extractedSubformId = extractSubformIdFromDropZone(String(over.id))
+        if (extractedSubformId && validateSubformExists(extractedSubformId)) {
+          targetSubformId = extractedSubformId
+          const hierarchy = subformHierarchyMap.get(targetSubformId)
+          targetSectionId = hierarchy?.sectionId
+          console.log("✅ METHOD 3 SUCCESS:", { targetSubformId, targetSectionId })
+        }
+      }
+
+      // Method 4: Section dropzone (only if no subform target found)
+      if (!targetSubformId && !targetSectionId && (overData?.type === "Section" || overData?.isSectionDropzone)) {
+        targetSectionId = String(over.id).replace("section-dropzone-", "")
+        console.log("✅ METHOD 4 SUCCESS - Section dropzone:", { targetSectionId })
+      }
+
+      // FINAL VALIDATION - Enhanced error reporting
       if (!targetSectionId) {
         console.log("❌ COMPLETE FAILURE - No valid drop target found")
         console.log("🔍 DEBUGGING INFORMATION:")
-        console.log("Available over data:", {
-          overId: over.id,
-          overIdString: String(over.id),
-          overData: overData,
-          overDataKeys: overData ? Object.keys(overData) : [],
-          overDataType: overData?.type,
-          overDataIsSubformDropzone: overData?.isSubformDropzone,
-          overDataSubform: overData?.subform,
-          overDataField: overData?.field,
-          overDataSection: overData?.section
-        })
-        console.log("Hierarchy map state:", {
-          size: subformHierarchyMap.size,
-          keys: Array.from(subformHierarchyMap.keys()),
-          values: Array.from(subformHierarchyMap.values()).map(h => ({
-            id: h.id,
-            name: h.name,
-            path: h.path,
-            sectionId: h.sectionId
-          }))
-        })
-        console.log("Form structure:", {
-          sectionsCount: form?.sections.length || 0,
-          sections: form?.sections.map(s => ({
-            id: s.id,
-            name: s.name,
-            subformsCount: s.subforms.length,
-            subformIds: s.subforms.map(sub => sub.id),
-            nestedSubforms: s.subforms.map(sub => ({
-              id: sub.id,
-              childCount: sub.childSubforms?.length || 0,
-              childIds: sub.childSubforms?.map(child => child.id) || []
-            }))
-          })) || []
-        })
+        console.log("Over ID:", over.id)
+        console.log("Over data:", overData)
+        console.log("Hierarchy map keys:", Array.from(subformHierarchyMap.keys()))
+        console.log(
+          "Form sections:",
+          form?.sections.map((s) => ({ id: s.id, name: s.name })),
+        )
 
         toast({
-          title: "Drop Failed - Debug Mode",
-          description: `Could not identify drop target. Over ID: ${over.id}, Type: ${overData?.type || 'unknown'}. Check console for details.`,
-          variant: "destructive"
+          title: "Drop Failed",
+          description: `Could not identify drop target. Over ID: ${over.id}, Type: ${overData?.type || "unknown"}. Please try refreshing the page.`,
+          variant: "destructive",
+        })
+        return
+      }
+
+      // FIXED: Additional validation to ensure target exists in current form state
+      if (targetSubformId && !validateSubformExists(targetSubformId)) {
+        console.log("❌ TARGET SUBFORM VALIDATION FAILED:", targetSubformId)
+        toast({
+          title: "Drop Failed",
+          description: "Target subform no longer exists. Please refresh the page.",
+          variant: "destructive",
         })
         return
       }
@@ -764,7 +767,7 @@ export default function FormBuilderPage() {
         targetSubformId,
         fieldType,
         willCreateInSubform: !!targetSubformId,
-        subformPath: targetSubformId ? getSubformPath(targetSubformId) : 'N/A'
+        subformPath: targetSubformId ? getSubformPath(targetSubformId) : "N/A",
       })
 
       // Special handling for subform field type
@@ -774,10 +777,11 @@ export default function FormBuilderPage() {
         return
       }
 
-      // Special handling for lookup fields
+      // FIXED: Special handling for lookup fields - now supports subforms
       if (fieldType === "lookup") {
         console.log("🔍 Creating lookup field")
         setPendingLookupSectionId(targetSectionId || "")
+        setPendingLookupSubformId(targetSubformId || null)
         setIsLookupDialogOpen(true)
         return
       }
@@ -891,17 +895,18 @@ export default function FormBuilderPage() {
       const overSubform = over.data.current?.subform
 
       // Only reorder if they're at the same level and have the same parent
-      if (activeSubform?.parentSubformId === overSubform?.parentSubformId &&
-        activeSubform?.sectionId === overSubform?.sectionId) {
-
+      if (
+        activeSubform?.parentSubformId === overSubform?.parentSubformId &&
+        activeSubform?.sectionId === overSubform?.sectionId
+      ) {
         setForm((prevForm) => {
           if (!prevForm) return null
 
           const newSections = [...prevForm.sections]
 
           const reorderSubforms = (subforms: Subform[]): boolean => {
-            const activeIndex = subforms.findIndex(sub => sub.id === active.id)
-            const overIndex = subforms.findIndex(sub => sub.id === over.id)
+            const activeIndex = subforms.findIndex((sub) => sub.id === active.id)
+            const overIndex = subforms.findIndex((sub) => sub.id === over.id)
 
             if (activeIndex !== -1 && overIndex !== -1 && activeIndex !== overIndex) {
               const sortedSubforms = arrayMove(subforms, activeIndex, overIndex)
@@ -1018,7 +1023,6 @@ export default function FormBuilderPage() {
           body: JSON.stringify({ order: index }),
         }),
       )
-
       await Promise.all(updatePromises)
       console.log("Subform field orders updated successfully for subform:", subformId)
     } catch (error) {
@@ -1033,7 +1037,6 @@ export default function FormBuilderPage() {
 
   const updateSubformOrders = async () => {
     if (!form) return
-
     try {
       const updatePromises: Promise<any>[] = []
 
@@ -1044,16 +1047,15 @@ export default function FormBuilderPage() {
               method: "PUT",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ order: index }),
-            })
+            }),
           )
-
           if (subform.childSubforms && subform.childSubforms.length > 0) {
             collectSubformUpdates(subform.childSubforms)
           }
         })
       }
 
-      form.sections.forEach(section => {
+      form.sections.forEach((section) => {
         collectSubformUpdates(section.subforms)
       })
 
@@ -1071,7 +1073,6 @@ export default function FormBuilderPage() {
 
   const createSingleField = async (fieldType: string, sectionId?: string, subformId?: string) => {
     if (!form) return
-
     try {
       console.log("🔧 Creating field with params:", { fieldType, sectionId, subformId })
 
@@ -1090,29 +1091,22 @@ export default function FormBuilderPage() {
         width: "full",
         order: 0, // Will be calculated by API
       }
-
       console.log("📤 Sending field creation request:", fieldData)
-
       const response = await fetch("/api/fields", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(fieldData),
       })
-
       if (!response.ok) {
         const errorText = await response.text()
         console.error("❌ Field creation failed:", response.status, errorText)
         throw new Error(`Failed to create field: ${response.status} ${errorText}`)
       }
-
       const result = await response.json()
       console.log("✅ Field creation successful:", result)
-
       if (result.success) {
         await fetchForm() // Refresh the entire form to get updated structure
-        const location = subformId
-          ? `subform ${getSubformPath(subformId)}`
-          : 'section'
+        const location = subformId ? `subform ${getSubformPath(subformId)}` : "section"
 
         toast({
           title: "Success",
@@ -1130,10 +1124,8 @@ export default function FormBuilderPage() {
       })
     }
   }
-
   const createSubform = async (sectionId?: string, parentSubformId?: string) => {
     if (!form) return
-
     try {
       // Generate next path number for the subform
       let nextPath = "1"
@@ -1145,13 +1137,12 @@ export default function FormBuilderPage() {
         }
       } else if (sectionId) {
         // Count existing root-level subforms in this section
-        const section = form.sections.find(s => s.id === sectionId)
+        const section = form.sections.find((s) => s.id === sectionId)
         if (section) {
-          const rootSubformsCount = section.subforms.filter(sub => !sub.parentSubformId).length
+          const rootSubformsCount = section.subforms.filter((sub) => !sub.parentSubformId).length
           nextPath = `${rootSubformsCount + 1}`
         }
       }
-
       const subformData = {
         sectionId: parentSubformId ? undefined : sectionId,
         parentSubformId: parentSubformId,
@@ -1163,28 +1154,24 @@ export default function FormBuilderPage() {
         collapsible: true,
         collapsed: false,
       }
-
       console.log("Creating subform with data:", subformData)
-
       const response = await fetch("/api/subforms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(subformData),
       })
-
       if (!response.ok) {
         const errorText = await response.text()
         console.error("Subform creation failed:", response.status, errorText)
         throw new Error(`Failed to create subform: ${response.status} ${errorText}`)
       }
-
       const result = await response.json()
       if (result.success) {
         await fetchForm() // Refresh the entire form to get updated structure
         const parentPath = parentSubformId ? getSubformPath(parentSubformId) : "root"
         toast({
           title: "Success",
-          description: `Subform ${nextPath} created successfully${parentSubformId ? ` under ${parentPath}` : ''}`,
+          description: `Subform ${nextPath} created successfully${parentSubformId ? ` under ${parentPath}` : ""}`,
         })
         return result.data // Return the created subform for immediate use
       } else {
@@ -1201,18 +1188,19 @@ export default function FormBuilderPage() {
     }
   }
 
+  // FIXED: Enhanced lookup field creation to support subforms
   const handleLookupFieldsConfirm = async (lookupFields: Partial<FormField>[]) => {
-    if (!pendingLookupSectionId || !form) return
+    if ((!pendingLookupSectionId && !pendingLookupSubformId) || !form) return
 
     try {
       const createdFields: FormField[] = []
-
       for (const fieldData of lookupFields) {
         const response = await fetch("/api/fields", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            sectionId: pendingLookupSectionId,
+            sectionId: pendingLookupSubformId ? undefined : pendingLookupSectionId,
+            subformId: pendingLookupSubformId,
             type: fieldData.type,
             label: fieldData.label,
             placeholder: fieldData.placeholder,
@@ -1227,15 +1215,14 @@ export default function FormBuilderPage() {
             lookup: fieldData.lookup,
           }),
         })
-
         if (!response.ok) throw new Error("Failed to create lookup field")
-
         const result = await response.json()
         if (result.success) {
           const savedField: FormField = {
             ...fieldData,
             id: result.data.id,
-            sectionId: pendingLookupSectionId,
+            sectionId: pendingLookupSubformId ? undefined : pendingLookupSectionId,
+            subformId: pendingLookupSubformId,
             createdAt: new Date(),
             updatedAt: new Date(),
           } as FormField
@@ -1243,9 +1230,18 @@ export default function FormBuilderPage() {
           createdFields.push(savedField)
         }
       }
-
       await fetchForm() // Refresh the entire form
+
+      // Show success message with location info
+      const location = pendingLookupSubformId ? `subform ${getSubformPath(pendingLookupSubformId)}` : "section"
+
+      toast({
+        title: "Success",
+        description: `${createdFields.length} lookup field${createdFields.length !== 1 ? "s" : ""} created in ${location} successfully`,
+      })
+
       setPendingLookupSectionId(null)
+      setPendingLookupSubformId(null)
     } catch (error: any) {
       console.error("Error creating lookup fields:", error)
       toast({
@@ -1258,7 +1254,6 @@ export default function FormBuilderPage() {
 
   const saveForm = async () => {
     if (!form) return
-
     setSaving(true)
     try {
       // The form structure is already maintained by the drag & drop operations
@@ -1270,7 +1265,6 @@ export default function FormBuilderPage() {
         isUserForm: form.isUserForm,
         isEmployeeForm: form.isEmployeeForm,
       }
-
       const response = await fetch(`/api/forms/${formId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -1293,7 +1287,6 @@ export default function FormBuilderPage() {
       setSaving(false)
     }
   }
-
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -1301,7 +1294,6 @@ export default function FormBuilderPage() {
       </div>
     )
   }
-
   if (!form) {
     return (
       <div className="flex h-screen items-center justify-center text-center">
@@ -1317,10 +1309,8 @@ export default function FormBuilderPage() {
       </div>
     )
   }
-
   // Get the active palette field type for drag overlay
   const activePaletteFieldType = activePaletteItem ? fieldTypes.find((ft) => ft.id === activePaletteItem) : null
-
   return (
     <DndContext
       sensors={sensors}
@@ -1333,7 +1323,6 @@ export default function FormBuilderPage() {
         <aside className="w-72 flex-shrink-0 border-r bg-white">
           <FieldPalette />
         </aside>
-
         <div className="flex flex-1 flex-col">
           <header className="flex h-16 flex-shrink-0 items-center justify-between border-b bg-white px-6">
             <div className="flex items-center gap-4">
@@ -1365,14 +1354,8 @@ export default function FormBuilderPage() {
                 </div>
               </div>
             </div>
-
             <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsUserFormSettingsOpen(true)}
-                className="text-xs"
-              >
+              <Button variant="outline" size="sm" onClick={() => setIsUserFormSettingsOpen(true)} className="text-xs">
                 <Settings className="mr-2 h-3 w-3" />
                 Form Settings
               </Button>
@@ -1390,7 +1373,6 @@ export default function FormBuilderPage() {
               </Button>
             </div>
           </header>
-
           <main className="flex-1 overflow-y-auto">
             <FormCanvas
               form={form}
@@ -1405,7 +1387,6 @@ export default function FormBuilderPage() {
           </main>
         </div>
       </div>
-
       {/* Enhanced Drag Overlay with proper z-index */}
       {typeof window !== "undefined" &&
         createPortal(
@@ -1444,50 +1425,51 @@ export default function FormBuilderPage() {
                 />
               </div>
             )}
-            {activeItem && !activeItem.hasOwnProperty("fields") && !activeItem.hasOwnProperty("subforms") && !activeItem.hasOwnProperty("childSubforms") && (
-              <div style={{ zIndex: 10000 }}>
-                <FieldComponent
-                  field={activeItem as FormField}
-                  isOverlay
-                  onUpdate={async () => { }}
-                  onDelete={() => { }}
-                  onCopy={() => { }}
-                  fieldPath={
-                    (activeItem as FormField).subformId
-                      ? getFullSubformPath((activeItem as FormField).subformId!)
-                      : "Section Level"
-                  }
-                  subformPath={
-                    (activeItem as FormField).subformId
-                      ? getSubformPath((activeItem as FormField).subformId!)
-                      : undefined
-                  }
-                  parentChildDisplay={
-                    (activeItem as FormField).subformId
-                      ? getParentChildDisplay((activeItem as FormField).subformId!)
-                      : undefined
-                  }
-                />
-              </div>
-            )}
+            {activeItem &&
+              !activeItem.hasOwnProperty("fields") &&
+              !activeItem.hasOwnProperty("subforms") &&
+              !activeItem.hasOwnProperty("childSubforms") && (
+                <div style={{ zIndex: 10000 }}>
+                  <FieldComponent
+                    field={activeItem as FormField}
+                    isOverlay
+                    onUpdate={async () => { }}
+                    onDelete={() => { }}
+                    onCopy={() => { }}
+                    fieldPath={
+                      (activeItem as FormField).subformId
+                        ? getFullSubformPath((activeItem as FormField).subformId!)
+                        : "Section Level"
+                    }
+                    subformPath={
+                      (activeItem as FormField).subformId
+                        ? getSubformPath((activeItem as FormField).subformId!)
+                        : undefined
+                    }
+                    parentChildDisplay={
+                      (activeItem as FormField).subformId
+                        ? getParentChildDisplay((activeItem as FormField).subformId!)
+                        : undefined
+                    }
+                  />
+                </div>
+              )}
           </DragOverlay>,
           document.body,
         )}
-
       <PublishFormDialog
         form={form}
         open={isPublishDialogOpen}
         onOpenChange={setIsPublishDialogOpen}
         onFormPublished={handleFormPublished}
       />
-
       <LookupConfigurationDialog
         open={isLookupDialogOpen}
         onOpenChange={setIsLookupDialogOpen}
         onConfirm={handleLookupFieldsConfirm}
         sectionId={pendingLookupSectionId || ""}
+        subformId={pendingLookupSubformId || undefined}
       />
-
       <UserFormSettingsDialog
         form={form}
         open={isUserFormSettingsOpen}

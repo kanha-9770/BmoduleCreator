@@ -23,7 +23,6 @@ export function Header() {
                         <Input placeholder="Search orders, products, customers..." className="pl-10" />
                     </div>
                 </div>
-
                 <div className="flex items-center gap-4">
                     <Button variant="ghost" size="icon" className="relative">
                         <Bell className="h-5 w-5" />

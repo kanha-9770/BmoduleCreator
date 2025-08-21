@@ -10,7 +10,18 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Check, ChevronsUpDown, Database, FileText, Zap, Loader2, Settings, CheckSquare, Key } from "lucide-react"
+import {
+  Check,
+  ChevronsUpDown,
+  Database,
+  FileText,
+  Zap,
+  Loader2,
+  Settings,
+  CheckSquare,
+  Key,
+  Layers,
+} from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import type { FormField } from "@/types/form-builder"
@@ -48,6 +59,7 @@ interface LookupConfigurationDialogProps {
   onOpenChange: (open: boolean) => void
   onConfirm: (lookupFields: Partial<FormField>[]) => void
   sectionId: string
+  subformId?: string // NEW: Support for subforms
 }
 
 export default function LookupConfigurationDialog({
@@ -55,6 +67,7 @@ export default function LookupConfigurationDialog({
   onOpenChange,
   onConfirm,
   sectionId,
+  subformId, // NEW: Accept subform ID
 }: LookupConfigurationDialogProps) {
   const { toast } = useToast()
   const [step, setStep] = useState<"source" | "fields" | "configure">("source")
@@ -175,11 +188,9 @@ export default function LookupConfigurationDialog({
       setSelectedFields((prev) => prev.filter((f) => f.fieldName !== field.name))
     }
   }
-
   const updateSelectedField = (fieldName: string, updates: Partial<SelectedField>) => {
     setSelectedFields((prev) => prev.map((field) => (field.fieldName === fieldName ? { ...field, ...updates } : field)))
   }
-
   const handleConfirm = () => {
     if (!selectedSource || selectedFields.length === 0) {
       toast({
@@ -189,33 +200,30 @@ export default function LookupConfigurationDialog({
       })
       return
     }
-
     console.log("[Dialog] Creating lookup fields with source info:", {
       selectedSource,
+      targetLocation: subformId ? `subform ${subformId}` : `section ${sectionId}`,
     })
-
     // Extract source type and ID for proper field creation
     let sourceModule: string | undefined
     let sourceForm: string | undefined
-
     if (selectedSource.type === "module" && selectedSource.id.startsWith("module_")) {
       sourceModule = selectedSource.id.replace("module_", "")
     } else if (selectedSource.type === "form" && selectedSource.id.startsWith("form_")) {
       sourceForm = selectedSource.id.replace("form_", "")
     }
-
     console.log("[Dialog] Extracted source info:", {
       sourceModule,
       sourceForm,
     })
-
     // Create lookup field configurations
     const lookupFields: Partial<FormField>[] = selectedFields.map((field, index) => ({
-      sectionId: sectionId,
+      sectionId: subformId ? undefined : sectionId, // NEW: Only set sectionId if not in subform
+      subformId: subformId, // NEW: Set subformId if creating in subform
       type: "lookup",
       label: field.label,
       placeholder: `Select ${field.label.toLowerCase()}...`,
-      description: `Lookup field for ${field.label} from ${selectedSource.name}${field.useIdField ? " (with ID field for updates)" : ""}`,
+      description: `Lookup field for ${field.label} from ${selectedSource.name}${field.useIdField ? " (with ID field for updates)" : ""}${subformId ? " in subform" : ""}`,
       defaultValue: "",
       options: [],
       validation: { required: false },
@@ -223,7 +231,6 @@ export default function LookupConfigurationDialog({
       readonly: false,
       width: "full" as const,
       order: index,
-
       // Add source information for middleware
       sourceModule,
       sourceForm,
@@ -231,7 +238,6 @@ export default function LookupConfigurationDialog({
       valueField: field.valueField,
       multiple: field.multiple,
       searchable: field.searchable,
-
       lookup: {
         sourceId: selectedSource.id,
         sourceType: selectedSource.type,
@@ -248,19 +254,16 @@ export default function LookupConfigurationDialog({
         },
       },
     }))
-
     console.log("[Dialog] Final lookup fields configuration:", lookupFields)
-
     onConfirm(lookupFields)
     onOpenChange(false)
     resetDialog()
-
+    const locationText = subformId ? "subform" : "section"
     toast({
       title: "Success",
-      description: `Created ${lookupFields.length} lookup field(s)${selectedFields.some((f) => f.useIdField) ? " with ID field support" : ""}`,
+      description: `Created ${lookupFields.length} lookup field(s) in ${locationText}${selectedFields.some((f) => f.useIdField) ? " with ID field support" : ""}`,
     })
   }
-
   const getSourceIcon = (type: string) => {
     switch (type) {
       case "form":
@@ -273,7 +276,6 @@ export default function LookupConfigurationDialog({
         return <Database className="h-4 w-4" />
     }
   }
-
   const getSourceTypeLabel = (type: string) => {
     switch (type) {
       case "form":
@@ -286,7 +288,6 @@ export default function LookupConfigurationDialog({
         return "Unknown"
     }
   }
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
@@ -294,10 +295,15 @@ export default function LookupConfigurationDialog({
           <DialogTitle className="flex items-center gap-2">
             <Settings className="h-5 w-5" />
             Configure Lookup Fields
+            {subformId && (
+              <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-300">
+                <Layers className="h-3 w-3 mr-1" />
+                For Subform
+              </Badge>
+            )}
             <Badge variant="secondary">Step {step === "source" ? "1" : step === "fields" ? "2" : "3"} of 3</Badge>
           </DialogTitle>
         </DialogHeader>
-
         <div className="flex-1 overflow-hidden">
           {/* Step 1: Source Selection */}
           {step === "source" && (
@@ -306,9 +312,9 @@ export default function LookupConfigurationDialog({
                 <h3 className="text-lg font-semibold mb-2">Select Data Source</h3>
                 <p className="text-sm text-muted-foreground mb-4">
                   Choose the form, module, or built-in source for your lookup fields
+                  {subformId && <span className="text-purple-600 font-medium"> (will be added to subform)</span>}
                 </p>
               </div>
-
               <div className="space-y-4">
                 <Label>Data Source</Label>
                 <Popover open={sourceOpen} onOpenChange={setSourceOpen}>
@@ -395,7 +401,6 @@ export default function LookupConfigurationDialog({
                                   </CommandItem>
                                 ))}
                             </CommandGroup>
-
                             <CommandGroup heading="Modules">
                               {sources
                                 .filter((source) => source.type === "module")
@@ -533,6 +538,7 @@ export default function LookupConfigurationDialog({
                   <h3 className="text-lg font-semibold">Select Fields</h3>
                   <p className="text-sm text-muted-foreground">
                     Choose which fields from {selectedSource.name} to create lookup fields for
+                    {subformId && <span className="text-purple-600 font-medium"> (will be added to subform)</span>}
                   </p>
                 </div>
                 <Button variant="outline" onClick={() => setStep("source")}>
@@ -581,6 +587,12 @@ export default function LookupConfigurationDialog({
                     <CardTitle className="flex items-center gap-2">
                       <CheckSquare className="h-4 w-4" />
                       Selected Fields ({selectedFields.length})
+                      {subformId && (
+                        <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-300">
+                          <Layers className="h-3 w-3 mr-1" />
+                          For Subform
+                        </Badge>
+                      )}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -606,7 +618,10 @@ export default function LookupConfigurationDialog({
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-lg font-semibold">Configure Lookup Fields</h3>
-                  <p className="text-sm text-muted-foreground">Fine-tune the configuration for each lookup field</p>
+                  <p className="text-sm text-muted-foreground">
+                    Fine-tune the configuration for each lookup field
+                    {subformId && <span className="text-purple-600 font-medium"> (will be added to subform)</span>}
+                  </p>
                 </div>
                 <Button variant="outline" onClick={() => setStep("fields")}>
                   Back to Fields
@@ -624,6 +639,12 @@ export default function LookupConfigurationDialog({
                             <Badge variant="outline" className="text-xs">
                               <Key className="h-3 w-3 mr-1" />
                               Update Mode
+                            </Badge>
+                          )}
+                          {subformId && (
+                            <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-300">
+                              <Layers className="h-3 w-3 mr-1" />
+                              Subform
                             </Badge>
                           )}
                         </CardTitle>
@@ -680,7 +701,6 @@ export default function LookupConfigurationDialog({
                             }
                           />
                         </div>
-
                         {selectedSource?.hasIdField && (
                           <div className="border-t pt-4">
                             <div className="flex items-center justify-between">
@@ -716,6 +736,7 @@ export default function LookupConfigurationDialog({
           {step === "configure" && (
             <Button onClick={handleConfirm} disabled={selectedFields.length === 0}>
               Create {selectedFields.length} Lookup Field{selectedFields.length !== 1 ? "s" : ""}
+              {subformId ? " in Subform" : ""}
             </Button>
           )}
         </DialogFooter>

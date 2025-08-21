@@ -191,7 +191,6 @@ export async function GET(request: NextRequest) {
         }
       })
     }
-
     if (sectionId) {
       subforms = await prisma.subform.findMany({
         where: {
@@ -201,6 +200,8 @@ export async function GET(request: NextRequest) {
         include: includeClause,
         orderBy: { order: 'asc' }
       })
+      ;
+      
     } else if (parentSubformId) {
       subforms = await prisma.subform.findMany({
         where: { parentSubformId },

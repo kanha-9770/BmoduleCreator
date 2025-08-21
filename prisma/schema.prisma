@@ -7,6 +7,304 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Enums
+enum AuthProvider {
+  EMAIL
+  GOOGLE
+  FACEBOOK
+  GITHUB
+  MOBILE
+  MICROSOFT
+}
+
+enum OTPType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+  TWO_FACTOR
+  REGISTRATION
+  LOGIN
+  MOBILE_VERIFICATION
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING
+  PENDING_VERIFICATION
+}
+
+enum PermissionCategory {
+  READ
+  WRITE
+  DELETE
+  ADMIN
+  SPECIAL
+}
+
+enum AccessLevel {
+  READ
+  WRITE
+  FULL
+}
+
+// Models
+model User {
+  id              String         @id @default(cuid())
+  email           String         @unique
+  username        String?        @unique
+  password        String?
+  provider        AuthProvider?  @default(EMAIL)
+  status          UserStatus     @default(PENDING)
+  organizationId  String?        @map("organization_id")
+  organization    Organization?   @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  sessions        UserSession[]
+  otpCodes        OTPCode[]
+  permissions     UserPermission[]
+  email_verified  Boolean?       @map("email_verified")
+  first_name      String?        @map("first_name")
+  last_name       String?        @map("last_name")
+  login_attempts  Int?           @map("login_attempts")
+  mobile          String?        @map("mobile")
+  mobile_verified Boolean?       @map("mobile_verified")
+  avatar          String?
+  department      String?
+  phone           String?
+  location        String?
+  joinDate        DateTime?      @map("join_date")
+  unitAssignments UserUnitAssignment[]
+  permissionOverrides UserPermissionOverride[]
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  @@map("users")
+  @@index([email])
+  @@index([username])
+  @@index([organizationId])
+  @@index([department])
+}
+
+model OTPCode {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code        String
+  type        OTPType
+  expiresAt   DateTime @map("expires_at")
+  used        Boolean  @default(false)
+  attempts    Int?     @map("attempts")
+  identifier  String?  @map("identifier")
+  verified    Boolean? @map("verified")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("otp_codes")
+  @@index([userId])
+  @@index([code])
+  @@index([type])
+  @@index([expiresAt])
+}
+
+model UserSession {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token        String   @unique
+  expiresAt    DateTime @map("expires_at")
+  ipAddress    String?  @map("ip_address")
+  userAgent    String?  @map("user_agent")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("user_sessions")
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+}
+
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  users       User[]
+  organizationUnits OrganizationUnit[]
+  roles       Role[]
+  permissions Permission[]
+  dataSharingRules DataSharingRule[]
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  @@map("organizations")
+}
+
+model OrganizationUnit {
+  id             String   @id @default(cuid())
+  name           String
+  description    String?
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parentId       String?  @map("parent_id")
+  parent         OrganizationUnit? @relation("UnitHierarchy", fields: [parentId], references: [id])
+  children       OrganizationUnit[] @relation("UnitHierarchy")
+  level          Int      @default(0)
+  sortOrder      Int      @default(0) @map("sort_order")
+  isActive       Boolean  @default(true) @map("is_active")
+  unitRoles      UnitRoleAssignment[]
+  userAssignments UserUnitAssignment[]
+  sourceRules    DataSharingRule[] @relation("SourceUnit")
+  targetRules    DataSharingRule[] @relation("TargetUnit")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  @@map("organization_units")
+  @@index([organizationId])
+  @@index([parentId])
+  @@index([level])
+  @@index([sortOrder])
+}
+
+model Role {
+  id                String   @id @default(cuid())
+  name              String   @unique
+  description       String?
+  organizationId    String   @map("organization_id")
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parentId          String?  @map("parent_id")
+  parent            Role?    @relation("RoleHierarchy", fields: [parentId], references: [id])
+  children          Role[]   @relation("RoleHierarchy")
+  level             Int      @default(0)
+  shareDataWithPeers Boolean @default(false) @map("share_data_with_peers")
+  sortOrder         Int      @default(0) @map("sort_order")
+  isActive          Boolean  @default(true) @map("is_active")
+  unitAssignments   UnitRoleAssignment[]
+  userAssignments   UserUnitAssignment[]
+  rolePermissions   RolePermission[]
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  @@map("roles")
+  @@index([organizationId])
+  @@index([parentId])
+  @@index([level])
+  @@index([sortOrder])
+  @@index([name])
+}
+
+model Permission {
+  id             String   @id @default(cuid())
+  name           String   @unique
+  description    String?
+  category       PermissionCategory
+  resource       String
+  resourceId     String?
+  resourceType   String?
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  isActive       Boolean  @default(true) @map("is_active")
+  rolePermissions RolePermission[]
+  userOverrides   UserPermissionOverride[]
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("permissions")
+  @@index([organizationId])
+  @@index([category])
+  @@index([resource])
+  @@index([resourceId])
+  @@index([resourceType])
+}
+
+model RolePermission {
+  id           String   @id @default(cuid())
+  roleId       String   @map("role_id")
+  role         Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permissionId String   @map("permission_id")
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  granted      Boolean  @default(true)
+  canDelegate  Boolean  @default(false) @map("can_delegate")
+  inheritedFrom String? @map("inherited_from")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+  @@index([roleId])
+  @@index([permissionId])
+}
+
+model UnitRoleAssignment {
+  id     String @id @default(cuid())
+  unitId String @map("unit_id")
+  unit   OrganizationUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  roleId String @map("role_id")
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([unitId, roleId])
+  @@map("unit_role_assignments")
+  @@index([unitId])
+  @@index([roleId])
+}
+
+model UserUnitAssignment {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  unitId String @map("unit_id")
+  unit   OrganizationUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  roleId String @map("role_id")
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  notes  String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, unitId])
+  @@map("user_unit_assignments")
+  @@index([userId])
+  @@index([unitId])
+  @@index([roleId])
+}
+
+model UserPermissionOverride {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permissionId String   @map("permission_id")
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  granted      Boolean
+  reason       String
+  expiresAt    DateTime? @map("expires_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, permissionId])
+  @@map("user_permission_overrides")
+  @@index([userId])
+  @@index([permissionId])
+  @@index([expiresAt])
+}
+
+model DataSharingRule {
+  id           String   @id @default(cuid())
+  name         String
+  description  String?
+  organizationId String @map("organization_id")
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sourceUnitId String   @map("source_unit_id")
+  sourceUnit   OrganizationUnit @relation("SourceUnit", fields: [sourceUnitId], references: [id], onDelete: Cascade)
+  targetUnitId String   @map("target_unit_id")
+  targetUnit   OrganizationUnit @relation("TargetUnit", fields: [targetUnitId], references: [id], onDelete: Cascade)
+  dataTypes    String[] @map("data_types")
+  accessLevel  AccessLevel @map("access_level")
+  conditions   String[] @default([])
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  @@map("data_sharing_rules")
+  @@index([organizationId])
+  @@index([sourceUnitId])
+  @@index([targetUnitId])
+  @@index([accessLevel])
+  @@index([isActive])
+}
+
 model FormModule {
   id          String   @id @default(cuid())
   name        String
@@ -14,24 +312,19 @@ model FormModule {
   icon        String?
   color       String?
   settings    Json     @default("{}") // GIN index to be added via migration
-  
-  // Hierarchical fields
   parentId    String?  @map("parent_id")
   parent      FormModule? @relation("ModuleHierarchy", fields: [parentId], references: [id])
   children    FormModule[] @relation("ModuleHierarchy")
-  moduleType  String   @default("standard") @map("module_type") // "master", "child", "standard"
+  moduleType  String   @default("standard") @map("module_type")
   level       Int      @default(0)
   path        String?
   isActive    Boolean  @default(true) @map("is_active")
   sortOrder   Int      @default(0) @map("sort_order")
-  
   forms       Form[]
+  lookupSources LookupSource[]
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
-  
-  // Lookup relations
-  lookupSources LookupSource[]
-  
+
   @@map("form_modules")
   @@index([parentId])
   @@index([level])
@@ -45,7 +338,7 @@ model Form {
   module            FormModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
   name              String
   description       String?
-  settings          Json     @default("{}") // GIN index to be added
+  settings          Json     @default("{}") // GIN index to be added via migration
   tableMapping      FormTableMapping? @relation("FormToTableMapping")
   sections          FormSection[]
   records1          FormRecord1[] @relation("FormRecord1")
@@ -71,16 +364,14 @@ model Form {
   requireLogin      Boolean  @default(false) @map("require_login")
   maxSubmissions    Int?     @map("max_submissions")
   submissionMessage String?  @map("submission_message")
-  conditional       Json?    // GIN index to be added
-  styling           Json?    // GIN index to be added
+  conditional       Json?    // GIN index to be added via migration
+  styling           Json?    // GIN index to be added via migration
+  isEmployeeForm    Boolean? @default(false) @map("isEmployeeForm")
+  isUserForm        Boolean? @default(false) @map("isUserForm")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
-  
-  // Lookup relations
   lookupSources     LookupSource[]
-  isUserForm        Boolean? @default(false)
-  isEmployeeForm    Boolean? @default(false)
-  
+
   @@map("forms")
   @@index([moduleId])
   @@index([isPublished])
@@ -92,10 +383,10 @@ model FormTableMapping {
   id           String   @id @default(cuid())
   formId       String   @unique @map("form_id")
   form         Form     @relation("FormToTableMapping", fields: [formId], references: [id], onDelete: Cascade)
-  storageTable String   @map("storage_table") // e.g., 'form_records_1'
+  storageTable String   @map("storage_table")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-  
+
   @@map("form_table_mappings")
   @@index([formId])
   @@index([storageTable])
@@ -112,13 +403,13 @@ model FormSection {
   visible     Boolean     @default(true)
   collapsible Boolean     @default(false)
   collapsed   Boolean     @default(false)
-  conditional Json?       // GIN index to be added
-  styling     Json?       // GIN index to be added
+  conditional Json?       // GIN index to be added via migration
+  styling     Json?       // GIN index to be added via migration
   fields      FormField[]
   subforms    Subform[]
   createdAt   DateTime    @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-  
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
   @@map("form_sections")
   @@index([formId])
   @@index([order])
@@ -135,25 +426,22 @@ model FormField {
   placeholder  String?
   description  String?
   defaultValue String?      @map("default_value")
-  options      Json         @default("[]") // GIN index to be added
-  validation   Json         @default("{}") // GIN index to be added
+  options      Json         @default("[]") // GIN index to be added via migration
+  validation   Json         @default("{}") // GIN index to be added via migration
   visible      Boolean      @default(true)
   readonly     Boolean      @default(false)
   width        String       @default("full")
   order        Int          @default(0)
-  conditional  Json?        // GIN index to be added
-  styling      Json?        // GIN index to be added
-  properties   Json?        // GIN index to be added
+  conditional  Json?        // GIN index to be added via migration
+  styling      Json?        // GIN index to be added via migration
+  properties   Json?        // GIN index to be added via migration
   formula      String?
-  rollup       Json?        // GIN index to be added
-  lookup       Json?        // GIN index to be added
-  
+  rollup       Json?        // GIN index to be added via migration
+  lookup       Json?        // GIN index to be added via migration
   createdAt    DateTime     @default(now()) @map("created_at")
   updatedAt    DateTime     @updatedAt @map("updated_at")
-  
-  // Lookup relations
   lookupRelations LookupFieldRelation[]
-  
+
   @@map("form_fields")
   @@index([sectionId])
   @@index([subformId])
@@ -161,39 +449,29 @@ model FormField {
   @@index([order])
 }
 
-// UPDATED: Enhanced Subform model with nested support
 model Subform {
   id              String      @id @default(cuid())
   sectionId       String?     @map("section_id")
   section         FormSection? @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-  
-  // NEW: Support for nested subforms
   parentSubformId String?     @map("parent_subform_id")
   parentSubform   Subform?    @relation("SubformHierarchy", fields: [parentSubformId], references: [id], onDelete: Cascade)
   childSubforms   Subform[]   @relation("SubformHierarchy")
-  
   name            String
   description     String?
   order           Int         @default(0)
-  level           Int         @default(0) // NEW: Nesting level (0 = root, 1 = first nested, etc.)
-  path            String?     // NEW: Hierarchical path like "1.2.3"
-  
-  // Visual and behavior properties
+  level           Int         @default(0)
+  path            String?
   columns         Int         @default(1)
   visible         Boolean     @default(true)
   collapsible     Boolean     @default(true)
   collapsed       Boolean     @default(false)
-  
-  // Styling for different nesting levels
-  styling         Json?       // Custom styling based on nesting level
-  conditional     Json?       // Conditional logic
-  
+  styling         Json?       // GIN index to be added via migration
+  conditional     Json?       // GIN index to be added via migration
   fields          FormField[]
   records         SubformRecord[]
-  
   createdAt       DateTime    @default(now()) @map("created_at")
   updatedAt       DateTime    @updatedAt @map("updated_at")
-  
+
   @@map("subforms")
   @@index([sectionId])
   @@index([parentSubformId])
@@ -206,13 +484,13 @@ model SubformRecord {
   id          String   @id @default(cuid())
   subformId   String   @map("subform_id")
   subform     Subform  @relation(fields: [subformId], references: [id], onDelete: Cascade)
-  data        Json     @default("{}") // GIN index to be added
-  employee_id String?  // For payroll/attendance
-  amount      Decimal? // For payroll amounts
-  date        DateTime? // For attendance dates
+  data        Json     @default("{}") // GIN index to be added via migration
+  employee_id String?
+  amount      Decimal?
+  date        DateTime?
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
-  
+
   @@map("subform_records")
   @@index([subformId])
   @@index([employee_id])
@@ -223,10 +501,10 @@ model FormRecord1 {
   id           String   @id @default(cuid())
   formId       String   @map("form_id")
   form         Form     @relation("FormRecord1", fields: [formId], references: [id], onDelete: Cascade)
-  recordData   Json     @default("{}") @map("record_data") // GIN index to be added
-  employee_id  String?  // For payroll/attendance
-  amount       Decimal? // For payroll amounts
-  date         DateTime? // For attendance dates
+  recordData   Json     @default("{}") @map("record_data") // GIN index to be added via migration
+  employee_id  String?
+  amount       Decimal?
+  date         DateTime?
   submittedBy  String?  @map("submitted_by")
   submittedAt  DateTime @default(now()) @map("submitted_at")
   ipAddress    String?  @map("ip_address")
@@ -234,7 +512,7 @@ model FormRecord1 {
   status       String   @default("submitted")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-  
+
   @@map("form_records_1")
   @@index([formId])
   @@index([submittedAt])
@@ -247,7 +525,7 @@ model FormRecord2 {
   id           String   @id @default(cuid())
   formId       String   @map("form_id")
   form         Form     @relation("FormRecord2", fields: [formId], references: [id], onDelete: Cascade)
-  recordData   Json     @default("{}") @map("record_data") // GIN index to be added
+  recordData   Json     @default("{}") @map("record_data") // GIN index to be added via migration
   employee_id  String?
   amount       Decimal?
   date         DateTime?
@@ -258,7 +536,7 @@ model FormRecord2 {
   status       String   @default("submitted")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-  
+
   @@map("form_records_2")
   @@index([formId])
   @@index([submittedAt])
@@ -271,7 +549,7 @@ model FormRecord3 {
   id           String   @id @default(cuid())
   formId       String   @map("form_id")
   form         Form     @relation("FormRecord3", fields: [formId], references: [id], onDelete: Cascade)
-  recordData   Json     @default("{}") @map("record_data") // GIN index to be added
+  recordData   Json     @default("{}") @map("record_data") // GIN index to be added via migration
   employee_id  String?
   amount       Decimal?
   date         DateTime?
@@ -282,7 +560,7 @@ model FormRecord3 {
   status       String   @default("submitted")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-  
+
   @@map("form_records_3")
   @@index([formId])
   @@index([submittedAt])
@@ -295,7 +573,7 @@ model FormRecord4 {
   id           String   @id @default(cuid())
   formId       String   @map("form_id")
   form         Form     @relation("FormRecord4", fields: [formId], references: [id], onDelete: Cascade)
-  recordData   Json     @default("{}") @map("record_data") // GIN index to be added
+  recordData   Json     @default("{}") @map("record_data") // GIN index to be added via migration
   employee_id  String?
   amount       Decimal?
   date         DateTime?
@@ -306,7 +584,7 @@ model FormRecord4 {
   status       String   @default("submitted")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-  
+
   @@map("form_records_4")
   @@index([formId])
   @@index([submittedAt])
@@ -319,7 +597,7 @@ model FormRecord5 {
   id           String   @id @default(cuid())
   formId       String   @map("form_id")
   form         Form     @relation("FormRecord5", fields: [formId], references: [id], onDelete: Cascade)
-  recordData   Json     @default("{}") @map("record_data") // GIN index to be added
+  recordData   Json     @default("{}") @map("record_data") // GIN index to be added via migration
   employee_id  String?
   amount       Decimal?
   date         DateTime?
@@ -330,7 +608,7 @@ model FormRecord5 {
   status       String   @default("submitted")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-  
+
   @@map("form_records_5")
   @@index([formId])
   @@index([submittedAt])
@@ -343,7 +621,7 @@ model FormRecord6 {
   id           String   @id @default(cuid())
   formId       String   @map("form_id")
   form         Form     @relation("FormRecord6", fields: [formId], references: [id], onDelete: Cascade)
-  recordData   Json     @default("{}") @map("record_data") // GIN index to be added
+  recordData   Json     @default("{}") @map("record_data") // GIN index to be added via migration
   employee_id  String?
   amount       Decimal?
   date         DateTime?
@@ -354,7 +632,7 @@ model FormRecord6 {
   status       String   @default("submitted")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-  
+
   @@map("form_records_6")
   @@index([formId])
   @@index([submittedAt])
@@ -367,7 +645,7 @@ model FormRecord7 {
   id           String   @id @default(cuid())
   formId       String   @map("form_id")
   form         Form     @relation("FormRecord7", fields: [formId], references: [id], onDelete: Cascade)
-  recordData   Json     @default("{}") @map("record_data") // GIN index to be added
+  recordData   Json     @default("{}") @map("record_data") // GIN index to be added via migration
   employee_id  String?
   amount       Decimal?
   date         DateTime?
@@ -378,7 +656,7 @@ model FormRecord7 {
   status       String   @default("submitted")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-  
+
   @@map("form_records_7")
   @@index([formId])
   @@index([submittedAt])
@@ -391,7 +669,7 @@ model FormRecord8 {
   id           String   @id @default(cuid())
   formId       String   @map("form_id")
   form         Form     @relation("FormRecord8", fields: [formId], references: [id], onDelete: Cascade)
-  recordData   Json     @default("{}") @map("record_data") // GIN index to be added
+  recordData   Json     @default("{}") @map("record_data") // GIN index to be added via migration
   employee_id  String?
   amount       Decimal?
   date         DateTime?
@@ -402,7 +680,7 @@ model FormRecord8 {
   status       String   @default("submitted")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-  
+
   @@map("form_records_8")
   @@index([formId])
   @@index([submittedAt])
@@ -415,7 +693,7 @@ model FormRecord9 {
   id           String   @id @default(cuid())
   formId       String   @map("form_id")
   form         Form     @relation("FormRecord9", fields: [formId], references: [id], onDelete: Cascade)
-  recordData   Json     @default("{}") @map("record_data") // GIN index to be added
+  recordData   Json     @default("{}") @map("record_data") // GIN index to be added via migration
   employee_id  String?
   amount       Decimal?
   date         DateTime?
@@ -426,7 +704,7 @@ model FormRecord9 {
   status       String   @default("submitted")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-  
+
   @@map("form_records_9")
   @@index([formId])
   @@index([submittedAt])
@@ -439,7 +717,7 @@ model FormRecord10 {
   id           String   @id @default(cuid())
   formId       String   @map("form_id")
   form         Form     @relation("FormRecord10", fields: [formId], references: [id], onDelete: Cascade)
-  recordData   Json     @default("{}") @map("record_data") // GIN index to be added
+  recordData   Json     @default("{}") @map("record_data") // GIN index to be added via migration
   employee_id  String?
   amount       Decimal?
   date         DateTime?
@@ -450,7 +728,7 @@ model FormRecord10 {
   status       String   @default("submitted")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-  
+
   @@map("form_records_10")
   @@index([formId])
   @@index([submittedAt])
@@ -463,7 +741,7 @@ model FormRecord11 {
   id           String   @id @default(cuid())
   formId       String   @map("form_id")
   form         Form     @relation("FormRecord11", fields: [formId], references: [id], onDelete: Cascade)
-  recordData   Json     @default("{}") @map("record_data") // GIN index to be added
+  recordData   Json     @default("{}") @map("record_data") // GIN index to be added via migration
   employee_id  String?
   amount       Decimal?
   date         DateTime?
@@ -474,7 +752,7 @@ model FormRecord11 {
   status       String   @default("submitted")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-  
+
   @@map("form_records_11")
   @@index([formId])
   @@index([submittedAt])
@@ -487,7 +765,7 @@ model FormRecord12 {
   id           String   @id @default(cuid())
   formId       String   @map("form_id")
   form         Form     @relation("FormRecord12", fields: [formId], references: [id], onDelete: Cascade)
-  recordData   Json     @default("{}") @map("record_data") // GIN index to be added
+  recordData   Json     @default("{}") @map("record_data") // GIN index to be added via migration
   employee_id  String?
   amount       Decimal?
   date         DateTime?
@@ -498,7 +776,7 @@ model FormRecord12 {
   status       String   @default("submitted")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-  
+
   @@map("form_records_12")
   @@index([formId])
   @@index([submittedAt])
@@ -511,7 +789,7 @@ model FormRecord13 {
   id           String   @id @default(cuid())
   formId       String   @map("form_id")
   form         Form     @relation("FormRecord13", fields: [formId], references: [id], onDelete: Cascade)
-  recordData   Json     @default("{}") @map("record_data") // GIN index to be added
+  recordData   Json     @default("{}") @map("record_data") // GIN index to be added via migration
   employee_id  String?
   amount       Decimal?
   date         DateTime?
@@ -522,7 +800,7 @@ model FormRecord13 {
   status       String   @default("submitted")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-  
+
   @@map("form_records_13")
   @@index([formId])
   @@index([submittedAt])
@@ -535,7 +813,7 @@ model FormRecord14 {
   id           String   @id @default(cuid())
   formId       String   @map("form_id")
   form         Form     @relation("FormRecord14", fields: [formId], references: [id], onDelete: Cascade)
-  recordData   Json     @default("{}") @map("record_data") // GIN index to be added
+  recordData   Json     @default("{}") @map("record_data") // GIN index to be added via migration
   employee_id  String?
   amount       Decimal?
   date         DateTime?
@@ -546,7 +824,7 @@ model FormRecord14 {
   status       String   @default("submitted")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-  
+
   @@map("form_records_14")
   @@index([formId])
   @@index([submittedAt])
@@ -559,7 +837,7 @@ model FormRecord15 {
   id           String   @id @default(cuid())
   formId       String   @map("form_id")
   form         Form     @relation("FormRecord15", fields: [formId], references: [id], onDelete: Cascade)
-  recordData   Json     @default("{}") @map("record_data") // GIN index to be added
+  recordData   Json     @default("{}") @map("record_data") // GIN index to be added via migration
   employee_id  String?
   amount       Decimal?
   date         DateTime?
@@ -570,7 +848,7 @@ model FormRecord15 {
   status       String   @default("submitted")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-  
+
   @@map("form_records_15")
   @@index([formId])
   @@index([submittedAt])
@@ -584,12 +862,12 @@ model FormEvent {
   formId    String   @map("form_id")
   form      Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
   eventType String   @map("event_type")
-  payload   Json     @default("{}") // GIN index to be added
+  payload   Json     @default("{}") // GIN index to be added via migration
   sessionId String?  @map("session_id")
   userAgent String?  @map("user_agent")
   ipAddress String?  @map("ip_address")
   createdAt DateTime @default(now()) @map("created_at")
-  
+
   @@map("form_events")
   @@index([formId])
   @@index([eventType])
@@ -603,11 +881,11 @@ model FieldType {
   category     String
   icon         String
   description  String
-  defaultProps Json     @default("{}") @map("default_props") // GIN index to be added
+  defaultProps Json     @default("{}") @map("default_props") // GIN index to be added via migration
   active       Boolean  @default(true)
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-  
+
   @@map("field_types")
   @@index([category])
   @@index([active])
@@ -616,20 +894,19 @@ model FieldType {
 model LookupSource {
   id              String   @id @default(cuid())
   name            String
-  type            String   // "static", "module", "form", "api"
+  type            String
   description     String?
   sourceModuleId  String?  @map("source_module_id")
   sourceModule    FormModule? @relation(fields: [sourceModuleId], references: [id], onDelete: Cascade)
   sourceFormId    String?  @map("source_form_id")
   sourceForm      Form?    @relation(fields: [sourceFormId], references: [id], onDelete: Cascade)
   apiEndpoint     String?  @map("api_endpoint")
-  staticData      Json?    @map("static_data") // GIN index to be added
+  staticData      Json?    @map("static_data") // GIN index to be added via migration
   active          Boolean  @default(true)
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
-  
   fieldRelations  LookupFieldRelation[]
-  
+
   @@map("lookup_sources")
   @@index([type])
   @@index([active])
@@ -649,10 +926,10 @@ model LookupFieldRelation {
   valueField      String?     @map("value_field")
   multiple        Boolean?
   searchable      Boolean?
-  filters         Json        @default("{}") // GIN index to be added
+  filters         Json        @default("{}") // GIN index to be added via migration
   createdAt       DateTime    @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
-  
+
   @@map("lookup_field_relations")
   @@index([lookupSourceId])
   @@index([formFieldId])
@@ -660,73 +937,26 @@ model LookupFieldRelation {
   @@index([moduleId])
 }
 
-// RBAC Models - Simplified for designation purposes only
-model Role {
-  id          String          @id @default(cuid())
-  name        String          @unique // e.g., "Manager", "Admin" - just for designation
-  description String?         // Optional description of the role
-  createdAt   DateTime        @default(now()) @map("created_at")
-  updatedAt   DateTime        @updatedAt @map("updated_at")
-  
-  @@map("roles")
-  @@index([name])
-}
-
-// Deprecated - keeping for backward compatibility but not used for permissions
-model Permission {
-  id           String          @id @default(cuid())
-  name         String          @unique
-  description  String?
-  resourceId   String?
-  resourceType String?
-  createdAt    DateTime        @default(now()) @map("created_at")
-  updatedAt    DateTime        @updatedAt @map("updated_at")
-  
-  @@map("permissions")
-  @@index([name])
-  @@index([resourceId])
-  @@index([resourceType])
-}
-
-// Deprecated - keeping for backward compatibility
-model RolePermission {
-  id           String     @id @default(cuid())
-  roleId       String     @map("role_id")
-  permissionId String     @map("permission_id")
-  createdAt    DateTime   @default(now()) @map("created_at")
-  updatedAt    DateTime   @updatedAt @map("updated_at")
-  
-  @@map("role_permissions")
-  @@index([roleId])
-  @@index([permissionId])
-}
-
-// NEW: User-specific permissions table
 model UserPermission {
   id           String      @id @default(cuid())
-  userId       String      @map("user_id") // References FormRecord15.id
-  resourceType String      @map("resource_type") // "module" or "form"
-  resourceId   String      @map("resource_id") // FormModule.id or Form.id
-  
-  // Permission actions
+  userId       String      @map("user_id")
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resourceType String      @map("resource_type")
+  resourceId   String      @map("resource_id")
   canView      Boolean     @default(false) @map("can_view")
   canCreate    Boolean     @default(false) @map("can_create")
   canEdit      Boolean     @default(false) @map("can_edit")
   canDelete    Boolean     @default(false) @map("can_delete")
-  canManage    Boolean     @default(false) @map("can_manage") // Full control
-  
-  // System permissions (for admin users)
+  canManage    Boolean     @default(false) @map("can_manage")
   isSystemAdmin Boolean    @default(false) @map("is_system_admin")
-  
-  // Metadata
-  grantedBy    String?     @map("granted_by") // Who granted this permission
+  grantedBy    String?     @map("granted_by")
   grantedAt    DateTime    @default(now()) @map("granted_at")
-  expiresAt    DateTime?   @map("expires_at") // Optional expiration
+  expiresAt    DateTime?   @map("expires_at")
   isActive     Boolean     @default(true) @map("is_active")
-  
+  role         String?     // From first schema, for role-based permissions
   createdAt    DateTime    @default(now()) @map("created_at")
   updatedAt    DateTime    @updatedAt @map("updated_at")
-  
+
   @@map("user_permissions")
   @@unique([userId, resourceType, resourceId], name: "unique_user_resource_permission")
   @@index([userId])

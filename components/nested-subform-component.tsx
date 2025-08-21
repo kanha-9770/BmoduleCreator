@@ -27,7 +27,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { GripVertical, MoreHorizontal, Trash2, ChevronDown, ChevronRight, Plus, Check, X, Edit3, Layers, AlertTriangle, MapPin } from 'lucide-react'
+import { GripVertical, MoreHorizontal, Trash2, ChevronDown, ChevronRight, Plus, Check, X, Edit3, Layers, AlertTriangle } from 'lucide-react'
 import FieldComponent from "./field-component"
 import type { FormField, Subform } from "@/types/form-builder"
 import { useToast } from "@/hooks/use-toast"
@@ -42,13 +42,12 @@ interface NestedSubformComponentProps {
   isOverlay?: boolean
   maxNestingLevel?: number
 }
-
 // Enhanced color schemes for deep nesting
 const DEEP_NESTING_COLORS = [
-  { 
-    bg: "bg-indigo-50/40", 
-    border: "border-l-indigo-500", 
-    accent: "text-indigo-800", 
+  {
+    bg: "bg-indigo-50/40",
+    border: "border-l-indigo-500",
+    accent: "text-indigo-800",
     hover: "hover:bg-indigo-50",
     headerBg: "bg-indigo-25",
     levelBadge: "bg-indigo-100 text-indigo-800 border-indigo-300",
@@ -56,10 +55,10 @@ const DEEP_NESTING_COLORS = [
     leftBorder: "border-l-4 border-l-indigo-500",
     pathBadge: "bg-indigo-50 text-indigo-700 border-indigo-300"
   },
-  { 
-    bg: "bg-teal-50/40", 
-    border: "border-l-teal-500", 
-    accent: "text-teal-800", 
+  {
+    bg: "bg-teal-50/40",
+    border: "border-l-teal-500",
+    accent: "text-teal-800",
     hover: "hover:bg-teal-50",
     headerBg: "bg-teal-25",
     levelBadge: "bg-teal-100 text-teal-800 border-teal-300",
@@ -67,10 +66,10 @@ const DEEP_NESTING_COLORS = [
     leftBorder: "border-l-4 border-l-teal-500",
     pathBadge: "bg-teal-50 text-teal-700 border-teal-300"
   },
-  { 
-    bg: "bg-amber-50/40", 
-    border: "border-l-amber-500", 
-    accent: "text-amber-800", 
+  {
+    bg: "bg-amber-50/40",
+    border: "border-l-amber-500",
+    accent: "text-amber-800",
     hover: "hover:bg-amber-50",
     headerBg: "bg-amber-25",
     levelBadge: "bg-amber-100 text-amber-800 border-amber-300",
@@ -78,10 +77,10 @@ const DEEP_NESTING_COLORS = [
     leftBorder: "border-l-4 border-l-amber-500",
     pathBadge: "bg-amber-50 text-amber-700 border-amber-300"
   },
-  { 
-    bg: "bg-rose-50/40", 
-    border: "border-l-rose-500", 
-    accent: "text-rose-800", 
+  {
+    bg: "bg-rose-50/40",
+    border: "border-l-rose-500",
+    accent: "text-rose-800",
     hover: "hover:bg-rose-50",
     headerBg: "bg-rose-25",
     levelBadge: "bg-rose-100 text-rose-800 border-rose-300",
@@ -89,10 +88,10 @@ const DEEP_NESTING_COLORS = [
     leftBorder: "border-l-4 border-l-rose-500",
     pathBadge: "bg-rose-50 text-rose-700 border-rose-300"
   },
-  { 
-    bg: "bg-violet-50/40", 
-    border: "border-l-violet-500", 
-    accent: "text-violet-800", 
+  {
+    bg: "bg-violet-50/40",
+    border: "border-l-violet-500",
+    accent: "text-violet-800",
     hover: "hover:bg-violet-50",
     headerBg: "bg-violet-25",
     levelBadge: "bg-violet-100 text-violet-800 border-violet-300",
@@ -258,9 +257,9 @@ export default function NestedSubformComponent({
         onUpdateSubform({
           fields: [...subform.fields, newField],
         })
-        toast({ 
-          title: "Success", 
-          description: `Field added to nested subform successfully` 
+        toast({
+          title: "Success",
+          description: `Field added to nested subform successfully`
         })
       } else {
         throw new Error(result.error || "Failed to create field")
@@ -293,25 +292,25 @@ export default function NestedSubformComponent({
     try {
       console.log("Creating deeply nested subform for parent:", subform.id)
       const createdSubform = await onAddSubform(subform.id)
-      
+
       if (createdSubform && typeof createdSubform === 'object' && 'id' in createdSubform) {
         // Add the new nested subform to the current subform's children
         const newChildSubform = createdSubform as Subform
         const updatedChildSubforms = [...(subform.childSubforms || []), newChildSubform]
-        
+
         onUpdateSubform({
           childSubforms: updatedChildSubforms,
         })
-        
-        toast({ 
-          title: "Success", 
-          description: `Deeply nested subform added successfully` 
+
+        toast({
+          title: "Success",
+          description: `Deeply nested subform added successfully`
         })
       } else {
         // If the function doesn't return the subform, we'll rely on the parent to refresh
-        toast({ 
-          title: "Success", 
-          description: `Deeply nested subform created successfully` 
+        toast({
+          title: "Success",
+          description: `Deeply nested subform created successfully`
         })
       }
     } catch (error: any) {
@@ -353,11 +352,10 @@ export default function NestedSubformComponent({
           setDroppableRef(node)
         }}
         style={style}
-        className={`group transition-all duration-300 bg-white border border-gray-200 rounded-lg shadow-sm ${colorScheme.leftBorder} ${
-          isDragging
-            ? `shadow-2xl scale-105 rotate-1 z-50`
-            : `hover:shadow-md`
-        } ${isOver ? `ring-2 ring-blue-300 ring-opacity-50 ${colorScheme.bg}` : ""}`}
+        className={`group transition-all duration-300 bg-white border border-gray-200 rounded-lg shadow-sm ${colorScheme.leftBorder} ${isDragging
+          ? `shadow-2xl scale-105 rotate-1 z-50`
+          : `hover:shadow-md`
+          } ${isOver ? `ring-2 ring-blue-300 ring-opacity-50 ${colorScheme.bg}` : ""}`}
       >
         {/* Nested Subform Header */}
         <CardHeader className={`pb-2 ${colorScheme.headerBg} border-b border-gray-100`}>
@@ -483,7 +481,7 @@ export default function NestedSubformComponent({
                       Add Select Field
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem 
+                    <DropdownMenuItem
                       onClick={addNestedSubform}
                       disabled={!canNestDeeper}
                     >
@@ -511,8 +509,8 @@ export default function NestedSubformComponent({
           <CardContent className="p-3">
             {allItems.length > 0 ? (
               <div className="space-y-2">
-                <SortableContext 
-                  items={allItems.map(item => item.id)} 
+                <SortableContext
+                  items={allItems.map(item => item.id)}
                   strategy={verticalListSortingStrategy}
                 >
                   {allItems.map((item) => {
@@ -572,9 +570,8 @@ export default function NestedSubformComponent({
               </div>
             ) : (
               <div
-                className={`border-2 border-dashed rounded-lg p-4 text-center transition-all duration-200 ${
-                  isOver ? `border-blue-400 bg-blue-50 ring-2 ring-blue-200` : `border-gray-300 bg-gray-50`
-                }`}
+                className={`border-2 border-dashed rounded-lg p-4 text-center transition-all duration-200 ${isOver ? `border-blue-400 bg-blue-50 ring-2 ring-blue-200` : `border-gray-300 bg-gray-50`
+                  }`}
               >
                 <Layers className={`w-5 h-5 mx-auto mb-2 ${isOver ? 'text-blue-600' : colorScheme.accent}`} />
                 <p className={`text-xs mb-2 ${isOver ? 'text-blue-700 font-medium' : colorScheme.accent}`}>
@@ -621,7 +618,7 @@ export default function NestedSubformComponent({
             </AlertDialogTitle>
             <AlertDialogDescription className="space-y-2">
               <p>
-                Are you sure you want to delete the nested subform <strong>"{subform.name}"</strong> 
+                Are you sure you want to delete the nested subform <strong>"{subform.name}"</strong>
                 <span> (Level {level})</span>?
               </p>
               {(subform.fields.length > 0 || (subform.childSubforms?.length || 0) > 0) && (

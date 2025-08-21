@@ -29,6 +29,14 @@ export interface FormField {
   updatedAt: Date
 }
 
+// NEW: Interface for minimal parent subform structure
+export interface ParentSubform {
+  id: string
+  name: string
+  level: number
+  path?: string
+}
+
 // ENHANCED: Subform with nested support - matches Prisma schema
 export interface Subform {
   id: string
@@ -52,7 +60,7 @@ export interface Subform {
   
   fields: FormField[]
   childSubforms: Subform[] // NEW: Nested subforms
-  parentSubform?: Subform // NEW: Parent subform reference
+  parentSubform?: ParentSubform | null // UPDATED: Use ParentSubform instead of Subform
   
   createdAt: Date
   updatedAt: Date
@@ -96,6 +104,8 @@ export interface Form {
   isEmployeeForm?: boolean
   createdAt: Date
   updatedAt: Date
+  tableMapping?: Record<string, any> | null
+  totalRecords?: number
 }
 
 // NEW: Helper types for nested operations

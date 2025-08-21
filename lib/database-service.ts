@@ -35,10 +35,10 @@ export class DatabaseService {
   static async getModuleHierarchy(userPermissions?: any[]): Promise<any[]> {
     try {
       console.log("[DatabaseService] Getting module hierarchy with permission filtering")
-      
+
       const modules = await DatabaseModules.getModuleHierarchy()
       console.log(`[DatabaseService] Found ${modules.length} total modules`)
-      
+
       if (!userPermissions || userPermissions.length === 0) {
         console.log("[DatabaseService] No user permissions provided, returning all modules for now")
         // For development/testing, return all modules if no permissions
@@ -49,7 +49,7 @@ export class DatabaseService {
       // Filter modules based on user permissions
       const filteredModules = AuthMiddleware.filterModulesByPermissions(modules, userPermissions)
       console.log(`[DatabaseService] Filtered to ${filteredModules.length} accessible modules`)
-      
+
       return filteredModules
     } catch (error: any) {
       console.error("[DatabaseService] Error getting module hierarchy:", error)
@@ -78,7 +78,6 @@ export class DatabaseService {
   static async getForms(moduleId?: string, userPermissions?: any[]): Promise<any[]> {
     try {
       const forms = await DatabaseModules.getForms(moduleId)
-      
       if (!userPermissions || userPermissions.length === 0) {
         console.log("[DatabaseService] No user permissions provided for forms, returning all")
         return forms
@@ -87,9 +86,9 @@ export class DatabaseService {
       // Filter forms based on user permissions
       return forms.filter(form => {
         return AuthMiddleware.hasFormPermission(
-          userPermissions, 
-          form.moduleId, 
-          form.id, 
+          userPermissions,
+          form.moduleId,
+          form.id,
           "view"
         )
       })
@@ -102,9 +101,9 @@ export class DatabaseService {
   static async getForm(id: string, userPermissions?: any[]): Promise<any | null> {
     try {
       const form = await DatabaseModules.getForm(id)
-      
+
       if (!form) return null
-      
+
       if (!userPermissions || userPermissions.length === 0) {
         console.log("[DatabaseService] No user permissions provided for form access, allowing access")
         return form
@@ -112,9 +111,9 @@ export class DatabaseService {
 
       // Check if user has permission to view this form
       const hasAccess = AuthMiddleware.hasFormPermission(
-        userPermissions, 
-        form.moduleId, 
-        form.id, 
+        userPermissions,
+        form.moduleId,
+        form.id,
         "view"
       )
 
@@ -136,12 +135,11 @@ export class DatabaseService {
       const form = await DatabaseModules.getForm(id)
       if (form) {
         const hasAccess = AuthMiddleware.hasFormPermission(
-          userPermissions, 
-          form.moduleId, 
-          form.id, 
+          userPermissions,
+          form.moduleId,
+          form.id,
           "edit"
         )
-
         if (!hasAccess) {
           throw new Error("Insufficient permissions to update this form")
         }
@@ -150,14 +148,12 @@ export class DatabaseService {
 
     return DatabaseModules.updateForm(id, data)
   }
-
   // Section operations
   static createSection = DatabaseModules.createSection
   static getSections = DatabaseModules.getSections
   static updateSection = DatabaseModules.updateSection
   static deleteSection = DatabaseModules.deleteSection
   static deleteSectionWithCleanup = DatabaseModules.deleteSectionWithCleanup
-
   // Field operations
   static createField = DatabaseModules.createField
   static getFields = DatabaseModules.getFields
@@ -272,21 +268,21 @@ export class DatabaseService {
 
   // Permission validation helpers
   static async validateUserAccess(
-    userId: string, 
-    resourceType: 'module' | 'form', 
-    resourceId: string, 
+    userId: string,
+    resourceType: 'module' | 'form',
+    resourceId: string,
     action: string = 'view'
   ): Promise<boolean> {
     try {
       const permissions = await DatabaseRoles.getUserPermissionsWithResources(userId)
-      
+
       if (resourceType === 'module') {
         return AuthMiddleware.hasModulePermission(permissions, resourceId, action as any)
       } else {
         // For forms, we need to get the moduleId
         const form = await DatabaseModules.getForm(resourceId)
         if (!form) return false
-        
+
         return AuthMiddleware.hasFormPermission(permissions, form.moduleId, resourceId, action as any)
       }
     } catch (error: any) {

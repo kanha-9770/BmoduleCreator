@@ -5,6 +5,7 @@ import type {
   FormSection,
   FormField,
   FieldType,
+  Subform,
 } from "@/types/form-builder";
 import { DatabaseTransforms } from "./DatabaseTransforms";
 
@@ -66,7 +67,23 @@ export class DatabaseModules {
                     include: {
                       fields: true,
                       records: true,
+                      parentSubform: true,
+                      childSubforms: {
+                        include: {
+                          fields: true,
+                          records: true,
+                          childSubforms: {
+                            include: {
+                              fields: true,
+                              records: true,
+                            },
+                            orderBy: { order: "asc" },
+                          },
+                        },
+                        orderBy: { order: "asc" },
+                      },
                     },
+                    orderBy: { order: "asc" },
                   },
                 },
                 orderBy: { order: "asc" },
@@ -113,7 +130,23 @@ export class DatabaseModules {
                     include: {
                       fields: true,
                       records: true,
+                      parentSubform: true,
+                      childSubforms: {
+                        include: {
+                          fields: true,
+                          records: true,
+                          childSubforms: {
+                            include: {
+                              fields: true,
+                              records: true,
+                            },
+                            orderBy: { order: "asc" },
+                          },
+                        },
+                        orderBy: { order: "asc" },
+                      },
                     },
+                    orderBy: { order: "asc" },
                   },
                 },
                 orderBy: { order: "asc" },
@@ -201,7 +234,23 @@ export class DatabaseModules {
                     include: {
                       fields: true,
                       records: true,
+                      parentSubform: true,
+                      childSubforms: {
+                        include: {
+                          fields: true,
+                          records: true,
+                          childSubforms: {
+                            include: {
+                              fields: true,
+                              records: true,
+                            },
+                            orderBy: { order: "asc" },
+                          },
+                        },
+                        orderBy: { order: "asc" },
+                      },
                     },
+                    orderBy: { order: "asc" },
                   },
                 },
                 orderBy: { order: "asc" },
@@ -268,7 +317,23 @@ export class DatabaseModules {
                     include: {
                       fields: true,
                       records: true,
+                      parentSubform: true,
+                      childSubforms: {
+                        include: {
+                          fields: true,
+                          records: true,
+                          childSubforms: {
+                            include: {
+                              fields: true,
+                              records: true,
+                            },
+                            orderBy: { order: "asc" },
+                          },
+                        },
+                        orderBy: { order: "asc" },
+                      },
                     },
+                    orderBy: { order: "asc" },
                   },
                 },
                 orderBy: { order: "asc" },
@@ -342,7 +407,23 @@ export class DatabaseModules {
                     include: {
                       fields: true,
                       records: true,
+                      parentSubform: true,
+                      childSubforms: {
+                        include: {
+                          fields: true,
+                          records: true,
+                          childSubforms: {
+                            include: {
+                              fields: true,
+                              records: true,
+                            },
+                            orderBy: { order: "asc" },
+                          },
+                        },
+                        orderBy: { order: "asc" },
+                      },
                     },
+                    orderBy: { order: "asc" },
                   },
                 },
                 orderBy: { order: "asc" },
@@ -431,7 +512,23 @@ export class DatabaseModules {
                 include: {
                   fields: true,
                   records: true,
+                  parentSubform: true,
+                  childSubforms: {
+                    include: {
+                      fields: true,
+                      records: true,
+                      childSubforms: {
+                        include: {
+                          fields: true,
+                          records: true,
+                        },
+                        orderBy: { order: "asc" },
+                      },
+                    },
+                    orderBy: { order: "asc" },
+                  },
                 },
+                orderBy: { order: "asc" },
               },
             },
             orderBy: { order: "asc" },
@@ -475,6 +572,25 @@ export class DatabaseModules {
                     orderBy: { order: "asc" },
                   },
                   records: true,
+                  parentSubform: true,
+                  childSubforms: {
+                    include: {
+                      fields: {
+                        orderBy: { order: "asc" },
+                      },
+                      records: true,
+                      childSubforms: {
+                        include: {
+                          fields: {
+                            orderBy: { order: "asc" },
+                          },
+                          records: true,
+                        },
+                        orderBy: { order: "asc" },
+                      },
+                    },
+                    orderBy: { order: "asc" },
+                  },
                 },
                 orderBy: { order: "asc" },
               },
@@ -511,8 +627,11 @@ export class DatabaseModules {
     }
   }
 
+  // Enhanced getForm method with complete subform hierarchy
   static async getForm(id: string): Promise<Form | null> {
     try {
+      console.log("[DatabaseModules] Fetching form with complete subform hierarchy:", id);
+
       const form = await prisma.form.findUnique({
         where: { id },
         include: {
@@ -528,6 +647,57 @@ export class DatabaseModules {
                     orderBy: { order: "asc" },
                   },
                   records: true,
+                  parentSubform: {
+                    select: {
+                      id: true,
+                      name: true,
+                      level: true,
+                      path: true,
+                    },
+                  },
+                  childSubforms: {
+                    include: {
+                      fields: {
+                        orderBy: { order: "asc" },
+                      },
+                      records: true,
+                      parentSubform: {
+                        select: {
+                          id: true,
+                          name: true,
+                          level: true,
+                          path: true,
+                        },
+                      },
+                      childSubforms: {
+                        include: {
+                          fields: {
+                            orderBy: { order: "asc" },
+                          },
+                          records: true,
+                          parentSubform: {
+                            select: {
+                              id: true,
+                              name: true,
+                              level: true,
+                              path: true,
+                            },
+                          },
+                          childSubforms: {
+                            include: {
+                              fields: {
+                                orderBy: { order: "asc" },
+                              },
+                              records: true,
+                            },
+                            orderBy: { order: "asc" },
+                          },
+                        },
+                        orderBy: { order: "asc" },
+                      },
+                    },
+                    orderBy: { order: "asc" },
+                  },
                 },
                 orderBy: { order: "asc" },
               },
@@ -556,8 +726,27 @@ export class DatabaseModules {
         },
       });
 
-      if (!form) return null;
-      return DatabaseTransforms.transformForm(form);
+      if (!form) {
+        console.log("[DatabaseModules] Form not found:", id);
+        return null;
+      }
+
+      console.log("[DatabaseModules] Form found with sections:", form.sections?.length || 0);
+      
+      // Log subform hierarchy information
+      form.sections?.forEach((section, sIndex) => {
+        if (section.subforms?.length > 0) {
+          console.log(`[DatabaseModules] Section ${sIndex} has ${section.subforms.length} subforms`);
+          section.subforms.forEach((subform, sfIndex) => {
+            console.log(`[DatabaseModules] Subform ${sfIndex}: name="${subform.name}", level=${subform.level}, path="${subform.path}", children=${subform.childSubforms?.length || 0}`);
+          });
+        }
+      });
+
+      const transformedForm = DatabaseTransforms.transformForm(form);
+      console.log("[DatabaseModules] Successfully transformed form with complete hierarchy");
+      
+      return transformedForm;
     } catch (error: any) {
       console.error("Database error fetching form:", error);
       throw new Error(`Failed to fetch form: ${error?.message}`);
@@ -649,6 +838,25 @@ export class DatabaseModules {
                     orderBy: { order: "asc" },
                   },
                   records: true,
+                  parentSubform: true,
+                  childSubforms: {
+                    include: {
+                      fields: {
+                        orderBy: { order: "asc" },
+                      },
+                      records: true,
+                      childSubforms: {
+                        include: {
+                          fields: {
+                            orderBy: { order: "asc" },
+                          },
+                          records: true,
+                        },
+                        orderBy: { order: "asc" },
+                      },
+                    },
+                    orderBy: { order: "asc" },
+                  },
                 },
                 orderBy: { order: "asc" },
               },
@@ -768,6 +976,25 @@ export class DatabaseModules {
                 orderBy: { order: "asc" },
               },
               records: true,
+              parentSubform: true,
+              childSubforms: {
+                include: {
+                  fields: {
+                    orderBy: { order: "asc" },
+                  },
+                  records: true,
+                  childSubforms: {
+                    include: {
+                      fields: {
+                        orderBy: { order: "asc" },
+                      },
+                      records: true,
+                    },
+                    orderBy: { order: "asc" },
+                  },
+                },
+                orderBy: { order: "asc" },
+              },
             },
             orderBy: { order: "asc" },
           },
@@ -795,6 +1022,25 @@ export class DatabaseModules {
                 orderBy: { order: "asc" },
               },
               records: true,
+              parentSubform: true,
+              childSubforms: {
+                include: {
+                  fields: {
+                    orderBy: { order: "asc" },
+                  },
+                  records: true,
+                  childSubforms: {
+                    include: {
+                      fields: {
+                        orderBy: { order: "asc" },
+                      },
+                      records: true,
+                    },
+                    orderBy: { order: "asc" },
+                  },
+                },
+                orderBy: { order: "asc" },
+              },
             },
             orderBy: { order: "asc" },
           },
@@ -839,6 +1085,25 @@ export class DatabaseModules {
                 orderBy: { order: "asc" },
               },
               records: true,
+              parentSubform: true,
+              childSubforms: {
+                include: {
+                  fields: {
+                    orderBy: { order: "asc" },
+                  },
+                  records: true,
+                  childSubforms: {
+                    include: {
+                      fields: {
+                        orderBy: { order: "asc" },
+                      },
+                      records: true,
+                    },
+                    orderBy: { order: "asc" },
+                  },
+                },
+                orderBy: { order: "asc" },
+              },
             },
             orderBy: { order: "asc" },
           },
@@ -990,6 +1255,161 @@ export class DatabaseModules {
       throw new Error(
         `Failed to delete section with cleanup: ${error?.message}`
       );
+    }
+  }
+
+  // Subform operations
+  static async createSubform(data: {
+    sectionId?: string;
+    parentSubformId?: string;
+    name: string;
+    description?: string;
+    columns?: number;
+    order?: number;
+  }): Promise<Subform> {
+    try {
+      // Calculate level and path based on parent
+      let level = 0;
+      let path = "1";
+
+      if (data.parentSubformId) {
+        const parent = await prisma.subform.findUnique({
+          where: { id: data.parentSubformId },
+          select: { level: true, path: true },
+        });
+
+        if (parent) {
+          level = parent.level + 1;
+          // Count siblings to determine the next path segment
+          const siblingCount = await prisma.subform.count({
+            where: { parentSubformId: data.parentSubformId },
+          });
+          path = parent.path ? `${parent.path}.${siblingCount + 1}` : `${siblingCount + 1}`;
+        }
+      } else if (data.sectionId) {
+        // Count root-level subforms in the section
+        const siblingCount = await prisma.subform.count({
+          where: { 
+            sectionId: data.sectionId,
+            parentSubformId: null 
+          },
+        });
+        path = `${siblingCount + 1}`;
+      }
+
+      const subform = await prisma.subform.create({
+        data: {
+          sectionId: data.sectionId,
+          parentSubformId: data.parentSubformId,
+          name: data.name,
+          description: data.description,
+          columns: data.columns || 1,
+          order: data.order || 0,
+          level,
+          path,
+          visible: true,
+          collapsible: true,
+          collapsed: false,
+        },
+        include: {
+          fields: {
+            orderBy: { order: "asc" },
+          },
+          records: true,
+          parentSubform: {
+            select: {
+              id: true,
+              name: true,
+              level: true,
+              path: true,
+            },
+          },
+          childSubforms: {
+            include: {
+              fields: {
+                orderBy: { order: "asc" },
+              },
+              records: true,
+            },
+            orderBy: { order: "asc" },
+          },
+        },
+      });
+
+      return DatabaseTransforms.transformSubform(subform);
+    } catch (error: any) {
+      console.error("Database error creating subform:", error);
+      throw new Error(`Failed to create subform: ${error?.message}`);
+    }
+  }
+
+  static async updateSubform(
+    id: string,
+    data: Partial<Subform>
+  ): Promise<Subform> {
+    try {
+      const subform = await prisma.subform.update({
+        where: { id },
+        data: {
+          name: data.name,
+          description: data.description,
+          columns: data.columns,
+          order: data.order,
+          visible: data.visible,
+          collapsible: data.collapsible,
+          collapsed: data.collapsed,
+          styling: data.styling,
+          conditional: data.conditional,
+        },
+        include: {
+          fields: {
+            orderBy: { order: "asc" },
+          },
+          records: true,
+          parentSubform: {
+            select: {
+              id: true,
+              name: true,
+              level: true,
+              path: true,
+            },
+          },
+          childSubforms: {
+            include: {
+              fields: {
+                orderBy: { order: "asc" },
+              },
+              records: true,
+              childSubforms: {
+                include: {
+                  fields: {
+                    orderBy: { order: "asc" },
+                  },
+                  records: true,
+                },
+                orderBy: { order: "asc" },
+              },
+            },
+            orderBy: { order: "asc" },
+          },
+        },
+      });
+
+      return DatabaseTransforms.transformSubform(subform);
+    } catch (error: any) {
+      console.error("Database error updating subform:", error);
+      throw new Error(`Failed to update subform: ${error?.message}`);
+    }
+  }
+
+  static async deleteSubform(id: string): Promise<void> {
+    try {
+      await prisma.subform.delete({
+        where: { id },
+      });
+    } catch (error: any) {
+      console.error("Database error deleting subform:", error);
+      throw new Error(`Failed to delete subform: ${error?.message}`);
     }
   }
 

@@ -7,7 +7,7 @@ export async function PUT(
 ) {
   try {
     const body = await request.json();
-
+    console.log("Updating field:", params.fieldId, body);
     const field = await DatabaseService.updateField(params.fieldId, {
       sectionId: body.sectionId,
       subformId: body.subformId,

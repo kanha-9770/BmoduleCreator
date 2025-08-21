@@ -822,8 +822,7 @@ export default function PublicFormPage() {
 
     // Combine fields and child subforms for rendering
     const allItems = [
-      ...subform.fields.map(field => ({ type: 'field' as const, item: field, id: field.id, order: field.order })),
-      ...(subform.childSubforms || []).map(childSubform => ({ type: 'subform' as const, item: childSubform, id: childSubform.id, order: childSubform.order }))
+      ...subform.fields.map(field => ({ type: 'field' as const, item: field, id: field.id, order: field.order }))
     ].sort((a, b) => a.order - b.order);
 
     return (

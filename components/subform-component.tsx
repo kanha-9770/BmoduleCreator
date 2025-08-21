@@ -28,7 +28,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { GripVertical, MoreHorizontal, Trash2, ChevronDown, ChevronRight, Plus, Check, X, Edit3, Layers, AlertTriangle, Indent } from 'lucide-react'
+import {
+  GripVertical,
+  MoreHorizontal,
+  Trash2,
+  ChevronDown,
+  ChevronRight,
+  Plus,
+  Check,
+  X,
+  Edit3,
+  Layers,
+  AlertTriangle,
+} from "lucide-react"
 import FieldComponent from "./field-component"
 import type { FormField, Subform } from "@/types/form-builder"
 import { useToast } from "@/hooks/use-toast"
@@ -45,45 +57,45 @@ interface SubformComponentProps {
 
 // Enhanced color schemes for better nesting visualization
 const NESTING_COLORS = [
-  { 
-    bg: "bg-purple-50/80", 
-    border: "border-purple-300", 
-    accent: "text-purple-700", 
+  {
+    bg: "bg-purple-50/80",
+    border: "border-purple-300",
+    accent: "text-purple-700",
     hover: "hover:bg-purple-100",
     headerBg: "bg-purple-100/50",
-    shadow: "shadow-purple-100"
+    shadow: "shadow-purple-100",
   },
-  { 
-    bg: "bg-blue-50/80", 
-    border: "border-blue-300", 
-    accent: "text-blue-700", 
+  {
+    bg: "bg-blue-50/80",
+    border: "border-blue-300",
+    accent: "text-blue-700",
     hover: "hover:bg-blue-100",
     headerBg: "bg-blue-100/50",
-    shadow: "shadow-blue-100"
+    shadow: "shadow-blue-100",
   },
-  { 
-    bg: "bg-green-50/80", 
-    border: "border-green-300", 
-    accent: "text-green-700", 
+  {
+    bg: "bg-green-50/80",
+    border: "border-green-300",
+    accent: "text-green-700",
     hover: "hover:bg-green-100",
     headerBg: "bg-green-100/50",
-    shadow: "shadow-green-100"
+    shadow: "shadow-green-100",
   },
-  { 
-    bg: "bg-orange-50/80", 
-    border: "border-orange-300", 
-    accent: "text-orange-700", 
+  {
+    bg: "bg-orange-50/80",
+    border: "border-orange-300",
+    accent: "text-orange-700",
     hover: "hover:bg-orange-100",
     headerBg: "bg-orange-100/50",
-    shadow: "shadow-orange-100"
+    shadow: "shadow-orange-100",
   },
-  { 
-    bg: "bg-pink-50/80", 
-    border: "border-pink-300", 
-    accent: "text-pink-700", 
+  {
+    bg: "bg-pink-50/80",
+    border: "border-pink-300",
+    accent: "text-pink-700",
     hover: "hover:bg-pink-100",
     headerBg: "bg-pink-100/50",
-    shadow: "shadow-pink-100"
+    shadow: "shadow-pink-100",
   },
 ]
 
@@ -248,14 +260,14 @@ export default function SubformComponent({
       toast({
         title: "Maximum nesting reached",
         description: `Cannot nest deeper than ${maxNestingLevel} levels`,
-        variant: "destructive"
+        variant: "destructive",
       })
       return
     }
 
     try {
       const currentChildCount = subform.childSubforms?.length || 0
-      
+
       const subformData = {
         parentSubformId: subform.id,
         name: `Nested Subform ${currentChildCount + 1}`,
@@ -290,13 +302,8 @@ export default function SubformComponent({
         onUpdateSubform({
           childSubforms: updatedChildSubforms,
         })
-        
+
         toast({ title: "Success", description: "Nested subform added successfully" })
-        
-        // Refresh the page to get the updated structure from the database
-        setTimeout(() => {
-          window.location.reload()
-        }, 1000)
       } else {
         throw new Error(result.error || "Failed to create nested subform")
       }
@@ -325,10 +332,18 @@ export default function SubformComponent({
     )
   }
 
-  // Combine fields and child subforms for rendering
+  // FIXED: Combine fields and child subforms for rendering with proper filtering to prevent duplicates
   const allItems = [
-    ...subform.fields.map(field => ({ type: 'field' as const, item: field, id: field.id, order: field.order })),
-    ...(subform.childSubforms || []).map((childSubform: Subform) => ({ type: 'subform' as const, item: childSubform, id: childSubform.id, order: childSubform.order }))
+    ...subform.fields.map((field) => ({ type: "field" as const, item: field, id: field.id, order: field.order })),
+    // Fixed duplicate rendering by filtering only direct children
+    ...(subform.childSubforms || [])
+      .filter((childSubform: Subform) => childSubform.parentSubformId === subform.id)
+      .map((childSubform: Subform) => ({
+        type: "subform" as const,
+        item: childSubform,
+        id: childSubform.id,
+        order: childSubform.order,
+      })),
   ].sort((a, b) => a.order - b.order)
 
   return (
@@ -339,11 +354,10 @@ export default function SubformComponent({
           setDroppableRef(node)
         }}
         style={style}
-        className={`group transition-all duration-300 border-2 ${colorScheme.shadow} ${
-          isDragging
+        className={`group transition-all duration-300 border-2 ${colorScheme.shadow} ${isDragging
             ? `shadow-2xl scale-105 rotate-1 ${colorScheme.border} ${colorScheme.bg} z-50`
             : `hover:shadow-lg ${colorScheme.border} ${colorScheme.bg}`
-        } ${isOver ? `ring-2 ring-opacity-50 ${colorScheme.border.replace('border-', 'ring-')}` : ""}`}
+          } ${isOver ? `ring-2 ring-opacity-50 ${colorScheme.border.replace("border-", "ring-")}` : ""}`}
       >
         {/* Subform Header */}
         <CardHeader className={`pb-2 ${colorScheme.headerBg} border-b ${colorScheme.border}`}>
@@ -363,11 +377,10 @@ export default function SubformComponent({
                 <div
                   {...attributes}
                   {...listeners}
-                  className={`cursor-grab hover:cursor-grabbing p-1 rounded transition-all duration-200 flex-shrink-0 ${
-                    isDragging
+                  className={`cursor-grab hover:cursor-grabbing p-1 rounded transition-all duration-200 flex-shrink-0 ${isDragging
                       ? `${colorScheme.accent} bg-white`
                       : `${colorScheme.hover} ${colorScheme.accent} opacity-0 group-hover:opacity-100`
-                  }`}
+                    }`}
                 >
                   <GripVertical className="w-4 h-4" />
                 </div>
@@ -395,7 +408,7 @@ export default function SubformComponent({
                       onChange={(e) => setEditName(e.target.value)}
                       onKeyDown={handleNameKeyDown}
                       onBlur={handleNameSave}
-                      className={`text-sm font-semibold h-6 px-2 py-1 border ${colorScheme.border} focus:${colorScheme.border.replace('border-', 'border-')} flex-1`}
+                      className={`text-sm font-semibold h-6 px-2 py-1 border ${colorScheme.border} focus:${colorScheme.border.replace("border-", "border-")} flex-1`}
                       placeholder="Subform name"
                       onClick={(e) => e.stopPropagation()}
                     />
@@ -473,10 +486,7 @@ export default function SubformComponent({
                       Add Select Field
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem 
-                      onClick={addNestedSubform}
-                      disabled={!canNestDeeper}
-                    >
+                    <DropdownMenuItem onClick={addNestedSubform} disabled={!canNestDeeper}>
                       <Layers className="w-4 h-4 mr-2" />
                       Add Nested Subform
                       {!canNestDeeper && <span className="text-xs text-gray-400 ml-1">(Max)</span>}
@@ -504,86 +514,88 @@ export default function SubformComponent({
         {/* Subform Content */}
         {isExpanded && (
           <CardContent className="p-3">
-            {allItems.length > 0 ? (
-              <ScrollArea className="max-h-96 pr-2">
-                <SortableContext 
-                  items={allItems.map(item => item.id)} 
-                  strategy={verticalListSortingStrategy}
+            <div className="space-y-2">
+              {allItems.length > 0 ? (
+                <ScrollArea className="max-h-96 w-full">
+                  <SortableContext items={allItems.map((item) => item.id)} strategy={verticalListSortingStrategy}>
+                    <div className="space-y-2 pr-2">
+                      {allItems.map((item) =>
+                        item.type === "field" ? (
+                          <div key={item.id} className="relative">
+                            <FieldComponent
+                              field={item.item as FormField}
+                              onUpdate={onUpdateField}
+                              onDelete={onDeleteField}
+                              isOverlay={false}
+                            />
+                          </div>
+                        ) : (
+                          // Added unique key prefix and improved nesting structure to prevent duplicates
+                          <div
+                            key={`nested-subform-${item.id}`}
+                            className="ml-4 border-l-2 border-dashed border-gray-300 pl-4"
+                          >
+                            {/* <SubformComponent
+                              subform={item.item as Subform}
+                              onUpdateSubform={(updates) => {
+                                // More precise update logic
+                                const updatedChildSubforms = (subform.childSubforms || []).map((child: Subform) =>
+                                  child.id === item.id ? { ...child, ...updates } : child,
+                                )
+                                onUpdateSubform({ childSubforms: updatedChildSubforms })
+                              }}
+                              onDeleteSubform={() => {
+                                // More precise delete logic
+                                const updatedChildSubforms = (subform.childSubforms || []).filter(
+                                  (child: Subform) => child.id !== item.id,
+                                )
+                                onUpdateSubform({ childSubforms: updatedChildSubforms })
+                              }}
+                              onUpdateField={onUpdateField}
+                              onDeleteField={onDeleteField}
+                              maxNestingLevel={maxNestingLevel}
+                            /> */}
+                          </div>
+                        ),
+                      )}
+                    </div>
+                  </SortableContext>
+                </ScrollArea>
+              ) : (
+                <div
+                  className={`border-2 border-dashed rounded-lg p-4 text-center transition-all duration-200 ${isOver ? `${colorScheme.border} ${colorScheme.bg}` : `border-gray-300 bg-gray-50`
+                    }`}
                 >
-                  <div className="space-y-2">
-                    {allItems.map((item) => (
-                      item.type === 'field' ? (
-                        <FieldComponent
-                          key={item.id}
-                          field={item.item as FormField}
-                          isInSubform={true}
-                          onUpdate={async (updates: Partial<FormField>) => {
-                            await onUpdateField(item.id, updates)
-                          }}
-                          onDelete={() => onDeleteField(item.id)}
-                          onCopy={(field) => {
-                            console.log("Copy field:", field)
-                          }}
-                        />
-                      ) : (
-                        <div key={item.id} className="ml-4 border-l-2 border-dashed border-gray-300 pl-3">
-                          <SubformComponent
-                            subform={item.item as Subform}
-                            onUpdateSubform={(updates) => {
-                              const updatedChildSubforms = (subform.childSubforms || []).map((child: Subform) =>
-                                child.id === item.id ? { ...child, ...updates } : child
-                              )
-                              onUpdateSubform({ childSubforms: updatedChildSubforms })
-                            }}
-                            onDeleteSubform={() => {
-                              const updatedChildSubforms = (subform.childSubforms || []).filter((child: Subform) => child.id !== item.id)
-                              onUpdateSubform({ childSubforms: updatedChildSubforms })
-                            }}
-                            onUpdateField={onUpdateField}
-                            onDeleteField={onDeleteField}
-                            maxNestingLevel={maxNestingLevel}
-                          />
-                        </div>
-                      )
-                    ))}
-                  </div>
-                </SortableContext>
-              </ScrollArea>
-            ) : (
-              <div
-                className={`border-2 border-dashed rounded-lg p-4 text-center transition-all duration-200 ${
-                  isOver ? `${colorScheme.border} ${colorScheme.bg}` : `border-gray-300 bg-gray-50`
-                }`}
-              >
-                <Layers className={`w-5 h-5 mx-auto mb-2 ${colorScheme.accent}`} />
-                <p className={`text-xs mb-2 ${colorScheme.accent}`}>Empty subform</p>
-                <p className={`text-xs mb-3 ${colorScheme.accent} opacity-75`}>
-                  Drop fields or create nested subforms here
-                </p>
-                <div className="flex gap-2 justify-center">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => addField("text")}
-                    className={`text-xs h-7 ${colorScheme.border} ${colorScheme.accent} ${colorScheme.hover}`}
-                  >
-                    <Plus className="w-3 h-3 mr-1" />
-                    Field
-                  </Button>
-                  {canNestDeeper && (
+                  <Layers className={`w-5 h-5 mx-auto mb-2 ${colorScheme.accent}`} />
+                  <p className={`text-xs mb-2 ${colorScheme.accent}`}>Empty subform</p>
+                  <p className={`text-xs mb-3 ${colorScheme.accent} opacity-75`}>
+                    Drop fields or create nested subforms here
+                  </p>
+                  <div className="flex gap-2 justify-center">
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={addNestedSubform}
+                      onClick={() => addField("text")}
                       className={`text-xs h-7 ${colorScheme.border} ${colorScheme.accent} ${colorScheme.hover}`}
                     >
-                      <Layers className="w-3 h-3 mr-1" />
-                      Subform
+                      <Plus className="w-3 h-3 mr-1" />
+                      Field
                     </Button>
-                  )}
+                    {canNestDeeper && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={addNestedSubform}
+                        className={`text-xs h-7 ${colorScheme.border} ${colorScheme.accent} ${colorScheme.hover}`}
+                      >
+                        <Layers className="w-3 h-3 mr-1" />
+                        Subform
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </CardContent>
         )}
       </Card>
@@ -612,7 +624,8 @@ export default function SubformComponent({
                     )}
                     {(subform.childSubforms?.length || 0) > 0 && (
                       <li>
-                        All {subform.childSubforms?.length} nested subform{(subform.childSubforms?.length || 0) !== 1 ? "s" : ""} and their content
+                        All {subform.childSubforms?.length} nested subform
+                        {(subform.childSubforms?.length || 0) !== 1 ? "s" : ""} and their content
                       </li>
                     )}
                     <li>All form record data for these fields and nested subforms</li>

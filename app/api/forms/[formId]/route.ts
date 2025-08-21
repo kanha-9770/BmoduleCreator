@@ -5,7 +5,7 @@ export async function GET(request: NextRequest, { params }: { params: { formId: 
   try {
     console.log("API: Fetching form:", params.formId)
     const form = await DatabaseService.getForm(params.formId)
-
+    console.log("API: Form fetched successfully:akash", form)
     if (!form) {
       return NextResponse.json({ success: false, error: "Form not found" }, { status: 404 })
     }
