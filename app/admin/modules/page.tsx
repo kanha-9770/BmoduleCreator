@@ -180,9 +180,11 @@ export default function HomePage() {
   const [selectedModule, setSelectedModule] = useState<FormModule | null>(null);
   const [selectedForm, setSelectedForm] = useState<Form | null>(null);
   const [formRecords, setFormRecords] = useState<EnhancedFormRecord[]>([]);
+  
   const [formFieldsWithSections, setFormFieldsWithSections] = useState<
     FormFieldWithSection[]
   >([]);
+
   const [loading, setLoading] = useState(true);
   const [recordsLoading, setRecordsLoading] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -1269,9 +1271,8 @@ export default function HomePage() {
         await fetchModules();
         toast({
           title: "Success",
-          description: `Form ${
-            form.isPublished ? "unpublished" : "published"
-          } successfully!`,
+          description: `Form ${form.isPublished ? "unpublished" : "published"
+            } successfully!`,
         });
       } else {
         throw new Error(data.error || "Failed to publish form");
@@ -1333,9 +1334,8 @@ export default function HomePage() {
         className="border-b border-gray-200"
       >
         <AccordionTrigger
-          className={`py-2 pl-${
-            4 + level * 2
-          } pr-4 hover:bg-gray-50 rounded-lg transition-colors duration-200`}
+          className={`py-2 pl-${4 + level * 2
+            } pr-4 hover:bg-gray-50 rounded-lg transition-colors duration-200`}
         >
           <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
             <FileText className="h-4 w-4 text-gray-500" />
@@ -1443,13 +1443,12 @@ export default function HomePage() {
           {forms.map((form: Form, index) => (
             <tr
               key={form.id}
-              className={`border-b border-gray-300 hover:bg-gray-50 cursor-pointer ${
-                selectedForm?.id === form.id
+              className={`border-b border-gray-300 hover:bg-gray-50 cursor-pointer ${selectedForm?.id === form.id
                   ? "bg-blue-50"
                   : index % 2 === 0
-                  ? "bg-white"
-                  : "bg-gray-50"
-              }`}
+                    ? "bg-white"
+                    : "bg-gray-50"
+                }`}
               onClick={() => setSelectedForm(form)}
             >
               <td className="p-2 text-gray-700 border-r border-gray-300">
@@ -1530,13 +1529,12 @@ export default function HomePage() {
           {forms.map((form: Form, index) => (
             <tr
               key={form.id}
-              className={`border-b border-gray-300 hover:bg-gray-50 cursor-pointer ${
-                selectedForm?.id === form.id
+              className={`border-b border-gray-300 hover:bg-gray-50 cursor-pointer ${selectedForm?.id === form.id
                   ? "bg-blue-50"
                   : index % 2 === 0
-                  ? "bg-white"
-                  : "bg-gray-50"
-              }`}
+                    ? "bg-white"
+                    : "bg-gray-50"
+                }`}
               onClick={() => setSelectedForm(form)}
             >
               <td className="p-3 text-gray-700">
@@ -2163,7 +2161,7 @@ export default function HomePage() {
                                           <Checkbox
                                             checked={
                                               selectedRecords.size ===
-                                                filteredRecords.length &&
+                                              filteredRecords.length &&
                                               filteredRecords.length > 0
                                             }
                                             onCheckedChange={(checked) => {
@@ -2477,14 +2475,14 @@ export default function HomePage() {
                                             5,
                                             Math.ceil(
                                               filteredRecords.length /
-                                                recordsPerPage
+                                              recordsPerPage
                                             )
                                           ),
                                         },
                                         (_, i) => {
                                           const totalPages = Math.ceil(
                                             filteredRecords.length /
-                                              recordsPerPage
+                                            recordsPerPage
                                           );
                                           let pageNum;
                                           if (totalPages <= 5) {
@@ -2527,7 +2525,7 @@ export default function HomePage() {
                                           Math.min(
                                             Math.ceil(
                                               filteredRecords.length /
-                                                recordsPerPage
+                                              recordsPerPage
                                             ),
                                             currentPage + 1
                                           )
@@ -2537,7 +2535,7 @@ export default function HomePage() {
                                         currentPage ===
                                         Math.ceil(
                                           filteredRecords.length /
-                                            recordsPerPage
+                                          recordsPerPage
                                         )
                                       }
                                       className="text-xs"
