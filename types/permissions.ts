@@ -1,52 +1,37 @@
 export interface Permission {
   id: string
-  employeeId: string
-  moduleId: string
-  submoduleId: string
-  permissionType: 'view' | 'add' | 'edit' | 'delete'
-  value: boolean
+  name: string
+  description: string
+  category: "read" | "write" | "delete" | "admin" | "special"
+  resource: string
+}
+
+export interface RolePermission {
+  roleId: string
+  permissionId: string
+  granted: boolean
+  inheritedFrom?: string // Role ID that this permission is inherited from
+  canDelegate: boolean
+}
+
+export interface DataSharingRule {
+  id: string
+  name: string
+  description: string
+  sourceUnitId: string
+  targetUnitId: string
+  dataTypes: string[]
+  accessLevel: "read" | "write" | "full"
+  conditions: string[]
+  isActive: boolean
   createdAt: Date
   updatedAt: Date
 }
 
-export interface EmployeePermissions {
-  id: string
-  name: string
-  email: string
-  role: string
-  department: string
-  status: string
-  permissions: {
-    [moduleId: string]: {
-      [submoduleId: string]: {
-        view: boolean
-        add: boolean
-        edit: boolean
-        delete: boolean
-      }
-    }
-  }
-}
-
-export interface ModuleWithSubmodules {
-  id: string
-  name: string
-  description?: string
-  icon?: string
-  color?: string
-  isActive: boolean
-  subModules: {
-    id: string
-    name: string
-    description?: string
-    isActive: boolean
-  }[]
-}
-
-export interface PermissionChangeRequest {
-  employeeId: string
-  moduleId: string
-  submoduleId: string
-  permissionType: 'view' | 'add' | 'edit' | 'delete'
-  value: boolean
+export interface UserPermissionOverride {
+  userId: string
+  permissionId: string
+  granted: boolean
+  reason: string
+  expiresAt?: Date
 }

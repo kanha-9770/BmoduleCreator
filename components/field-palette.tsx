@@ -3,7 +3,27 @@
 import { useDraggable } from "@dnd-kit/core";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Type, AlignLeft, Hash, Mail, Calendar, CheckSquare, Radio, ChevronDown, Upload, Search, Phone, Link, Star, Clock, MapPin, User, CreditCard, ImageIcon, Layers } from 'lucide-react';
+import {
+  Type,
+  AlignLeft,
+  Hash,
+  Mail,
+  Calendar,
+  CheckSquare,
+  Radio,
+  ChevronDown,
+  Upload,
+  Search,
+  Phone,
+  Link,
+  Star,
+  Clock,
+  MapPin,
+  User,
+  CreditCard,
+  ImageIcon,
+  Layers,
+} from "lucide-react";
 
 export const fieldTypes = [
   {
@@ -150,10 +170,10 @@ function PaletteItem({ fieldType }: PaletteItemProps) {
     useDraggable({
       id: fieldType.id,
       data: {
-        type: "PaletteField", // Changed from "PaletteItem" to match detection logic
-        isPaletteItem: true, // CRITICAL FLAG - This is what the drop detection looks for
+        type: "PaletteField",
+        isPaletteItem: true,
         fieldType: fieldType.id,
-        fieldData: fieldType, // Include full field data for overlay
+        fieldData: fieldType,
       },
     });
 
@@ -232,7 +252,7 @@ export default function FieldPalette() {
           Drag fields to add them to your form
         </p>
       </div>
-      <div className="flex-1 overflow-y-auto p-4 space-y-6 ">
+      <div className="flex-1 overflow-y-auto p-4 space-y-6">
         {categories.map((category) => (
           <div key={category}>
             <div className="flex items-center justify-between mb-3">

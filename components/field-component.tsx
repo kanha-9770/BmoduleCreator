@@ -206,9 +206,8 @@ export default function FieldComponent({
       return (
         <div
           ref={setDroppableRef}
-          className={`border-2 border-dashed rounded-lg p-6 text-center transition-all duration-200 ${
-            isOver ? "border-blue-400 bg-blue-50" : "border-gray-300 bg-gray-50"
-          }`}
+          className={`border-2 border-dashed rounded-lg p-6 text-center transition-all duration-200 ${isOver ? "border-blue-400 bg-blue-50" : "border-gray-300 bg-gray-50"
+            }`}
         >
           {subformFields.length > 0 ? (
             <SortableContext items={subformFields.map((f: FormField) => f.id)} strategy={verticalListSortingStrategy}>
@@ -411,9 +410,8 @@ export default function FieldComponent({
             {[1, 2, 3, 4, 5].map((rating) => (
               <Star
                 key={rating}
-                className={`h-6 w-6 ${
-                  rating <= (previewValue || 0) ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
-                }`}
+                className={`h-6 w-6 ${rating <= (previewValue || 0) ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
+                  }`}
               />
             ))}
             <span className={`ml-2 text-sm ${isInSubform ? "text-purple-600" : "text-muted-foreground"}`}>
@@ -436,9 +434,8 @@ export default function FieldComponent({
       case "hidden":
         return (
           <div
-            className={`flex items-center space-x-2 p-2 rounded border-dashed border-2 ${
-              isInSubform ? "bg-purple-50 border-purple-200" : "bg-gray-100 border-gray-300"
-            }`}
+            className={`flex items-center space-x-2 p-2 rounded border-dashed border-2 ${isInSubform ? "bg-purple-50 border-purple-200" : "bg-gray-100 border-gray-300"
+              }`}
           >
             <EyeOff className={`h-4 w-4 ${isInSubform ? "text-purple-500" : "text-gray-500"}`} />
             <span className={`text-sm ${isInSubform ? "text-purple-600" : "text-gray-500"}`}>Hidden Field</span>
@@ -463,15 +460,12 @@ export default function FieldComponent({
   // Dynamic styling based on context
   const getCardStyles = () => {
     if (isInSubform) {
-      return `group relative transition-all duration-200 border-l-4 border-l-purple-400 ${
-        isDragging ? "shadow-2xl scale-105 rotate-1 border-purple-500 bg-purple-100" : "hover:shadow-md bg-purple-50/50"
-      } ${!field.visible ? "opacity-50" : ""} ${field.readonly ? "bg-purple-100/50" : ""}`
+      return `group relative transition-all duration-200 border-l-4 border-l-purple-400 ${isDragging ? "shadow-2xl scale-105 rotate-1 border-purple-500 bg-purple-100" : "hover:shadow-md bg-purple-50/50"
+        } ${!field.visible ? "opacity-50" : ""} ${field.readonly ? "bg-purple-100/50" : ""}`
     }
-    return `group relative transition-all duration-200 ${
-      isDragging ? "shadow-2xl scale-105 rotate-1 border-blue-400 bg-blue-50" : "hover:shadow-md"
-    } ${!field.visible ? "opacity-50" : ""} ${
-      field.readonly ? "bg-gray-50" : ""
-    } ${field.type === "subform" ? "border-2 border-dashed" : ""}`
+    return `group relative transition-all duration-200 ${isDragging ? "shadow-2xl scale-105 rotate-1 border-blue-400 bg-blue-50" : "hover:shadow-md"
+      } ${!field.visible ? "opacity-50" : ""} ${field.readonly ? "bg-gray-50" : ""
+      } ${field.type === "subform" ? "border-2 border-dashed" : ""}`
   }
 
   const getGripStyles = () => {
@@ -580,9 +574,8 @@ export default function FieldComponent({
           </div>
           {/* Field Info */}
           <div
-            className={`mt-3 flex items-center justify-between text-xs ${
-              isInSubform ? "text-purple-600" : "text-muted-foreground"
-            }`}
+            className={`mt-3 flex items-center justify-between text-xs ${isInSubform ? "text-purple-600" : "text-muted-foreground"
+              }`}
           >
             <span>ID: {field.id}</span>
             <span>Order: {field.order}</span>
