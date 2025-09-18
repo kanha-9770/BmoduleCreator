@@ -1,24 +1,28 @@
-import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import { NextRequest, NextResponse } from 'next/server'
+import { deleteSession } from '@/lib/auth'
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
-    // Clear authentication cookies
-    cookies().delete('auth_token'); // Replace with your actual cookie name
-    cookies().delete('refresh_token'); // If using refresh tokens
+    const token = request.cookies.get('auth-token')?.value
 
-    return NextResponse.json({
+    if (token) {
+      await deleteSession(token)
+    }
+
+    const response = NextResponse.json({
       success: true,
-      message: 'Logged out successfully'
-    });
-  } catch (error: any) {
-    console.error('Logout error:', error);
+      message: 'Logged out successfully',
+    })
+
+    // Clear authentication cookie
+    response.cookies.delete('auth-token')
+
+    return response
+  } catch (error) {
+    console.error('Logout error:', error)
     return NextResponse.json(
-      {
-        success: false,
-        error: error?.message || 'Failed to logout'
-      },
+      { error: 'Internal server error' },
       { status: 500 }
-    );
+    )
   }
 }

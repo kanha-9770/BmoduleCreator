@@ -1,22 +1,21 @@
-import type React from "react"
-import type { Metadata } from "next"
-import { Inter } from "next/font/google"
-import "./globals.css"
-import { Providers } from "@/components/providers"
-import { ConditionalLayout } from "@/components/ConditionalLayout"
+import type React from "react";
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
+import { ConditionalLayout } from "@/components/ConditionalLayout";
 
-const inter = Inter({ subsets: ["latin"] })
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "ERP System",
   description: "Complete Enterprise Resource Planning System",
-  generator: "v0.dev",
-}
+  generator: "Complete Enterprise Resource Planning System",
+};
 
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
   return (
     <html lang="en">
@@ -24,5 +23,5 @@ export default function RootLayout({
         <ConditionalLayout>{children}</ConditionalLayout>
       </body>
     </html>
-  )
+  );
 }

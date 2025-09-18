@@ -178,7 +178,7 @@ export default function OrganizationManagement() {
                     RBAC & Organizational Hierarchy
                   </p>
                 </div>
-              </div>    
+              </div>
             </div>
           </div>
         </header>

@@ -1,44 +1,25 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { AuthMiddleware } from "@/lib/auth-middleware"
-import { DatabaseRoles } from "@/lib/DatabaseRoles"
+import { getPermissions } from "@/lib/database"
+import { NextResponse } from "next/server"
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    console.log("[API] /api/users/permissions - Getting user permissions")
+    console.log("[v0] GET /api/permissions - Starting request")
 
-    // Get authenticated user context
-    const authResult = await AuthMiddleware.getUserFromRequest(request)
-
-    if (!authResult) {
-      console.log("[API] /api/users/permissions - No authentication found")
-      return NextResponse.json({ success: false, error: "Authentication required" }, { status: 401 })
-    }
-
-    const { userId, userEmail } = authResult
-    console.log(`[API] /api/users/permissions - Getting permissions for user: ${userEmail}`)
-
-    // Get user permissions with resource details using your existing service
-    const permissions = await DatabaseRoles.getUserPermissionsWithResources(userId)
-
-    console.log(`[API] /api/users/permissions - Found ${permissions.length} permissions`)
+    const permissions = await getPermissions()
+    console.log(`[v0] Retrieved permissions from database: ${permissions.length}`)
+    console.log("[v0] Successfully retrieved", permissions.length, "permissions")
 
     return NextResponse.json({
       success: true,
       data: permissions,
-      meta: {
-        userId,
-        userEmail,
-        permissionCount: permissions.length,
-        isSystemAdmin: permissions.some((p) => p.isSystemAdmin),
-      },
     })
-  } catch (error: any) {
-    console.error("[API] /api/users/permissions - Error:", error)
+  } catch (error) {
+    console.error("[v0] Failed to fetch permissions:", error)
     return NextResponse.json(
       {
         success: false,
-        error: error.message || "Failed to fetch user permissions",
-        details: process.env.NODE_ENV === "development" ? error.stack : undefined,
+        error: "Failed to fetch permissions",
+        details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },
     )

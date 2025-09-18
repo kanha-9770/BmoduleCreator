@@ -4,37 +4,40 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { LoginSchema } from '@/lib/validations'
+import { RegisterSchema } from '@/lib/validations'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { useToast } from '@/hooks/use-toast'
-import { Loader2, LogIn, Mail, Lock, Eye, EyeOff } from 'lucide-react'
+import { Loader2, Mail, ArrowRight, User, Lock, Eye, EyeOff } from 'lucide-react'
 import Link from 'next/link'
 import type { z } from 'zod'
 
-type LoginFormData = z.infer<typeof LoginSchema>
+type RegisterFormData = z.infer<typeof RegisterSchema>
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
 
-  const form = useForm<LoginFormData>({
-    resolver: zodResolver(LoginSchema),
+  const form = useForm<RegisterFormData>({
+    resolver: zodResolver(RegisterSchema),
     defaultValues: {
+      name: '',
       email: '',
       password: '',
+      confirmPassword: '',
     },
   })
 
-  const onSubmit = async (data: LoginFormData) => {
+  const onSubmit = async (data: RegisterFormData) => {
     setIsLoading(true)
 
     try {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch('/api/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -45,58 +48,22 @@ export default function LoginPage() {
       const result = await response.json()
 
       if (!response.ok) {
-        console.error('Login failed:', result)
         toast({
-          title: 'Login Failed',
+          title: 'Registration Failed',
           description: result.error || 'Something went wrong',
           variant: 'destructive',
         })
         return
       }
 
-      console.log('Login response:', result)
+      toast({
+        title: 'Success!',
+        description: 'Verification code sent to your email',
+      })
 
-      if (result.requiresOTP) {
-        toast({
-          title: 'Login Code Sent',
-          description: 'Check your email for the login verification code',
-        })
-        
-        // Redirect to OTP verification page
-        router.push(`/verify-otp?userId=${result.userId}&type=login`)
-      } else {
-        toast({
-          title: 'Welcome back!',
-          description: 'You have been successfully logged in',
-        })
-
-        // Force immediate redirect to dashboard with multiple fallbacks
-        console.log('Login successful, redirecting to dashboard...')
-        
-        // Try multiple redirect methods for reliability
-        setTimeout(() => {
-          console.log('Attempting redirect...')
-          window.location.href = '/dashboard'
-        }, 100)
-        
-        // Fallback redirect
-        setTimeout(() => {
-          if (window.location.pathname === '/login') {
-            console.log('First redirect failed, trying again...')
-            router.replace('/dashboard')
-          }
-        }, 500)
-        
-        // Final fallback
-        setTimeout(() => {
-          if (window.location.pathname === '/login') {
-            console.log('Router redirect failed, forcing window location...')
-            window.location.assign('/dashboard')
-          }
-        }, 1000)
-      }
+      // Redirect to OTP verification page with user ID
+      router.push(`/verify-otp?userId=${result.userId}&type=registration`)
     } catch (error) {
-      console.error('Login error:', error)
       toast({
         title: 'Error',
         description: 'Network error. Please try again.',
@@ -112,26 +79,49 @@ export default function LoginPage() {
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
           <div className="mx-auto h-12 w-12 flex items-center justify-center bg-blue-600 rounded-full mb-4">
-            <LogIn className="h-6 w-6 text-white" />
+            <Mail className="h-6 w-6 text-white" />
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-gray-900">
-            Welcome Back
+            Create Account
           </h1>
           <p className="mt-2 text-gray-600">
-            Sign in to your account to continue
+            Fill in your details to create your account
           </p>
         </div>
 
         <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-semibold">Sign In</CardTitle>
+            <CardTitle className="text-2xl font-semibold">Register</CardTitle>
             <CardDescription>
-              Enter your email and password to access your account
+              Create your account and verify your email address
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-sm font-medium">Full Name</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                          <Input
+                            {...field}
+                            type="text"
+                            placeholder="Enter your full name"
+                            className="pl-10 h-12 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                            disabled={isLoading}
+                          />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 <FormField
                   control={form.control}
                   name="email"
@@ -160,14 +150,14 @@ export default function LoginPage() {
                   name="password"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-sm font-medium">Password (Optional)</FormLabel>
+                      <FormLabel className="text-sm font-medium">Password</FormLabel>
                       <FormControl>
                         <div className="relative">
                           <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                           <Input
                             {...field}
                             type={showPassword ? 'text' : 'password'}
-                            placeholder="Enter your password (optional)"
+                            placeholder="Create a password"
                             className="pl-10 pr-10 h-12 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
                             disabled={isLoading}
                           />
@@ -185,6 +175,36 @@ export default function LoginPage() {
                   )}
                 />
 
+                <FormField
+                  control={form.control}
+                  name="confirmPassword"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-sm font-medium">Confirm Password</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                          <Input
+                            {...field}
+                            type={showConfirmPassword ? 'text' : 'password'}
+                            placeholder="Confirm your password"
+                            className="pl-10 pr-10 h-12 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                            disabled={isLoading}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                            className="absolute right-3 top-3 h-4 w-4 text-gray-400 hover:text-gray-600"
+                          >
+                            {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </button>
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 <Button
                   type="submit"
                   className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-medium transition-all duration-200 hover:scale-[1.02]"
@@ -193,10 +213,13 @@ export default function LoginPage() {
                   {isLoading ? (
                     <div className="flex items-center space-x-2">
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Signing in...</span>
+                      <span>Sending verification code...</span>
                     </div>
                   ) : (
-                    'Sign In'
+                    <div className="flex items-center space-x-2">
+                      <span>Send Verification Code</span>
+                      <ArrowRight className="h-4 w-4" />
+                    </div>
                   )}
                 </Button>
               </form>
@@ -204,28 +227,13 @@ export default function LoginPage() {
 
             <div className="mt-6 text-center">
               <p className="text-sm text-gray-600">
-                Don't have an account?{' '}
+                Already have an account?{' '}
                 <Link 
-                  href="/register" 
+                  href="/login" 
                   className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
                 >
-                  Sign up
+                  Sign in
                 </Link>
-              </p>
-              <p className="text-sm text-gray-600 mt-2">
-                Forgot your password?{' '}
-                <Link 
-                  href="/forgot-password" 
-                  className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
-                >
-                  Reset it here
-                </Link>
-              </p>
-            </div>
-
-            <div className="mt-4 text-center">
-              <p className="text-xs text-gray-500">
-                For passwordless login, leave password field empty and we'll send you a verification code.
               </p>
             </div>
           </CardContent>
@@ -233,7 +241,7 @@ export default function LoginPage() {
 
         <div className="text-center">
           <p className="text-xs text-gray-500">
-            Protected by advanced security measures and encryption.
+            By creating an account, you agree to our Terms of Service and Privacy Policy.
           </p>
         </div>
       </div>
