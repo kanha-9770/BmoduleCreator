@@ -15,34 +15,125 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useToast } from "@/hooks/use-toast";
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  email_verified?: boolean;
+  status: string;
+  createdAt: string;
+}
 
 export function Header() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
+  const { toast } = useToast();
 
   useEffect(() => {
-    // Retrieve user data from sessionStorage
+    console.log("Header component mounted, checking user data");
+
+    const fetchUser = async () => {
+      console.log("Fetching user data from /api/auth/me");
+      try {
+        const response = await fetch("/api/auth/me", {
+          method: "GET",
+          credentials: "include", // Include cookies for auth-token
+        });
+        console.log("User fetch response status:", response.status);
+        const result = await response.json();
+        console.log("User fetch result:", result);
+
+        if (!response.ok) {
+          console.log("User fetch failed, redirecting to login");
+          toast({
+            title: "Error",
+            description: "Failed to load user data",
+            variant: "destructive",
+          });
+          sessionStorage.removeItem("user"); // Clear invalid sessionStorage
+          router.push("/login");
+          return;
+        }
+
+        console.log("User data loaded successfully:", result.user);
+        // Store user data in sessionStorage
+        sessionStorage.setItem("user", JSON.stringify(result.user));
+        setUser(result.user);
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load user data",
+          variant: "destructive",
+        });
+        sessionStorage.removeItem("user"); // Clear invalid sessionStorage
+        router.push("/login");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    // Check if user data is already in sessionStorage
     const storedUser = sessionStorage.getItem("user");
     if (storedUser) {
-      setUser(JSON.parse(storedUser));
+      try {
+        const parsedUser = JSON.parse(storedUser);
+        console.log("Found valid user data in sessionStorage:", parsedUser);
+        setUser(parsedUser);
+        setIsLoading(false);
+      } catch (error) {
+        console.error("Error parsing sessionStorage user data:", error);
+        console.log(
+          "Invalid user data in sessionStorage, clearing and fetching new data"
+        );
+        sessionStorage.removeItem("user"); // Clear invalid data
+        fetchUser();
+      }
+    } else {
+      console.log("No user data in sessionStorage, fetching from API");
+      fetchUser();
     }
-  }, []);
+  }, [router, toast]);
 
-  const handleLogout = () => {
-    // Clear user data from sessionStorage
-    sessionStorage.removeItem("user");
-    // Clear user cookie
-    document.cookie = "user=; path=/; max-age=0"; // Expire the cookie immediately
-    // Redirect to login page
-    router.push("/login");
+  const handleLogout = async () => {
+    console.log("Initiating logout");
+    try {
+      const response = await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include", // Include cookies for auth-token
+      });
+
+      if (response.ok) {
+        console.log("Logout successful");
+        // Clear user data from sessionStorage
+        sessionStorage.removeItem("user");
+        // Clear auth-token cookie
+        document.cookie = "auth-token=; path=/; max-age=0"; // Expire the cookie immediately
+        toast({
+          title: "Logged out",
+          description: "You have been successfully logged out",
+        });
+        router.push("/login");
+      } else {
+        throw new Error("Logout failed");
+      }
+    } catch (error) {
+      console.error("Error during logout:", error);
+      toast({
+        title: "Error",
+        description: "Failed to logout. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   // Fallbacks for display if user data is not available
-  const displayName = user ? `${user.first_name} ${user.last_name}` : "Guest";
+  const displayName = user?.name || "Guest";
   const displayEmail = user?.email || "No email provided";
-  const avatarFallback = user
-    ? `${user.first_name?.[0] || ""}${user.last_name?.[0] || ""}`
-    : "JD";
+  const avatarFallback = user?.name?.[0] || "JD";
 
   return (
     <header className="bg-white border-b border-gray-200 px-6 py-4">
@@ -66,7 +157,11 @@ export function Header() {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+              <Button
+                variant="ghost"
+                className="relative h-8 w-8 rounded-full"
+                disabled={isLoading}
+              >
                 <Avatar className="h-8 w-8">
                   <AvatarImage src="/placeholder-user.jpg" alt="User" />
                   <AvatarFallback>{avatarFallback}</AvatarFallback>

@@ -107,7 +107,7 @@ export default function VerifyOTPPage() {
 
       // Force redirect to dashboard with replace and refresh
       setTimeout(() => {
-      window.location.href = '/dashboard'
+      window.location.href = '/profile'
       }, 100)
     } catch (error) {
       console.error('Network error during OTP verification:', error)

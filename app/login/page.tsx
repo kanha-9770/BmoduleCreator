@@ -70,20 +70,20 @@ export default function LoginPage() {
           description: 'You have been successfully logged in',
         })
 
-        // Force immediate redirect to dashboard with multiple fallbacks
-        console.log('Login successful, redirecting to dashboard...')
+        // Force immediate redirect to profile with multiple fallbacks
+        console.log('Login successful, redirecting to profile...')
         
         // Try multiple redirect methods for reliability
         setTimeout(() => {
           console.log('Attempting redirect...')
-          window.location.href = '/dashboard'
+          window.location.href = '/profile'
         }, 100)
         
         // Fallback redirect
         setTimeout(() => {
           if (window.location.pathname === '/login') {
             console.log('First redirect failed, trying again...')
-            router.replace('/dashboard')
+            router.replace('/profile')
           }
         }, 500)
         
@@ -91,7 +91,7 @@ export default function LoginPage() {
         setTimeout(() => {
           if (window.location.pathname === '/login') {
             console.log('Router redirect failed, forcing window location...')
-            window.location.assign('/dashboard')
+            window.location.assign('/profile')
           }
         }, 1000)
       }

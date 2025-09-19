@@ -104,7 +104,7 @@ export default function ResetPasswordPage() {
       })
 
       // Force redirect to dashboard with replace and refresh
-      window.location.href = '/dashboard'
+      window.location.href = '/profile'
     } catch (error) {
       toast({
         title: 'Error',

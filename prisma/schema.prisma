@@ -984,7 +984,6 @@ model UserPermission {
   canCreate     Boolean     @default(false) @map("can_create")
   canEdit       Boolean     @default(false) @map("can_edit")
   canDelete     Boolean     @default(false) @map("can_delete")
-  canManage     Boolean     @default(false) @map("can_manage")
   isSystemAdmin Boolean     @default(false) @map("is_system_admin")
   reason        String?     @default("Direct assignment")
   grantedBy     String?     @map("granted_by")
@@ -1080,3 +1079,4 @@ model Activity {
   @@index([createdAt])
   @@map("activities")
 }
+
