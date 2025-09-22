@@ -1,18 +1,33 @@
-import { getUserPermissions, updateUserPermissions } from "@/lib/database";
+// pages/api/user-permissions.ts
 import { type NextRequest, NextResponse } from "next/server";
+import { getUserPermissions, updateUserPermissions } from "@/lib/database";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     console.log("[v0] GET /api/user-permissions - Starting request");
 
-    const userPermissions = await getUserPermissions();
+    const userId = request.nextUrl.searchParams.get("userId");
+
+    if (userId && typeof userId !== "string") {
+      console.log("[v0] Invalid userId parameter:", userId);
+      return NextResponse.json(
+        { success: false, error: "Invalid userId parameter" },
+        { status: 400 }
+      );
+    }
+
+    const userPermissions = await getUserPermissions(userId || undefined);
     console.log(
-      `[v0] Successfully retrieved ${userPermissions.length} user permissions`
+      `[v0] Successfully retrieved ${userPermissions.length} user permissions for userId: ${userId || "all"}`
     );
 
     return NextResponse.json({
       success: true,
       data: userPermissions,
+      meta: {
+        userId: userId || null,
+        permissionCount: userPermissions.length,
+      },
     });
   } catch (error) {
     console.error("[v0] Failed to fetch user permissions:", error);
@@ -35,6 +50,7 @@ export async function PUT(request: NextRequest) {
     console.log("[v0] Request body:", JSON.stringify(body, null, 2));
 
     if (!Array.isArray(body)) {
+      console.log("[v0] Invalid request body: must be an array");
       return NextResponse.json(
         { success: false, error: "Request body must be an array" },
         { status: 400 }
@@ -64,6 +80,7 @@ export async function PUT(request: NextRequest) {
       }));
 
     if (updates.length === 0) {
+      console.log("[v0] No valid updates provided");
       return NextResponse.json(
         { success: false, error: "No valid updates provided" },
         { status: 400 }

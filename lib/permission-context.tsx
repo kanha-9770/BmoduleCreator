@@ -29,7 +29,6 @@ interface Permission {
     canCreate: boolean;
     canEdit: boolean;
     canDelete: boolean;
-    canManage: boolean;
   };
   isSystemAdmin: boolean;
   grantedBy?: string;
@@ -54,7 +53,6 @@ interface PermissionContextType {
     canAdd: boolean;
     canEdit: boolean;
     canDelete: boolean;
-    canManage: boolean;
   };
   refreshPermissions: () => Promise<void>;
 }
@@ -129,8 +127,7 @@ export function PermissionProvider({
 
     if (modulePermission) {
       return (
-        modulePermission.permissions.canView ||
-        modulePermission.permissions.canManage
+        modulePermission.permissions.canView
       );
     }
 
@@ -151,8 +148,7 @@ export function PermissionProvider({
 
     if (formPermission) {
       return (
-        formPermission.permissions.canView ||
-        formPermission.permissions.canManage
+        formPermission.permissions.canView 
       );
     }
 
@@ -166,8 +162,8 @@ export function PermissionProvider({
           p.resourceType === "module" &&
           p.resourceId === formWithResource.resource!.moduleId
       );
-      // Only module MANAGE permission grants access to all forms in that module
-      return modulePermission?.permissions.canManage || false;
+    
+   
     }
 
     return false;
@@ -180,7 +176,6 @@ export function PermissionProvider({
         canAdd: false,
         canEdit: false,
         canDelete: false,
-        canManage: false,
       };
     }
 
@@ -191,7 +186,6 @@ export function PermissionProvider({
         canAdd: true,
         canEdit: true,
         canDelete: true,
-        canManage: true,
       };
     }
 
@@ -204,18 +198,13 @@ export function PermissionProvider({
       if (formPermission) {
         return {
           canView:
-            formPermission.permissions.canView ||
-            formPermission.permissions.canManage,
+            formPermission.permissions.canView ,
           canAdd:
-            formPermission.permissions.canCreate ||
-            formPermission.permissions.canManage,
+            formPermission.permissions.canCreate ,
           canEdit:
-            formPermission.permissions.canEdit ||
-            formPermission.permissions.canManage,
+            formPermission.permissions.canEdit ,
           canDelete:
-            formPermission.permissions.canDelete ||
-            formPermission.permissions.canManage,
-          canManage: formPermission.permissions.canManage,
+            formPermission.permissions.canDelete 
         };
       }
 
@@ -224,15 +213,7 @@ export function PermissionProvider({
         (p) => p.resourceType === "module" && p.resourceId === moduleId
       );
 
-      if (modulePermission?.permissions.canManage) {
-        return {
-          canView: true,
-          canAdd: true,
-          canEdit: true,
-          canDelete: true,
-          canManage: true,
-        };
-      }
+      
     }
 
     // Module-level permissions
@@ -243,18 +224,13 @@ export function PermissionProvider({
     if (modulePermission) {
       return {
         canView:
-          modulePermission.permissions.canView ||
-          modulePermission.permissions.canManage,
+          modulePermission.permissions.canView ,
         canAdd:
-          modulePermission.permissions.canCreate ||
-          modulePermission.permissions.canManage,
+          modulePermission.permissions.canCreate ,
         canEdit:
-          modulePermission.permissions.canEdit ||
-          modulePermission.permissions.canManage,
+          modulePermission.permissions.canEdit ,
         canDelete:
-          modulePermission.permissions.canDelete ||
-          modulePermission.permissions.canManage,
-        canManage: modulePermission.permissions.canManage,
+          modulePermission.permissions.canDelete ,
       };
     }
 
@@ -263,7 +239,6 @@ export function PermissionProvider({
       canAdd: false,
       canEdit: false,
       canDelete: false,
-      canManage: false,
     };
   };
 

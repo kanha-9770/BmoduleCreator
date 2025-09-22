@@ -65,7 +65,6 @@ export function PermissionMatrix({
     { id: "create", name: "CREATE", color: "text-green-600" },
     { id: "edit", name: "EDIT", color: "text-yellow-600" },
     { id: "delete", name: "DELETE", color: "text-red-600" },
-    { id: "manage", name: "MANAGE", color: "text-purple-600" },
   ]
 
   const departments = ["all", ...Array.from(new Set(employees.map((emp) => emp.department)))]

@@ -1,173 +1,176 @@
-import React, { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { Loader2, AlertCircle, Lock } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Loader2, AlertCircle, Lock } from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 interface ProtectedRouteProps {
-  children: React.ReactNode
+  children: React.ReactNode;
   requiredPermission?: {
-    resourceType: 'module' | 'form'
-    resourceId: string
-    action: 'view' | 'create' | 'edit' | 'delete' | 'manage'
-    moduleId?: string // Required for form permissions
-  }
-  fallback?: React.ReactNode
-  requireAuth?: boolean
+    resourceType: "module" | "form";
+    resourceId: string;
+    action: "view" | "create" | "edit" | "delete";
+    moduleId?: string; // Required for form permissions
+  };
+  fallback?: React.ReactNode;
+  requireAuth?: boolean;
 }
 
 interface UserPermission {
-  resourceType: 'module' | 'form'
-  resourceId: string
+  resourceType: "module" | "form";
+  resourceId: string;
   permissions: {
-    canView: boolean
-    canCreate: boolean
-    canEdit: boolean
-    canDelete: boolean
-    canManage: boolean
-  }
-  isSystemAdmin: boolean
+    canView: boolean;
+    canCreate: boolean;
+    canEdit: boolean;
+    canDelete: boolean;
+  };
+  isSystemAdmin: boolean;
   resource?: {
-    id: string
-    name: string
-    description?: string
-    moduleId?: string
-  }
+    id: string;
+    name: string;
+    description?: string;
+    moduleId?: string;
+  };
 }
 
 interface AuthUser {
-  id: string
-  email: string
-  name: string
-  role: string
-  permissions: UserPermission[]
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  permissions: UserPermission[];
 }
 
-export function ProtectedRoute({ 
-  children, 
-  requiredPermission, 
+export function ProtectedRoute({
+  children,
+  requiredPermission,
   fallback,
-  requireAuth = true 
+  requireAuth = true,
 }: ProtectedRouteProps) {
-  const [user, setUser] = useState<AuthUser | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const router = useRouter()
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
-    checkAuth()
-  }, [])
+    checkAuth();
+  }, []);
 
   const checkAuth = async () => {
     try {
-      setLoading(true)
-      setError(null)
+      setLoading(true);
+      setError(null);
 
       // Get user credentials from localStorage (in production, use secure storage)
-      const userId = localStorage.getItem('auth_user_id')
-      const userEmail = localStorage.getItem('auth_user_email')
+      const userId = localStorage.getItem("auth_user_id");
+      const userEmail = localStorage.getItem("auth_user_email");
 
       if (!userId || !userEmail) {
         if (requireAuth) {
-          setError('Authentication required')
-          return
+          setError("Authentication required");
+          return;
         } else {
-          setLoading(false)
-          return
+          setLoading(false);
+          return;
         }
       }
 
       // Fetch user permissions
-      const response = await fetch('/api/users/permissions', {
+      const response = await fetch("/api/users/permissions", {
         headers: {
-          'x-user-id': userId,
-          'x-user-email': userEmail,
-        }
-      })
+          "x-user-id": userId,
+          "x-user-email": userEmail,
+        },
+      });
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      const data = await response.json()
+      const data = await response.json();
 
       if (!data.success) {
-        throw new Error(data.error || 'Failed to fetch user permissions')
+        throw new Error(data.error || "Failed to fetch user permissions");
       }
 
-      setUser(data.user)
+      setUser(data.user);
     } catch (error: any) {
-      console.error('Auth check failed:', error)
-      setError(error.message || 'Authentication failed')
+      console.error("Auth check failed:", error);
+      setError(error.message || "Authentication failed");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
-  const hasPermission = (user: AuthUser, permission: ProtectedRouteProps['requiredPermission']): boolean => {
-    if (!permission) return true
+  const hasPermission = (
+    user: AuthUser,
+    permission: ProtectedRouteProps["requiredPermission"]
+  ): boolean => {
+    if (!permission) return true;
 
     // Check for system admin
-    const hasSystemAdmin = user.permissions.some(p => p.isSystemAdmin)
-    if (hasSystemAdmin) return true
+    const hasSystemAdmin = user.permissions.some((p) => p.isSystemAdmin);
+    if (hasSystemAdmin) return true;
 
-    if (permission.resourceType === 'module') {
+    if (permission.resourceType === "module") {
       // Check module permission
-      const modulePermission = user.permissions.find(p => 
-        p.resourceType === 'module' && p.resourceId === permission.resourceId
-      )
+      const modulePermission = user.permissions.find(
+        (p) =>
+          p.resourceType === "module" && p.resourceId === permission.resourceId
+      );
 
       if (modulePermission) {
         switch (permission.action) {
-          case 'view':
-            return modulePermission.permissions.canView || modulePermission.permissions.canManage
-          case 'create':
-            return modulePermission.permissions.canCreate || modulePermission.permissions.canManage
-          case 'edit':
-            return modulePermission.permissions.canEdit || modulePermission.permissions.canManage
-          case 'delete':
-            return modulePermission.permissions.canDelete || modulePermission.permissions.canManage
-          case 'manage':
-            return modulePermission.permissions.canManage
+          case "view":
+            return modulePermission.permissions.canView;
+          case "create":
+            return modulePermission.permissions.canCreate;
+          case "edit":
+            return modulePermission.permissions.canEdit;
+          case "delete":
+            return modulePermission.permissions.canDelete;
           default:
-            return false
+            return false;
         }
       }
-    } else if (permission.resourceType === 'form' && permission.moduleId) {
+    } else if (permission.resourceType === "form" && permission.moduleId) {
       // Check if user has module manage permission (grants all form permissions)
-      const modulePermission = user.permissions.find(p => 
-        p.resourceType === 'module' && p.resourceId === permission.moduleId
-      )
-
-      if (modulePermission && modulePermission.permissions.canManage) {
-        return true
-      }
+      const modulePermission = user.permissions.find(
+        (p) =>
+          p.resourceType === "module" && p.resourceId === permission.moduleId
+      );
 
       // Check specific form permission
-      const formPermission = user.permissions.find(p => 
-        p.resourceType === 'form' && p.resourceId === permission.resourceId
-      )
+      const formPermission = user.permissions.find(
+        (p) =>
+          p.resourceType === "form" && p.resourceId === permission.resourceId
+      );
 
       if (formPermission) {
         switch (permission.action) {
-          case 'view':
-            return formPermission.permissions.canView || formPermission.permissions.canManage
-          case 'create':
-            return formPermission.permissions.canCreate || formPermission.permissions.canManage
-          case 'edit':
-            return formPermission.permissions.canEdit || formPermission.permissions.canManage
-          case 'delete':
-            return formPermission.permissions.canDelete || formPermission.permissions.canManage
-          case 'manage':
-            return formPermission.permissions.canManage
+          case "view":
+            return formPermission.permissions.canView;
+          case "create":
+            return formPermission.permissions.canCreate;
+          case "edit":
+            return formPermission.permissions.canEdit;
+          case "delete":
+            return formPermission.permissions.canDelete;
           default:
-            return false
+            return false;
         }
       }
     }
 
-    return false
-  }
+    return false;
+  };
 
   if (loading) {
     return (
@@ -177,7 +180,7 @@ export function ProtectedRoute({
           <p className="text-gray-600">Checking permissions...</p>
         </div>
       </div>
-    )
+    );
   }
 
   if (error) {
@@ -190,16 +193,13 @@ export function ProtectedRoute({
             <CardDescription>{error}</CardDescription>
           </CardHeader>
           <CardContent className="text-center">
-            <Button 
-              onClick={() => router.push('/login')}
-              className="w-full"
-            >
+            <Button onClick={() => router.push("/login")} className="w-full">
               Go to Login
             </Button>
           </CardContent>
         </Card>
       </div>
-    )
+    );
   }
 
   if (requireAuth && !user) {
@@ -212,21 +212,18 @@ export function ProtectedRoute({
             <CardDescription>Please log in to access this page</CardDescription>
           </CardHeader>
           <CardContent className="text-center">
-            <Button 
-              onClick={() => router.push('/login')}
-              className="w-full"
-            >
+            <Button onClick={() => router.push("/login")} className="w-full">
               Go to Login
             </Button>
           </CardContent>
         </Card>
       </div>
-    )
+    );
   }
 
   if (user && requiredPermission && !hasPermission(user, requiredPermission)) {
     if (fallback) {
-      return <>{fallback}</>
+      return <>{fallback}</>;
     }
 
     return (
@@ -238,11 +235,12 @@ export function ProtectedRoute({
             <CardDescription>
               You don't have permission to access this resource.
               <br />
-              Required: {requiredPermission.action} access to {requiredPermission.resourceType} {requiredPermission.resourceId}
+              Required: {requiredPermission.action} access to{" "}
+              {requiredPermission.resourceType} {requiredPermission.resourceId}
             </CardDescription>
           </CardHeader>
           <CardContent className="text-center">
-            <Button 
+            <Button
               onClick={() => router.back()}
               variant="outline"
               className="w-full"
@@ -252,10 +250,10 @@ export function ProtectedRoute({
           </CardContent>
         </Card>
       </div>
-    )
+    );
   }
 
-  return <>{children}</>
+  return <>{children}</>;
 }
 
-export default ProtectedRoute
+export default ProtectedRoute;

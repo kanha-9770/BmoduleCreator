@@ -8,7 +8,7 @@ interface UsePermissionCheckReturn {
   hasFormAccess: (formId: string) => boolean;
   canPerformAction: (
     moduleId: string,
-    action: 'view' | 'create' | 'edit' | 'delete' | 'manage',
+    action: 'view' | 'create' | 'edit' | 'delete',
     formId?: string
   ) => boolean;
   getAccessibleActions: (
@@ -19,7 +19,6 @@ interface UsePermissionCheckReturn {
     canAdd: boolean;
     canEdit: boolean;
     canDelete: boolean;
-    canManage: boolean;
   };
 }
 
@@ -39,7 +38,7 @@ export const usePermissionCheck = (): UsePermissionCheckReturn => {
 
   const canPerformAction = (
     moduleId: string,
-    action: 'view' | 'create' | 'edit' | 'delete' | 'manage',
+    action: 'view' | 'create' | 'edit' | 'delete' ,
     formId?: string
   ): boolean => {
     if (!user) return false;
@@ -56,8 +55,6 @@ export const usePermissionCheck = (): UsePermissionCheckReturn => {
         return actions.canEdit;
       case 'delete':
         return actions.canDelete;
-      case 'manage':
-        return actions.canManage;
       default:
         return false;
     }

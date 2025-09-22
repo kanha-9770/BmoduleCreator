@@ -3,6 +3,7 @@ import { DatabaseRecords } from "./DatabaseRecords"
 import { DatabaseModules } from "./DatabaseModules"
 import { DatabaseRoles } from "./DatabaseRoles"
 import { AuthMiddleware } from "./auth-middleware"
+import { prisma } from "./prisma"
 
 export class DatabaseService {
   static getFieldById(subformId: any) {
@@ -32,30 +33,61 @@ export class DatabaseService {
   static deleteModule = DatabaseModules.deleteModule
 
   // Enhanced module hierarchy with permission filtering
-  static async getModuleHierarchy(userPermissions?: any[]): Promise<any[]> {
-    try {
-      console.log("[DatabaseService] Getting module hierarchy with permission filtering")
+ static async getModuleHierarchy(userId?: string): Promise<any[]> {
+  try {
+    console.log(`[DatabaseService] Getting module hierarchy for userId: ${userId || 'unauthenticated'}`);
 
-      const modules = await DatabaseModules.getModuleHierarchy()
-      console.log(`[DatabaseService] Found ${modules.length} total modules`)
+    // Fetch all modules
+    const modules = await DatabaseModules.getModuleHierarchy();
+    console.log(`[DatabaseService] Found ${modules.length} total modules`);
 
-      if (!userPermissions || userPermissions.length === 0) {
-        console.log("[DatabaseService] No user permissions provided, returning all modules for now")
-        // For development/testing, return all modules if no permissions
-        // In production, you might want to return empty array
-        return modules
-      }
-
-      // Filter modules based on user permissions
-      const filteredModules = AuthMiddleware.filterModulesByPermissions(modules, userPermissions)
-      console.log(`[DatabaseService] Filtered to ${filteredModules.length} accessible modules`)
-
-      return filteredModules
-    } catch (error: any) {
-      console.error("[DatabaseService] Error getting module hierarchy:", error)
-      return []
+    if (!userId) {
+      console.log("[DatabaseService] No user ID provided, returning all modules for unauthenticated access");
+      return modules;
     }
+
+    // Fetch user permissions
+    const userPermissions = await prisma.userPermission.findMany({
+      where: { userId, isActive: true },
+      include: {
+        permission: { select: { name: true, category: true } },
+        module: { select: { name: true, path: true } },
+      },
+    });
+
+    // Fetch user's role(s) from UserUnitAssignment
+    const userAssignments = await prisma.userUnitAssignment.findMany({
+      where: { userId },
+      select: { roleId: true },
+    });
+    const roleIds = userAssignments.map(assignment => assignment.roleId);
+
+    // Fetch role permissions
+    const rolePermissions = await prisma.rolePermission.findMany({
+      where: { roleId: { in: roleIds } },
+      include: {
+        permission: { select: { name: true, category: true } },
+        module: { select: { name: true, path: true } },
+      },
+    });
+
+    console.log(`[DatabaseService] Found ${userPermissions.length} user permissions and ${rolePermissions.length} role permissions`);
+
+    if (userPermissions.length === 0 && rolePermissions.length === 0) {
+      console.log("[DatabaseService] No permissions found, returning empty module list");
+      return [];
+    }
+
+    // Filter modules based on permissions
+    const filteredModules = AuthMiddleware.filterModulesByPermissions(modules, userPermissions, rolePermissions);
+    console.log(`[DatabaseService] Filtered to ${filteredModules.length} accessible modules`);
+
+    return filteredModules;
+  } catch (error: any) {
+    console.error("[DatabaseService] Error getting module hierarchy:", error);
+    return [];
   }
+}
 
   // Enhanced modules list with permission filtering
   static async getModules(userPermissions?: any[]): Promise<any[]> {

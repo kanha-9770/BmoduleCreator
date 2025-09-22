@@ -1,4 +1,4 @@
-import { prisma } from "./prisma";
+import { prisma, PrismaClient } from "./prisma";
 
 export interface DatabaseUser {
   id: string;
@@ -65,6 +65,17 @@ export interface RolePermissionUpdate {
   moduleId?: string;
   granted: boolean;
   canDelegate?: boolean;
+}
+
+export interface UserPermissionUpdate {
+  userId: string;
+  permissionId: string;
+  moduleId?: string;
+  granted: boolean;
+  reason?: string;
+  grantedBy?: string;
+  expiresAt?: Date | null;
+  isActive?: boolean;
 }
 
 // Helper function to check database connectivity
@@ -179,7 +190,6 @@ async function ensureAllPermissionsExist(): Promise<void> {
       { id: "2", name: "CREATE", category: "WRITE", resource: "general" },
       { id: "3", name: "EDIT", category: "WRITE", resource: "general" },
       { id: "4", name: "DELETE", category: "DELETE", resource: "general" },
-      { id: "5", name: "MANAGE", category: "ADMIN", resource: "general" },
     ];
 
     for (const perm of allPermissions) {
@@ -353,7 +363,7 @@ export async function getPermissions(): Promise<any[]> {
   }
 }
 
-export async function getRolePermissions(): Promise<any[]> {
+export async function getRolePermissions(p0: string | undefined): Promise<any[]> {
   const isConnected = await isDatabaseConnected();
   if (!isConnected) {
     console.log(
@@ -496,35 +506,10 @@ export async function updateRolePermissions(
     console.log("[v0] Updating role permissions in database:", updates);
     await ensureAllPermissionsExist();
     let updateCount = 0;
-
     await prisma.$transaction(
-      async (tx: {
-        permission: { findUnique: (arg0: { where: { id: string } }) => any };
-        role: { findUnique: (arg0: { where: { id: string } }) => any };
-        formModule: { findUnique: (arg0: { where: { id: string } }) => any };
-        rolePermission: {
-          upsert: (arg0: {
-            where: {
-              roleId_permissionId_moduleId: {
-                roleId: string;
-                permissionId: string;
-                moduleId: string | null;
-              };
-            };
-            update: { granted: boolean; canDelegate: boolean };
-            create: {
-              roleId: string;
-              permissionId: string;
-              moduleId: string | null;
-              granted: boolean;
-              canDelegate: boolean;
-            };
-          }) => any;
-        };
-      }) => {
+      async (tx: Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">) => {
         for (const update of updates) {
           console.log("[v0] Processing role permission update:", update);
-
           if (!update.roleId || !update.permissionId) {
             console.log(
               "[v0] Skipping invalid update: missing roleId or permissionId",
@@ -532,27 +517,22 @@ export async function updateRolePermissions(
             );
             continue;
           }
-
           const permissionExists = await tx.permission.findUnique({
             where: { id: update.permissionId },
           });
-
           if (!permissionExists) {
             console.log(
               `[v0] Permission ${update.permissionId} does not exist, skipping`
             );
             continue;
           }
-
           const roleExists = await tx.role.findUnique({
             where: { id: update.roleId },
           });
-
           if (!roleExists) {
             console.log(`[v0] Role ${update.roleId} does not exist, skipping`);
             continue;
           }
-
           let cleanModuleId: string | null = null;
           if (update.moduleId) {
             cleanModuleId = update.moduleId
@@ -561,7 +541,6 @@ export async function updateRolePermissions(
             const moduleExists = await tx.formModule.findUnique({
               where: { id: cleanModuleId },
             });
-
             if (!moduleExists) {
               console.log(
                 `[v0] Module ${cleanModuleId} does not exist, skipping`
@@ -569,13 +548,12 @@ export async function updateRolePermissions(
               continue;
             }
           }
-
           await tx.rolePermission.upsert({
             where: {
               roleId_permissionId_moduleId: {
                 roleId: update.roleId,
                 permissionId: update.permissionId,
-                moduleId: cleanModuleId,
+                moduleId: cleanModuleId ?? null,
               },
             },
             update: {
@@ -585,12 +563,11 @@ export async function updateRolePermissions(
             create: {
               roleId: update.roleId,
               permissionId: update.permissionId,
-              moduleId: cleanModuleId,
+              moduleId: cleanModuleId ?? null,
               granted: update.granted,
               canDelegate: update.canDelegate ?? false,
             },
           });
-
           updateCount++;
           console.log(
             `[v0] Successfully processed role permission: roleId=${update.roleId}, permissionId=${update.permissionId}, moduleId=${cleanModuleId}`
@@ -598,7 +575,6 @@ export async function updateRolePermissions(
         }
       }
     );
-
     console.log(`[v0] Successfully updated ${updateCount} role permissions`);
     if (updateCount === 0) {
       throw new Error("No valid role permissions were updated");
@@ -610,7 +586,7 @@ export async function updateRolePermissions(
   }
 }
 
-export async function updateUserPermissions(updates: any[]): Promise<boolean> {
+export async function updateUserPermissions(updates: UserPermissionUpdate[]): Promise<boolean> {
   const isConnected = await isDatabaseConnected();
   if (!isConnected) {
     console.log(
@@ -624,7 +600,7 @@ export async function updateUserPermissions(updates: any[]): Promise<boolean> {
       "[v0] Updating user permissions in database:",
       JSON.stringify(updates, null, 2)
     );
-    const validUpdates = updates.filter((update: any) => {
+    const validUpdates = updates.filter((update) => {
       if (!update.userId || !update.permissionId) {
         console.log(
           "[v0] Skipping invalid update: missing userId or permissionId",
@@ -649,43 +625,7 @@ export async function updateUserPermissions(updates: any[]): Promise<boolean> {
     let updateCount = 0;
 
     await prisma.$transaction(
-      async (tx: {
-        user: { findUnique: (arg0: { where: { id: any } }) => any };
-        permission: { findUnique: (arg0: { where: { id: any } }) => any };
-        formModule: {
-          findUnique: (arg0: { where: { id: string | null } }) => any;
-        };
-        userPermission: {
-          upsert: (arg0: {
-            where: {
-              unique_user_permission: {
-                userId: any;
-                permissionId: any;
-                moduleId: string | null;
-              };
-            };
-            update: {
-              granted: any;
-              reason: any;
-              grantedBy: any;
-              expiresAt: any;
-              isActive: any;
-              updatedAt: Date;
-            };
-            create: {
-              userId: any;
-              permissionId: any;
-              moduleId: string | null;
-              granted: any;
-              reason: any;
-              grantedBy: any;
-              grantedAt: Date;
-              expiresAt: any;
-              isActive: any;
-            };
-          }) => any;
-        };
-      }) => {
+      async (tx: Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">) => {
         for (const update of validUpdates) {
           console.log(
             "[v0] Processing user permission update:",
@@ -729,36 +669,35 @@ export async function updateUserPermissions(updates: any[]): Promise<boolean> {
             }
           }
 
-          const result = await tx.userPermission.upsert({
+          await tx.userPermission.upsert({
             where: {
-              unique_user_permission: {
+              userId_permissionId_moduleId: {
                 userId: update.userId,
                 permissionId: update.permissionId,
-                moduleId: cleanModuleId,
+                moduleId: cleanModuleId ?? null,
               },
             },
             update: {
               granted: update.granted,
               reason: update.reason || "Manual assignment",
               grantedBy: update.grantedBy,
-              expiresAt: update.expiresAt,
+              expiresAt: update.expiresAt ?? null,
               isActive: update.isActive ?? true,
               updatedAt: new Date(),
             },
             create: {
               userId: update.userId,
               permissionId: update.permissionId,
-              moduleId: cleanModuleId,
+              moduleId: cleanModuleId ?? null,
               granted: update.granted,
               reason: update.reason || "Manual assignment",
               grantedBy: update.grantedBy,
               grantedAt: new Date(),
-              expiresAt: update.expiresAt,
+              expiresAt: update.expiresAt ?? null,
               isActive: update.isActive ?? true,
             },
           });
 
-          console.log(`[v0] Upsert result:`, JSON.stringify(result, null, 2));
           updateCount++;
           console.log(
             `[v0] Successfully processed user permission: userId=${update.userId}, permissionId=${update.permissionId}, moduleId=${cleanModuleId}`
@@ -810,7 +749,7 @@ export async function updateUserPermissions(updates: any[]): Promise<boolean> {
   }
 }
 
-export async function getUserPermissions(): Promise<any[]> {
+export async function getUserPermissions(p0: string | undefined): Promise<any[]> {
   const isConnected = await isDatabaseConnected();
   if (!isConnected) {
     console.log(

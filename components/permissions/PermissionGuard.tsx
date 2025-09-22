@@ -7,7 +7,7 @@ interface PermissionGuardProps {
   moduleId?: string
   submoduleId?: string
   formId?: string
-  requiredPermission?: 'view' | 'create' | 'edit' | 'delete' | 'manage'
+  requiredPermission?: 'view' | 'create' | 'edit' | 'delete'
   fallback?: React.ReactNode
   showError?: boolean
 }
@@ -68,9 +68,6 @@ export function PermissionGuard({
       break
     case 'delete':
       hasPermission = actions.canDelete
-      break
-    case 'manage':
-      hasPermission = actions.canManage
       break
   }
 

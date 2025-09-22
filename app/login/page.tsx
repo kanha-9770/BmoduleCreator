@@ -160,14 +160,14 @@ export default function LoginPage() {
                   name="password"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-sm font-medium">Password (Optional)</FormLabel>
+                      <FormLabel className="text-sm font-medium">Password</FormLabel>
                       <FormControl>
                         <div className="relative">
                           <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                           <Input
                             {...field}
                             type={showPassword ? 'text' : 'password'}
-                            placeholder="Enter your password (optional)"
+                            placeholder="Enter your password"
                             className="pl-10 pr-10 h-12 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
                             disabled={isLoading}
                           />

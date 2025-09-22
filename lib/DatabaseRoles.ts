@@ -252,7 +252,6 @@ export class DatabaseRoles {
               canCreate: perm.canCreate,
               canEdit: perm.canEdit,
               canDelete: perm.canDelete,
-              canManage: perm.canManage
             },
             isSystemAdmin: perm.isSystemAdmin,
             grantedBy: perm.grantedBy,
@@ -388,8 +387,7 @@ export class DatabaseRoles {
           canView: perm.canView,
           canCreate: perm.canCreate,
           canEdit: perm.canEdit,
-          canDelete: perm.canDelete,
-          canManage: perm.canManage
+          canDelete: perm.canDelete
         },
         isSystemAdmin: perm.isSystemAdmin,
         grantedBy: perm.grantedBy,
@@ -410,7 +408,7 @@ export class DatabaseRoles {
     userId: string, 
     resourceType: 'module' | 'form', 
     resourceId: string, 
-    action: 'view' | 'create' | 'edit' | 'delete' | 'manage'
+    action: 'view' | 'create' | 'edit' | 'delete'
   ): Promise<boolean> {
     try {
       console.log("[DatabaseRoles] Checking user permission:", { userId, resourceType, resourceId, action })
@@ -469,19 +467,16 @@ export class DatabaseRoles {
       let hasPermission = false
       switch (action) {
         case 'view':
-          hasPermission = permission.canView || permission.canManage
+          hasPermission = permission.canView 
           break
         case 'create':
-          hasPermission = permission.canCreate || permission.canManage
+          hasPermission = permission.canCreate 
           break
         case 'edit':
-          hasPermission = permission.canEdit || permission.canManage
+          hasPermission = permission.canEdit 
           break
         case 'delete':
-          hasPermission = permission.canDelete || permission.canManage
-          break
-        case 'manage':
-          hasPermission = permission.canManage
+          hasPermission = permission.canDelete 
           break
         default:
           hasPermission = false
@@ -507,7 +502,6 @@ export class DatabaseRoles {
       canCreate?: boolean
       canEdit?: boolean
       canDelete?: boolean
-      canManage?: boolean
     }
     isSystemAdmin?: boolean
     grantedBy?: string
@@ -568,7 +562,6 @@ export class DatabaseRoles {
           canCreate: data.permissions.canCreate ?? false,
           canEdit: data.permissions.canEdit ?? false,
           canDelete: data.permissions.canDelete ?? false,
-          canManage: data.permissions.canManage ?? false,
           isSystemAdmin: data.isSystemAdmin ?? false,
           grantedBy: data.grantedBy,
           expiresAt: data.expiresAt,
@@ -583,7 +576,6 @@ export class DatabaseRoles {
           canCreate: data.permissions.canCreate ?? false,
           canEdit: data.permissions.canEdit ?? false,
           canDelete: data.permissions.canDelete ?? false,
-          canManage: data.permissions.canManage ?? false,
           isSystemAdmin: data.isSystemAdmin ?? false,
           grantedBy: data.grantedBy,
           expiresAt: data.expiresAt,
@@ -654,7 +646,6 @@ export class DatabaseRoles {
         canCreate?: boolean
         canEdit?: boolean
         canDelete?: boolean
-        canManage?: boolean
       }
       grantedBy?: string
     }>
@@ -786,9 +777,6 @@ export class DatabaseRoles {
           case 'delete':
             resourceUpdate.permissions.canDelete = update.value
             break
-          case 'manage':
-            resourceUpdate.permissions.canManage = update.value
-            break
         }
       }
 
@@ -816,7 +804,6 @@ export class DatabaseRoles {
           canCreate: resourceUpdate.permissions.canCreate ?? existingPermission?.canCreate ?? false,
           canEdit: resourceUpdate.permissions.canEdit ?? existingPermission?.canEdit ?? false,
           canDelete: resourceUpdate.permissions.canDelete ?? existingPermission?.canDelete ?? false,
-          canManage: resourceUpdate.permissions.canManage ?? existingPermission?.canManage ?? false
         }
 
         console.log(`[DatabaseRoles] Updating ${resourceUpdate.resourceType} ${resourceUpdate.resourceId}:`, finalPermissions)
@@ -890,8 +877,7 @@ export class DatabaseRoles {
         canView: existingPermission?.canView ?? false,
         canCreate: existingPermission?.canCreate ?? false,
         canEdit: existingPermission?.canEdit ?? false,
-        canDelete: existingPermission?.canDelete ?? false,
-        canManage: existingPermission?.canManage ?? false
+        canDelete: existingPermission?.canDelete ?? false
       }
 
       // Update the specific permission
@@ -907,9 +893,6 @@ export class DatabaseRoles {
           break
         case 'delete':
           permissions.canDelete = value
-          break
-        case 'manage':
-          permissions.canManage = value
           break
         default:
           throw new Error(`Invalid permission action: ${action}`)
@@ -1184,7 +1167,6 @@ export class DatabaseRoles {
                 create: perm.canCreate,
                 edit: perm.canEdit,
                 delete: perm.canDelete,
-                manage: perm.canManage
               }
             } else {
               // This is a child module - find its parent and add as submodule permission
@@ -1204,7 +1186,6 @@ export class DatabaseRoles {
                   create: perm.canCreate,
                   edit: perm.canEdit,
                   delete: perm.canDelete,
-                  manage: perm.canManage
                 }
               }
             }
@@ -1348,7 +1329,7 @@ export class DatabaseRoles {
       }
 
       // Validate permission type
-      if (!['view', 'create', 'edit', 'delete', 'manage'].includes(permissionType)) {
+      if (!['view', 'create', 'edit', 'delete'].includes(permissionType)) {
         throw new Error(`Invalid permission type: ${permissionType}`)
       }
 
@@ -1381,7 +1362,6 @@ export class DatabaseRoles {
         canCreate: existingPermission?.canCreate ?? false,
         canEdit: existingPermission?.canEdit ?? false,
         canDelete: existingPermission?.canDelete ?? false,
-        canManage: existingPermission?.canManage ?? false
       }
 
       // Update the specific permission
@@ -1397,9 +1377,6 @@ export class DatabaseRoles {
           break
         case 'delete':
           permissionData.canDelete = value
-          break
-        case 'manage':
-          permissionData.canManage = value
           break
       }
 

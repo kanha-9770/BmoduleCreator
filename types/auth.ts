@@ -5,7 +5,6 @@ export interface PermissionMatrix {
       canAdd: boolean
       canEdit: boolean
       canDelete: boolean
-      canManage: boolean
     }
     subModules: {
       [formId: string]: {
@@ -14,7 +13,6 @@ export interface PermissionMatrix {
           canAdd: boolean
           canEdit: boolean
           canDelete: boolean
-          canManage: boolean
         }
       }
     }
@@ -31,7 +29,6 @@ export interface UserPermission {
     canCreate: boolean
     canEdit: boolean
     canDelete: boolean
-    canManage: boolean
   }
   isSystemAdmin: boolean
   resource?: {

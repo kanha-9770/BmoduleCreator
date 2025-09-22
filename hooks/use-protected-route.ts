@@ -6,7 +6,7 @@ interface UseProtectedRouteOptions {
   requireSystemAdmin?: boolean
   requireModuleAccess?: string | string[]
   requireFormAccess?: string | string[]
-  requireAction?: "view" | "create" | "edit" | "delete" | "manage"
+  requireAction?: "view" | "create" | "edit" | "delete" 
   allowedRoles?: string[]
 }
 
@@ -62,8 +62,7 @@ export function useProtectedRoute(options: UseProtectedRouteOptions = {}): Prote
           const hasActionPermission =
             (checkOptions.requireAction === "create" && actions.canAdd) ||
             (checkOptions.requireAction === "edit" && actions.canEdit) ||
-            (checkOptions.requireAction === "delete" && actions.canDelete) ||
-            (checkOptions.requireAction === "manage" && actions.canManage)
+            (checkOptions.requireAction === "delete" && actions.canDelete) 
 
           if (!hasActionPermission) return false
         }
@@ -89,9 +88,8 @@ export function useProtectedRoute(options: UseProtectedRouteOptions = {}): Prote
             const hasActionPermission =
               (checkOptions.requireAction === "create" && actions.canAdd) ||
               (checkOptions.requireAction === "edit" && actions.canEdit) ||
-              (checkOptions.requireAction === "delete" && actions.canDelete) ||
-              (checkOptions.requireAction === "manage" && actions.canManage)
-
+              (checkOptions.requireAction === "delete" && actions.canDelete)
+              
             if (!hasActionPermission) return false
           }
         }

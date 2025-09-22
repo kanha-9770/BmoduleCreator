@@ -7,7 +7,7 @@ interface PermissionGuardProps {
   children: ReactNode
   moduleId?: string
   formId?: string
-  action?: "view" | "create" | "edit" | "delete" | "manage"
+  action?: "view" | "create" | "edit" | "delete"
   fallback?: ReactNode
   requireAll?: boolean
 }
@@ -51,9 +51,6 @@ export function PermissionGuard({
       case "delete":
         hasPermission = actions.canDelete
         break
-      case "manage":
-        hasPermission = actions.canManage
-        break
     }
   } else if (moduleId) {
     // Check module-level permission
@@ -70,9 +67,6 @@ export function PermissionGuard({
         break
       case "delete":
         hasPermission = actions.canDelete
-        break
-      case "manage":
-        hasPermission = actions.canManage
         break
     }
   } else if (formId) {

@@ -1,16 +1,33 @@
+// pages/api/role-permissions.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getRolePermissions, updateRolePermissions, type RolePermissionUpdate } from "@/lib/database";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     console.log("[v0] GET /api/role-permissions - Starting request");
 
-    const rolePermissions = await getRolePermissions();
-    console.log(`[v0] Successfully retrieved ${rolePermissions.length} role permissions`);
+    const roleId = request.nextUrl.searchParams.get("roleId");
+
+    if (roleId && typeof roleId !== "string") {
+      console.log("[v0] Invalid roleId parameter:", roleId);
+      return NextResponse.json(
+        { success: false, error: "Invalid roleId parameter" },
+        { status: 400 }
+      );
+    }
+
+    const rolePermissions = await getRolePermissions(roleId || undefined);
+    console.log(
+      `[v0] Successfully retrieved ${rolePermissions.length} role permissions for roleId: ${roleId || "all"}`
+    );
 
     return NextResponse.json({
       success: true,
       data: rolePermissions,
+      meta: {
+        roleId: roleId || null,
+        permissionCount: rolePermissions.length,
+      },
     });
   } catch (error) {
     console.error("[v0] Failed to fetch role permissions:", error);
@@ -33,13 +50,13 @@ export async function PUT(request: NextRequest) {
     console.log("[v0] Request body:", body);
 
     if (!Array.isArray(body)) {
+      console.log("[v0] Invalid request body: must be an array");
       return NextResponse.json(
         { success: false, error: "Request body must be an array" },
         { status: 400 }
       );
     }
 
-    // Validate and transform the updates
     const updates: RolePermissionUpdate[] = body
       .filter((update: any) => {
         if (!update.roleId || !update.permissionId) {
@@ -57,6 +74,7 @@ export async function PUT(request: NextRequest) {
       }));
 
     if (updates.length === 0) {
+      console.log("[v0] No valid updates provided");
       return NextResponse.json(
         { success: false, error: "No valid updates provided" },
         { status: 400 }

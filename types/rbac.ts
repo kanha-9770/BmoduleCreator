@@ -2,7 +2,7 @@
 export type ResourceType = 'FormModule' | 'Form' | 'FormField' | 'User' | 'System'
 
 // Permission actions
-export type PermissionAction = 'view' | 'create' | 'edit' | 'delete' | 'publish' | 'manage'
+export type PermissionAction = 'view' | 'create' | 'edit' | 'delete'
 
 // Role interface (now just for designation purposes)
 export interface Role {
@@ -52,7 +52,6 @@ export interface UserPermission {
     canCreate: boolean
     canEdit: boolean
     canDelete: boolean
-    canManage: boolean
   }
   isSystemAdmin: boolean
   grantedBy?: string
@@ -69,7 +68,6 @@ export interface PermissionMatrix {
     name: string
     permissions: {
       canView: boolean
-      canManage: boolean
     }
     subModules: {
       [formId: string]: {
@@ -79,7 +77,6 @@ export interface PermissionMatrix {
           canAdd: boolean
           canEdit: boolean
           canDelete: boolean
-          canManage: boolean
         }
       }
     }

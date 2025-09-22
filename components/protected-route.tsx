@@ -6,7 +6,7 @@ interface ProtectedRouteProps {
   children: React.ReactNode;
   moduleId?: string;
   formId?: string;
-  requiredAction?: 'view' | 'create' | 'edit' | 'delete' | 'manage';
+  requiredAction?: 'view' | 'create' | 'edit' | 'delete';
   redirectTo?: string;
 }
 
@@ -97,9 +97,6 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         case 'delete':
           hasAccess = actions.canDelete;
           break;
-        case 'manage':
-          hasAccess = actions.canManage;
-          break;
       }
     }
   } else {
@@ -118,9 +115,6 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
           break;
         case 'delete':
           hasAccess = actions.canDelete;
-          break;
-        case 'manage':
-          hasAccess = actions.canManage;
           break;
       }
     }
