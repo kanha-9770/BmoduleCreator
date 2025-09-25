@@ -660,6 +660,7 @@ export default function FormBuilderPage() {
       // Initialize target variables
       let targetSectionId: string | undefined
       let targetSubformId: string | undefined
+      let insertionIndex: number | undefined
 
       console.log("🔍 ENHANCED DROP TARGET ANALYSIS:", {
         overId: over.id,
@@ -684,7 +685,10 @@ export default function FormBuilderPage() {
         // Fallback to overData.subformId
         else if (overData.subformId) {
           targetSubformId = overData.subformId
-          const hierarchy = subformHierarchyMap.get(targetSubformId)
+          let hierarchy: SubformHierarchy | undefined = undefined
+          if (typeof targetSubformId === "string") {
+            hierarchy = subformHierarchyMap.get(targetSubformId)
+          }
           targetSectionId = hierarchy?.sectionId
           console.log("✅ METHOD 1B SUCCESS - From subformId:", { targetSubformId, targetSectionId })
         }
@@ -704,7 +708,8 @@ export default function FormBuilderPage() {
       if (!targetSubformId && overData?.field) {
         targetSectionId = overData.field.sectionId
         targetSubformId = overData.field.subformId
-        console.log("✅ METHOD 2 SUCCESS - Near field:", { targetSectionId, targetSubformId })
+        insertionIndex = overData.field.order + 1
+        console.log("✅ METHOD 2 SUCCESS - Near field:", { targetSectionId, targetSubformId, insertionIndex })
 
         // If field is in a subform but has no sectionId, get it from hierarchy
         if (targetSubformId && !targetSectionId) {
@@ -766,6 +771,7 @@ export default function FormBuilderPage() {
         targetSectionId,
         targetSubformId,
         fieldType,
+        insertionIndex,
         willCreateInSubform: !!targetSubformId,
         subformPath: targetSubformId ? getSubformPath(targetSubformId) : "N/A",
       })
@@ -788,7 +794,7 @@ export default function FormBuilderPage() {
 
       // Handle other field types
       console.log("⚡ Creating field:", fieldType)
-      await createSingleField(fieldType, targetSectionId, targetSubformId)
+      await createSingleField(fieldType, targetSectionId, targetSubformId, insertionIndex)
       return
     }
 
@@ -817,7 +823,6 @@ export default function FormBuilderPage() {
       setTimeout(() => updateSectionOrders(), 100)
     }
 
-    // Handle field reordering within the same container
     const isFieldDrag = active.data.current?.type === "Field" && over.data.current?.type === "Field"
     if (isFieldDrag) {
       const activeSectionId = active.data.current?.field.sectionId
@@ -825,11 +830,99 @@ export default function FormBuilderPage() {
       const activeSubformId = active.data.current?.field.subformId
       const overSubformId = over.data.current?.field.subformId
 
-      if (activeSectionId === overSectionId && activeSubformId === overSubformId) {
-        setForm((prevForm) => {
-          if (!prevForm) return null
+      setForm((prevForm) => {
+        if (!prevForm) return null
 
-          const newSections = [...prevForm.sections]
+        const newSections = [...prevForm.sections]
+
+        // Handle cross-container movement
+        if (activeSectionId !== overSectionId || activeSubformId !== overSubformId) {
+          // Remove from source
+          const activeSection = newSections.find((s) => s.id === activeSectionId)
+          if (!activeSection) return prevForm
+
+          let movedField: FormField | undefined
+
+          if (activeSubformId) {
+            // Remove from subform
+            const removeFromSubform = (subforms: Subform[]): boolean => {
+              for (const subform of subforms) {
+                const fieldIndex = subform.fields.findIndex((f) => f.id === active.id)
+                if (fieldIndex !== -1) {
+                  ;[movedField] = subform.fields.splice(fieldIndex, 1)
+                  // Reorder remaining fields
+                  subform.fields.forEach((field, index) => {
+                    field.order = index
+                  })
+                  return true
+                }
+                if (subform.childSubforms && removeFromSubform(subform.childSubforms)) {
+                  return true
+                }
+              }
+              return false
+            }
+
+            if (!removeFromSubform(activeSection.subforms)) return prevForm
+          } else {
+            // Remove from section
+            const activeIndex = activeSection.fields.findIndex((f) => f.id === active.id)
+            if (activeIndex === -1) return prevForm
+              ;[movedField] = activeSection.fields.splice(activeIndex, 1)
+            // Reorder remaining fields
+            activeSection.fields.forEach((field, index) => {
+              field.order = index
+            })
+          }
+
+          if (!movedField) return prevForm
+
+          // Add to target at specific position
+          const targetSection = newSections.find((s) => s.id === overSectionId)
+          if (!targetSection) return prevForm
+
+          movedField.sectionId = overSectionId
+          movedField.subformId = overSubformId
+
+          const targetFieldOrder = over.data.current?.field.order || 0
+
+          if (overSubformId) {
+            // Add to subform at specific position
+            const addToSubform = (subforms: Subform[]): boolean => {
+              for (const subform of subforms) {
+                if (subform.id === overSubformId) {
+                  // Insert at the position after the target field
+                  const insertIndex = Math.min(targetFieldOrder + 1, subform.fields.length)
+                  subform.fields.splice(insertIndex, 0, movedField!)
+                  // Reorder all fields
+                  subform.fields.forEach((field, index) => {
+                    field.order = index
+                  })
+                  return true
+                }
+                if (subform.childSubforms && addToSubform(subform.childSubforms)) {
+                  return true
+                }
+              }
+              return false
+            }
+
+            addToSubform(targetSection.subforms)
+          } else {
+            // Add to section at specific position
+            const insertIndex = Math.min(targetFieldOrder + 1, targetSection.fields.length)
+            targetSection.fields.splice(insertIndex, 0, movedField)
+            // Reorder all fields
+            targetSection.fields.forEach((field, index) => {
+              field.order = index
+            })
+          }
+
+          return { ...prevForm, sections: newSections }
+        }
+
+        // Handle reordering within the same container
+        if (activeSectionId === overSectionId && activeSubformId === overSubformId) {
           const section = newSections.find((s) => s.id === activeSectionId)
           if (!section) return prevForm
 
@@ -877,13 +970,24 @@ export default function FormBuilderPage() {
           }
 
           return { ...prevForm, sections: newSections }
-        })
+        }
 
-        // Persist field order changes to database
-        if (activeSubformId) {
-          setTimeout(() => updateSubformFieldOrders(activeSubformId), 100)
+        return prevForm
+      })
+
+      // Persist field order changes to database
+      if (activeSubformId) {
+        setTimeout(() => updateSubformFieldOrders(activeSubformId), 100)
+      } else {
+        setTimeout(() => updateFieldOrders(activeSectionId), 100)
+      }
+
+      // Also update target container if different
+      if (activeSectionId !== overSectionId || activeSubformId !== overSubformId) {
+        if (overSubformId) {
+          setTimeout(() => updateSubformFieldOrders(overSubformId), 100)
         } else {
-          setTimeout(() => updateFieldOrders(activeSectionId), 100)
+          setTimeout(() => updateFieldOrders(overSectionId), 100)
         }
       }
     }
@@ -1071,10 +1175,47 @@ export default function FormBuilderPage() {
     }
   }
 
-  const createSingleField = async (fieldType: string, sectionId?: string, subformId?: string) => {
+  const createSingleField = async (
+    fieldType: string,
+    sectionId?: string,
+    subformId?: string,
+    insertionIndex?: number,
+  ) => {
     if (!form) return
     try {
-      console.log("🔧 Creating field with params:", { fieldType, sectionId, subformId })
+      console.log("🔧 Creating field with params:", { fieldType, sectionId, subformId, insertionIndex })
+
+      // Calculate the correct order based on insertion position
+      let calculatedOrder = 0
+      if (insertionIndex !== undefined) {
+        calculatedOrder = insertionIndex
+      } else {
+        // Default to end of list
+        if (subformId) {
+          // Find the subform and get its field count
+          const findSubform = (subforms: Subform[]): Subform | null => {
+            for (const subform of subforms) {
+              if (subform.id === subformId) return subform
+              if (subform.childSubforms) {
+                const found = findSubform(subform.childSubforms)
+                if (found) return found
+              }
+            }
+            return null
+          }
+
+          let targetSubform: Subform | null = null
+          for (const section of form.sections) {
+            targetSubform = findSubform(section.subforms)
+            if (targetSubform) break
+          }
+
+          calculatedOrder = targetSubform?.fields.length || 0
+        } else if (sectionId) {
+          const section = form.sections.find((s) => s.id === sectionId)
+          calculatedOrder = section?.fields.length || 0
+        }
+      }
 
       const fieldData = {
         sectionId: subformId ? undefined : sectionId,
@@ -1089,8 +1230,10 @@ export default function FormBuilderPage() {
         visible: true,
         readonly: false,
         width: "full",
-        order: 0, // Will be calculated by API
+        order: calculatedOrder,
+        insertionIndex: insertionIndex, // Pass insertion index to API
       }
+
       console.log("📤 Sending field creation request:", fieldData)
       const response = await fetch("/api/fields", {
         method: "POST",
@@ -1348,9 +1491,6 @@ export default function FormBuilderPage() {
                       </Badge>
                     )}
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    Advanced Form Builder with Hierarchical Subforms (1, 1.1, 1.2, etc.)
-                  </p>
                 </div>
               </div>
             </div>
@@ -1405,8 +1545,6 @@ export default function FormBuilderPage() {
                   onDeleteSubform={() => { }}
                   onUpdateField={handleUpdateField}
                   onDeleteField={handleDeleteField}
-                  subformPath={getSubformPath((activeItem as Subform).id)}
-                  parentChildDisplay={getParentChildDisplay((activeItem as Subform).id)}
                 />
               </div>
             )}
@@ -1436,21 +1574,6 @@ export default function FormBuilderPage() {
                     onUpdate={async () => { }}
                     onDelete={() => { }}
                     onCopy={() => { }}
-                    fieldPath={
-                      (activeItem as FormField).subformId
-                        ? getFullSubformPath((activeItem as FormField).subformId!)
-                        : "Section Level"
-                    }
-                    subformPath={
-                      (activeItem as FormField).subformId
-                        ? getSubformPath((activeItem as FormField).subformId!)
-                        : undefined
-                    }
-                    parentChildDisplay={
-                      (activeItem as FormField).subformId
-                        ? getParentChildDisplay((activeItem as FormField).subformId!)
-                        : undefined
-                    }
                   />
                 </div>
               )}

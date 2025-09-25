@@ -1959,6 +1959,15 @@ export default function HomePage() {
                     >
                       <Trash2 className="h-4 w-4 mr-2" /> Delete
                     </Button>
+                    <NextLink href={`/modules/${selectedModule.id}`}>
+                      <Button
+                        size="sm"
+                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                      >
+                        <Settings className="h-4 w-4 mr-2" />
+                        Manage
+                      </Button>
+                    </NextLink>
                   </div>
                 </div>
                 {/* Forms Display */}

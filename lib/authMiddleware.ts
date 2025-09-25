@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateSession, AuthContext } from './auth';
+import { DatabaseRoles } from './DatabaseRoles';
 
 export const withAuth = (handler: (req: NextRequest & { user?: any; authContext?: AuthContext }) => Promise<NextResponse>) => {
   return async (req: NextRequest) => {

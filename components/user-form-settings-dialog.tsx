@@ -65,11 +65,11 @@ export default function UserFormSettingsDialog({
   if (!form) return null
 
   const hasRecords = form.recordCount && form.recordCount > 0
-  const currentStorageInfo = form.isUserForm 
+  const currentStorageInfo = form.isUserForm
     ? "This form stores data in the dedicated user forms table (form_records_15)"
     : form.isEmployeeForm
-    ? "This form stores data in the dedicated employee forms table (form_records_14)"
-    : "This form stores data in the general forms tables (form_records_1-13)"
+      ? "This form stores data in the dedicated employee forms table (form_records_14)"
+      : "This form stores data in the general forms tables (form_records_1-13)"
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -79,9 +79,9 @@ export default function UserFormSettingsDialog({
             <Users className="h-5 w-5" />
             Form Settings
           </DialogTitle>
-          <DialogDescription>
+          {/* <DialogDescription>
             Configure whether this form is designated as a user form or employee form. These forms have dedicated storage and special handling.
-          </DialogDescription>
+          </DialogDescription> */}
         </DialogHeader>
 
         <div className="space-y-6 py-4">
@@ -128,7 +128,7 @@ export default function UserFormSettingsDialog({
                   disabled={isUpdating}
                 />
               </div>
-              
+
               <div className="flex items-center justify-between p-4 border rounded-lg">
                 <div className="space-y-1">
                   <div className="font-medium">Employee Form</div>
@@ -146,39 +146,14 @@ export default function UserFormSettingsDialog({
             </div>
           </div>
 
-          {/* Storage Information */}
-          <Alert>
-            <Info className="h-4 w-4" />
-            <AlertDescription className="text-sm">
-              <strong>Storage Location:</strong><br />
-              {isUserForm 
-                ? "User forms store data in a dedicated table (form_records_15) for better organization and performance."
-                : isEmployeeForm
-                ? "Employee forms store data in a dedicated table (form_records_14) for better organization and performance."
-                : "Regular forms use shared storage tables (form_records_1-13) with automatic distribution."
-              }
-            </AlertDescription>
-          </Alert>
-
-          {/* Current Storage Info */}
-          <div className="p-3 bg-gray-50 rounded-lg">
-            <div className="text-sm text-gray-600">
-              <strong>Current Storage:</strong> {currentStorageInfo}
-            </div>
-            {form.recordCount !== undefined && (
-              <div className="text-sm text-gray-600 mt-1">
-                <strong>Records:</strong> {form.recordCount} submissions
-              </div>
-            )}
-          </div>
 
           {/* Warning for existing records */}
           {hasRecords && (form.isUserForm !== isUserForm || form.isEmployeeForm !== isEmployeeForm) && (
             <Alert>
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription className="text-sm">
-                <strong>Important:</strong> This form has {form.recordCount} existing record(s). 
-                Changing the form type will affect where new submissions are stored, but existing 
+                <strong>Important:</strong> This form has {form.recordCount} existing record(s).
+                Changing the form type will affect where new submissions are stored, but existing
                 records will remain in their current location.
               </AlertDescription>
             </Alert>
@@ -204,8 +179,8 @@ export default function UserFormSettingsDialog({
           <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isUpdating}>
             Cancel
           </Button>
-          <Button 
-            onClick={handleSave} 
+          <Button
+            onClick={handleSave}
             disabled={isUpdating || (form.isUserForm === isUserForm && form.isEmployeeForm === isEmployeeForm)}
           >
             {isUpdating ? "Updating..." : "Save Changes"}

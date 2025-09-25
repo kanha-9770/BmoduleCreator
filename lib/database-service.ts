@@ -2,7 +2,7 @@ import { DatabaseTransforms } from "./DatabaseTransforms"
 import { DatabaseRecords } from "./DatabaseRecords"
 import { DatabaseModules } from "./DatabaseModules"
 import { DatabaseRoles } from "./DatabaseRoles"
-import { AuthMiddleware } from "./auth-middleware"
+import { AuthMiddleware, UserPermission, RolePermission } from "./auth-middleware"
 import { prisma } from "./prisma"
 
 export class DatabaseService {
@@ -32,67 +32,239 @@ export class DatabaseService {
   static moveModule = DatabaseModules.moveModule
   static deleteModule = DatabaseModules.deleteModule
 
-  // Enhanced module hierarchy with permission filtering
- static async getModuleHierarchy(userId?: string): Promise<any[]> {
-  try {
-    console.log(`[DatabaseService] Getting module hierarchy for userId: ${userId || 'unauthenticated'}`);
+  // Enhanced module hierarchy with permission filtering - UPDATED LOGIC
+  static async getModuleHierarchy(userId?: string): Promise<any[]> {
+    try {
+      console.log(`[DatabaseService] Getting module hierarchy for userId: ${userId || 'unauthenticated'}`);
 
-    // Fetch all modules
-    const modules = await DatabaseModules.getModuleHierarchy();
-    console.log(`[DatabaseService] Found ${modules.length} total modules`);
+      if (!userId) {
+        console.log("[DatabaseService] No user ID provided, returning all modules for unauthenticated access");
+        return await DatabaseModules.getModuleHierarchy();
+      }
 
-    if (!userId) {
-      console.log("[DatabaseService] No user ID provided, returning all modules for unauthenticated access");
-      return modules;
-    }
+      // Step 1: Get modules via role permissions (equivalent to first part of UNION)
+      const modulesViaRoles = await prisma.$queryRaw`
+        SELECT DISTINCT m.id, m.name, m.description, m.icon, m.color, m.settings, 
+               m.parent_id, m.module_type, m.level, m.path, m.is_active, 
+               m.sort_order, m.created_at, m.updated_at
+        FROM users u
+        JOIN user_unit_assignments uua ON uua.user_id = u.id
+        JOIN roles r ON r.id = uua.role_id
+        JOIN role_permissions rp ON rp.role_id = r.id AND rp.granted = TRUE
+        JOIN form_modules m ON m.id = rp.module_id AND m.is_active = TRUE
+        WHERE u.id = ${userId}
+      ` as any[];
 
-    // Fetch user permissions
-    const userPermissions = await prisma.userPermission.findMany({
-      where: { userId, isActive: true },
-      include: {
-        permission: { select: { name: true, category: true } },
-        module: { select: { name: true, path: true } },
-      },
-    });
+      console.log(`[DatabaseService] Found ${modulesViaRoles.length} modules via role permissions`);
 
-    // Fetch user's role(s) from UserUnitAssignment
-    const userAssignments = await prisma.userUnitAssignment.findMany({
-      where: { userId },
-      select: { roleId: true },
-    });
-    const roleIds = userAssignments.map(assignment => assignment.roleId);
+      // Step 2: Get modules via direct user permissions (equivalent to second part of UNION)
+      const modulesViaUserPermissions = await prisma.$queryRaw`
+        SELECT DISTINCT m.id, m.name, m.description, m.icon, m.color, m.settings,
+               m.parent_id, m.module_type, m.level, m.path, m.is_active,
+               m.sort_order, m.created_at, m.updated_at
+        FROM users u
+        JOIN user_permissions up ON up.user_id = u.id AND up.granted = TRUE AND up.is_active = TRUE
+        JOIN form_modules m ON m.id = up.module_id AND m.is_active = TRUE
+        WHERE u.id = ${userId}
+      ` as any[];
 
-    // Fetch role permissions
-    const rolePermissions = await prisma.rolePermission.findMany({
-      where: { roleId: { in: roleIds } },
-      include: {
-        permission: { select: { name: true, category: true } },
-        module: { select: { name: true, path: true } },
-      },
-    });
+      console.log(`[DatabaseService] Found ${modulesViaUserPermissions.length} modules via direct user permissions`);
 
-    console.log(`[DatabaseService] Found ${userPermissions.length} user permissions and ${rolePermissions.length} role permissions`);
+      // Step 3: Combine and deduplicate modules
+      const allUserModules = new Map();
+      
+      // Add modules from roles
+      modulesViaRoles.forEach(module => {
+        allUserModules.set(module.id, module);
+      });
 
-    if (userPermissions.length === 0 && rolePermissions.length === 0) {
-      console.log("[DatabaseService] No permissions found, returning empty module list");
+      // Add modules from direct permissions (will overwrite if exists, but that's fine)
+      modulesViaUserPermissions.forEach(module => {
+        allUserModules.set(module.id, module);
+      });
+
+      const uniqueModuleIds = Array.from(allUserModules.keys());
+      console.log(`[DatabaseService] Total unique accessible modules: ${uniqueModuleIds.length}`);
+
+      if (uniqueModuleIds.length === 0) {
+        console.log("[DatabaseService] No accessible modules found for user");
+        return [];
+      }
+
+      // Step 4: Get complete module data with forms and build hierarchy
+      const completeModules = await prisma.formModule.findMany({
+        where: {
+          id: { in: uniqueModuleIds },
+          isActive: true
+        },
+        include: {
+          forms: {
+            include: {
+              tableMapping: true,
+              sections: {
+                include: {
+                  fields: true,
+                  subforms: {
+                    include: {
+                      fields: true,
+                      records: true,
+                      parentSubform: true,
+                      childSubforms: {
+                        include: {
+                          fields: true,
+                          records: true,
+                          childSubforms: {
+                            include: {
+                              fields: true,
+                              records: true,
+                            },
+                            orderBy: { order: "asc" },
+                          },
+                        },
+                        orderBy: { order: "asc" },
+                      },
+                    },
+                    orderBy: { order: "asc" },
+                  },
+                },
+                orderBy: { order: "asc" },
+              },
+              _count: {
+                select: {
+                  records1: true,
+                  records2: true,
+                  records3: true,
+                  records4: true,
+                  records5: true,
+                  records6: true,
+                  records7: true,
+                  records8: true,
+                  records9: true,
+                  records10: true,
+                  records11: true,
+                  records12: true,
+                  records13: true,
+                  records14: true,
+                  records15: true,
+                },
+              },
+            },
+          },
+          parent: true,
+          children: {
+            where: {
+              isActive: true,
+              id: { in: uniqueModuleIds } // Only include children user has access to
+            },
+            include: {
+              forms: {
+                include: {
+                  tableMapping: true,
+                  sections: {
+                    include: {
+                      fields: true,
+                      subforms: {
+                        include: {
+                          fields: true,
+                          records: true,
+                        },
+                        orderBy: { order: "asc" },
+                      },
+                    },
+                    orderBy: { order: "asc" },
+                  },
+                  _count: {
+                    select: {
+                      records1: true,
+                      records2: true,
+                      records3: true,
+                      records4: true,
+                      records5: true,
+                      records6: true,
+                      records7: true,
+                      records8: true,
+                      records9: true,
+                      records10: true,
+                      records11: true,
+                      records12: true,
+                      records13: true,
+                      records14: true,
+                      records15: true,
+                    },
+                  },
+                },
+              },
+            },
+            orderBy: [{ level: "asc" }, { sortOrder: "asc" }, { name: "asc" }]
+          }
+        },
+        orderBy: [{ level: "asc" }, { sortOrder: "asc" }, { name: "asc" }]
+      });
+
+      console.log(`[DatabaseService] Retrieved complete data for ${completeModules.length} modules`);
+
+      // Step 5: Build proper hierarchy
+      const moduleMap = new Map<string, any>();
+      const rootModules: any[] = [];
+
+      // First pass: create map and identify root modules (only those user has access to)
+      completeModules.forEach((module) => {
+        const transformedModule = { ...module, children: [] };
+        moduleMap.set(module.id, transformedModule);
+
+        if (!module.parentId || !uniqueModuleIds.includes(module.parentId)) {
+          // Include as root if no parent or parent is not accessible
+          rootModules.push(transformedModule);
+        }
+      });
+
+      // Second pass: build parent-child relationships (only for accessible modules)
+      completeModules.forEach((module) => {
+        if (module.parentId && moduleMap.has(module.parentId) && uniqueModuleIds.includes(module.parentId)) {
+          const parent = moduleMap.get(module.parentId);
+          const child = moduleMap.get(module.id);
+          if (parent && child) {
+            parent.children.push(child);
+          }
+        }
+      });
+
+      // Step 6: Transform to proper format with hierarchy levels
+      const result = rootModules.map((module) =>
+        DatabaseTransforms.transformModuleHierarchy(module, 0)
+      );
+
+      console.log(`[DatabaseService] Built hierarchy with ${result.length} root modules`);
+      
+      // Log detailed hierarchy info
+      result.forEach((rootModule, index) => {
+        const childCount = this.countChildrenRecursive(rootModule);
+        console.log(`[DatabaseService] Root module ${index + 1}: "${rootModule.name}" with ${childCount} total descendants`);
+      });
+
+      return result;
+    } catch (error: any) {
+      console.error("[DatabaseService] Error getting module hierarchy:", error);
       return [];
     }
-
-    // Filter modules based on permissions
-    const filteredModules = AuthMiddleware.filterModulesByPermissions(modules, userPermissions, rolePermissions);
-    console.log(`[DatabaseService] Filtered to ${filteredModules.length} accessible modules`);
-
-    return filteredModules;
-  } catch (error: any) {
-    console.error("[DatabaseService] Error getting module hierarchy:", error);
-    return [];
   }
-}
+
+  // Helper method to count children recursively
+  private static countChildrenRecursive(module: any): number {
+    let count = 0;
+    if (module.children && module.children.length > 0) {
+      count += module.children.length;
+      module.children.forEach((child: any) => {
+        count += this.countChildrenRecursive(child);
+      });
+    }
+    return count;
+  }
 
   // Enhanced modules list with permission filtering
-  static async getModules(userPermissions?: any[]): Promise<any[]> {
+  static async getModules(userId?: string): Promise<any[]> {
     try {
-      const hierarchyModules = await this.getModuleHierarchy(userPermissions)
+      const hierarchyModules = await this.getModuleHierarchy(userId)
       return DatabaseTransforms.flattenModuleHierarchy(hierarchyModules)
     } catch (error: any) {
       console.error("[DatabaseService] Error getting modules:", error)
@@ -107,50 +279,70 @@ export class DatabaseService {
   static unpublishForm = DatabaseModules.unpublishForm
 
   // Enhanced form operations with permission filtering
-  static async getForms(moduleId?: string, userPermissions?: any[]): Promise<any[]> {
+  static async getForms(moduleId?: string, userId?: string): Promise<any[]> {
     try {
       const forms = await DatabaseModules.getForms(moduleId)
-      if (!userPermissions || userPermissions.length === 0) {
-        console.log("[DatabaseService] No user permissions provided for forms, returning all")
+      
+      if (!userId) {
+        console.log("[DatabaseService] No user ID provided for forms, returning all")
         return forms
       }
 
-      // Filter forms based on user permissions
-      return forms.filter(form => {
-        return AuthMiddleware.hasFormPermission(
-          userPermissions,
-          form.moduleId,
-          form.id,
-          "view"
-        )
-      })
+      // Get user's accessible modules to check form permissions
+      const accessibleModules = await this.getModuleHierarchy(userId);
+      const accessibleModuleIds = new Set<string>();
+      
+      // Flatten the hierarchy to get all accessible module IDs
+      const collectModuleIds = (modules: any[]) => {
+        modules.forEach(module => {
+          accessibleModuleIds.add(module.id);
+          if (module.children && module.children.length > 0) {
+            collectModuleIds(module.children);
+          }
+        });
+      };
+      collectModuleIds(accessibleModules);
+
+      // Filter forms based on accessible modules
+      const accessibleForms = forms.filter(form => 
+        accessibleModuleIds.has(form.moduleId)
+      );
+
+      console.log(`[DatabaseService] Filtered ${forms.length} forms down to ${accessibleForms.length} accessible forms`);
+      return accessibleForms;
     } catch (error: any) {
       console.error("[DatabaseService] Error getting forms:", error)
       return []
     }
   }
 
-  static async getForm(id: string, userPermissions?: any[]): Promise<any | null> {
+  static async getForm(id: string, userId?: string): Promise<any | null> {
     try {
       const form = await DatabaseModules.getForm(id)
 
       if (!form) return null
 
-      if (!userPermissions || userPermissions.length === 0) {
-        console.log("[DatabaseService] No user permissions provided for form access, allowing access")
+      if (!userId) {
+        console.log("[DatabaseService] No user ID provided for form access, allowing access")
         return form
       }
 
-      // Check if user has permission to view this form
-      const hasAccess = AuthMiddleware.hasFormPermission(
-        userPermissions,
-        form.moduleId,
-        form.id,
-        "view"
-      )
+      // Check if user has access to the form's module
+      const accessibleModules = await this.getModuleHierarchy(userId);
+      const accessibleModuleIds = new Set<string>();
+      
+      const collectModuleIds = (modules: any[]) => {
+        modules.forEach(module => {
+          accessibleModuleIds.add(module.id);
+          if (module.children && module.children.length > 0) {
+            collectModuleIds(module.children);
+          }
+        });
+      };
+      collectModuleIds(accessibleModules);
 
-      if (!hasAccess) {
-        console.log(`[DatabaseService] User denied access to form ${form.name}`)
+      if (!accessibleModuleIds.has(form.moduleId)) {
+        console.log(`[DatabaseService] User denied access to form ${form.name} - module not accessible`)
         return null
       }
 
@@ -161,31 +353,75 @@ export class DatabaseService {
     }
   }
 
-  static async updateForm(id: string, data: any, userPermissions?: any[]): Promise<any> {
+  static async updateForm(id: string, data: any, userId?: string): Promise<any> {
     // Check permissions before update
-    if (userPermissions && userPermissions.length > 0) {
-      const form = await DatabaseModules.getForm(id)
-      if (form) {
-        const hasAccess = AuthMiddleware.hasFormPermission(
-          userPermissions,
-          form.moduleId,
-          form.id,
-          "edit"
-        )
-        if (!hasAccess) {
-          throw new Error("Insufficient permissions to update this form")
-        }
+    if (userId) {
+      const form = await this.getForm(id, userId)
+      if (!form) {
+        throw new Error("Insufficient permissions to update this form or form not found")
       }
     }
 
     return DatabaseModules.updateForm(id, data)
   }
+
+  // Helper methods for getting user permissions (kept for compatibility)
+  private static async getUserPermissionsForFiltering(userId: string): Promise<UserPermission[]> {
+    return await prisma.userPermission.findMany({
+      where: { userId, isActive: true },
+      include: {
+        permission: { 
+          select: { 
+            name: true, 
+            category: true 
+          } 
+        },
+        module: { 
+          select: { 
+            name: true, 
+            path: true 
+          } 
+        },
+      },
+    }) as UserPermission[];
+  }
+
+  private static async getRolePermissionsForUser(userId: string): Promise<RolePermission[]> {
+    const userAssignments = await prisma.userUnitAssignment.findMany({
+      where: { userId },
+      select: { roleId: true },
+    });
+    
+    const roleIds = userAssignments.map(assignment => assignment.roleId);
+
+    if (roleIds.length === 0) return [];
+
+    return await prisma.rolePermission.findMany({
+      where: { roleId: { in: roleIds } },
+      include: {
+        permission: { 
+          select: { 
+            name: true, 
+            category: true 
+          } 
+        },
+        module: { 
+          select: { 
+            name: true, 
+            path: true 
+          } 
+        },
+      },
+    }) as RolePermission[];
+  }
+
   // Section operations
   static createSection = DatabaseModules.createSection
   static getSections = DatabaseModules.getSections
   static updateSection = DatabaseModules.updateSection
   static deleteSection = DatabaseModules.deleteSection
   static deleteSectionWithCleanup = DatabaseModules.deleteSectionWithCleanup
+  
   // Field operations
   static createField = DatabaseModules.createField
   static getFields = DatabaseModules.getFields
@@ -257,38 +493,41 @@ export class DatabaseService {
       console.log(`[DatabaseService] Getting user context for: ${userId}`)
 
       // Get user record
-      const userRecord = await DatabaseRoles.getUserById(userId)
+      const userRecord = await prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+          unitAssignments: {
+            include: {
+              role: true,
+              unit: true
+            }
+          }
+        }
+      })
       if (!userRecord) {
         console.log(`[DatabaseService] User not found: ${userId}`)
         return null
       }
 
-      // Get user permissions
-      const permissions = await DatabaseRoles.getUserPermissionsWithResources(userId)
-      console.log(`[DatabaseService] Found ${permissions.length} permissions for user`)
+      // Get user permissions and role permissions
+      const userPermissions = await this.getUserPermissionsForFiltering(userId);
+      const rolePermissions = await this.getRolePermissionsForUser(userId);
 
-      // Get accessible modules
-      const allModules = await DatabaseModules.getModuleHierarchy()
-      const accessibleModules = AuthMiddleware.filterModulesByPermissions(allModules, permissions)
+      // Get accessible modules (using the updated logic)
+      const accessibleModules = await this.getModuleHierarchy(userId);
 
-      // Get accessible forms
-      const allForms = await DatabaseModules.getForms()
-      const accessibleForms = allForms.filter(form => {
-        return AuthMiddleware.hasFormPermission(permissions, form.moduleId, form.id, "view")
-      })
-
-      const recordData = userRecord.recordData as any
+      // Get accessible forms (using the updated logic)
+      const accessibleForms = await this.getForms(undefined, userId);
 
       return {
         user: {
           id: userRecord.id,
-          email: recordData?.email || 'Unknown',
-          name: recordData?.name || recordData?.fullName || 'Unknown User',
-          role: recordData?.role || recordData?.roleName || 'No Role',
-          department: recordData?.department || 'Unassigned',
-          status: recordData?.status || 'Active'
+          email: userRecord.email || 'Unknown',
+          name: `${userRecord.first_name || ''} ${userRecord.last_name || ''}`.trim() || 'Unknown User',
+          department: userRecord.department || 'Unassigned',
+          status: userRecord.status || 'Active'
         },
-        permissions,
+        permissions: [...userPermissions, ...rolePermissions],
         accessibleModules,
         accessibleForms
       }
@@ -306,16 +545,26 @@ export class DatabaseService {
     action: string = 'view'
   ): Promise<boolean> {
     try {
-      const permissions = await DatabaseRoles.getUserPermissionsWithResources(userId)
-
       if (resourceType === 'module') {
-        return AuthMiddleware.hasModulePermission(permissions, resourceId, action as any)
-      } else {
-        // For forms, we need to get the moduleId
-        const form = await DatabaseModules.getForm(resourceId)
-        if (!form) return false
+        // Check if user has access to this module
+        const accessibleModules = await this.getModuleHierarchy(userId);
+        const accessibleModuleIds = new Set<string>();
+        
+        const collectModuleIds = (modules: any[]) => {
+          modules.forEach(module => {
+            accessibleModuleIds.add(module.id);
+            if (module.children && module.children.length > 0) {
+              collectModuleIds(module.children);
+            }
+          });
+        };
+        collectModuleIds(accessibleModules);
 
-        return AuthMiddleware.hasFormPermission(permissions, form.moduleId, resourceId, action as any)
+        return accessibleModuleIds.has(resourceId);
+      } else {
+        // For forms, check if user has access
+        const form = await this.getForm(resourceId, userId);
+        return form !== null;
       }
     } catch (error: any) {
       console.error("[DatabaseService] Error validating user access:", error)

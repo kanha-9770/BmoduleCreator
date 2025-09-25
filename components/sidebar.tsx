@@ -1,548 +1,373 @@
-"use client";
+'use client'
 
-import { useState, useEffect } from "react";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { useToast } from "@/hooks/use-toast";
+import React, { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import {
-  LayoutDashboard,
-  ShoppingCart,
-  Factory,
-  Package2,
-  Users,
-  Ship,
-  Package,
-  Wrench,
-  Settings,
   ChevronDown,
   ChevronRight,
-  Menu,
-  AlertCircle,
-} from "lucide-react";
-
-// Icon mapping for modules
-const iconMap = {
-  LayoutDashboard,
-  ShoppingCart,
-  Factory,
-  Package2,
+  Home,
   Users,
-  Ship,
-  Package,
-  Wrench,
+  FileText,
   Settings,
-};
-
-interface Form {
-  id: string;
-  moduleId: string;
-  name: string;
-  description: string;
-  isPublished: boolean;
-  formUrl: string | null;
-}
+  Database,
+  Activity,
+  Shield,
+  Folder,
+  Menu,
+  X,
+  Building2,
+  ChevronLeft
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 interface Module {
-  id: string;
-  name: string;
-  description: string | null;
-  icon: string | null;
-  color: string | null;
-  moduleType: "standard" | "master" | "child";
-  level: number;
-  path: string;
-  isActive: boolean;
-  forms: Form[];
-  children: Module[];
-}
-
-interface Permission {
-  id: string;
-  name: string;
-  category: "READ" | "WRITE" | "DELETE" | "ADMIN" | "SPECIAL";
-  resource: string;
-}
-
-interface RolePermission {
-  roleId: string;
-  permissionId: string;
-  moduleId: string;
-  granted: boolean;
-  canDelegate: boolean;
-  permission: { name: string; category: string };
-  module: { name: string; path: string };
-}
-
-interface UserPermission {
-  userId: string;
-  permissionId: string;
-  moduleId: string;
-  granted: boolean;
-  reason?: string;
-  isActive: boolean;
-  canView: boolean;
-  canCreate: boolean;
-  canEdit: boolean;
-  canDelete: boolean;
-  isSystemAdmin: boolean;
-  permission: { name: string; category: string };
-  module: { name: string; path: string };
-}
-
-interface MenuData {
-  modules: Module[];
-}
-
-interface MenuItem {
-  id: string;
-  title: string;
-  href?: string;
-  icon?: string;
-  children?: MenuItem[];
-}
-
-interface SidebarContentProps {
-  menuItems: MenuItem[];
-  pathname: string;
-  menuData: MenuData | null;
-  error: string | null;
-  expandedItems: string[];
-  toggleExpanded: (title: string) => void;
-  onItemClick?: () => void;
+  module_id: string
+  module_name: string
+  description?: string
+  icon?: string
+  color?: string
+  path?: string
+  parent_id?: string
+  level: number
+  sort_order: number
+  module_type: string
 }
 
 interface User {
-  id: string;
-  name: string;
-  email: string;
-  email_verified: boolean;
-  status: string;
-  createdAt: string;
-  unitAssignments?: { roleId: string }[];
-  userRoles?: { roleId: string }[];
+  id: string
+  email: string
+  name: string
 }
 
-function SidebarContent({
-  menuItems,
-  pathname,
-  menuData,
-  error,
-  expandedItems,
-  toggleExpanded,
-  onItemClick,
-}: SidebarContentProps) {
-  return (
-    <div className="flex flex-col h-full">
-      <div className="p-4 border-b border-gray-200">
-        <h1 className="text-lg sm:text-xl font-bold text-gray-900">ERP System</h1>
-      </div>
-      <ScrollArea className="flex-1 px-3 py-4">
-        <nav className="space-y-1">
-          {menuItems.length === 0 && !error ? (
-            <div className="text-center py-8">
-              <AlertCircle className="h-12 w-12 text-gray-300 mx-auto mb-2" />
-              <p className="text-sm text-gray-500">No modules available</p>
-            </div>
-          ) : (
-            menuItems.map((item) => {
-              const IconComponent = iconMap[item.icon as keyof typeof iconMap] || Package;
-              return (
-                <div key={item.id} className="flex flex-col">
-                  {item.children && item.children.length > 0 ? (
-                    <div>
-                      <Button
-                        variant="ghost"
-                        className={cn(
-                          "w-full justify-start gap-2 h-9",
-                          "hover:bg-gray-100"
-                        )}
-                        onClick={() => toggleExpanded(item.title)}
-                      >
-                        <IconComponent className="h-4 w-4 flex-shrink-0" />
-                        <span className="flex-1 text-left truncate">{item.title}</span>
-                        {expandedItems.includes(item.title) ? (
-                          <ChevronDown className="h-4 w-4" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4" />
-                        )}
-                      </Button>
-                      {expandedItems.includes(item.title) && (
-                        <div className="ml-6 mt-1 space-y-1">
-                          {item.children.map((child) => (
-                            <Link key={child.href} href={child.href!} onClick={onItemClick}>
-                              <Button
-                                variant="ghost"
-                                className={cn(
-                                  "w-full justify-start h-8 text-sm",
-                                  pathname === child.href
-                                    ? "bg-blue-50 text-blue-700 hover:bg-blue-50"
-                                    : "hover:bg-gray-100"
-                                )}
-                              >
-                                <span className="flex-1 text-left truncate">{child.title}</span>
-                              </Button>
-                            </Link>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <Link href={item.href!} onClick={onItemClick}>
-                      <Button
-                        variant="ghost"
-                        className={cn(
-                          "w-full justify-start gap-2 h-9",
-                          pathname === item.href
-                            ? "bg-blue-50 text-blue-700 hover:bg-blue-50"
-                            : "hover:bg-gray-100"
-                        )}
-                      >
-                        <IconComponent className="h-4 w-4 flex-shrink-0" />
-                        <span className="flex-1 text-left truncate">{item.title}</span>
-                      </Button>
-                    </Link>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </nav>
-      </ScrollArea>
-      {error && (
-        <div className="px-3 py-2 border-t border-gray-200">
-          <div className="text-xs text-amber-600 bg-amber-50 p-2 rounded flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 flex-shrink-0" />
-            <span>{error}</span>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+// Icon mapping for different module types
+const getModuleIcon = (iconName?: string, moduleType?: string) => {
+  const iconMap: { [key: string]: React.ComponentType<any> } = {
+    'home': Home,
+    'users': Users,
+    'file-text': FileText,
+    'settings': Settings,
+    'database': Database,
+    'activity': Activity,
+    'shield': Shield,
+    'folder': Folder,
+    'building2': Building2,
+  }
+
+  if (iconName && iconMap[iconName]) {
+    return iconMap[iconName]
+  }
+
+  // Fallback icons based on module type
+  switch (moduleType) {
+    case 'admin': return Shield
+    case 'user': return Users
+    case 'form': return FileText
+    case 'data': return Database
+    default: return Folder
+  }
 }
 
 export function DynamicSidebar() {
-  const pathname = usePathname();
-  const router = useRouter();
-  const { toast } = useToast();
-  const [expandedItems, setExpandedItems] = useState<string[]>([]);
-  const [menuData, setMenuData] = useState<MenuData | null>(null);
-  const [permissions, setPermissions] = useState<Permission[]>([]);
-  const [rolePermissions, setRolePermissions] = useState<RolePermission[]>([]);
-  const [userPermissions, setUserPermissions] = useState<UserPermission[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
+  const [modules, setModules] = useState<Module[]>([])
+  const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set())
+  const [isMobileOpen, setIsMobileOpen] = useState(false)
+  const [isCollapsed, setIsCollapsed] = useState(false)
+  const router = useRouter()
+
+  // Fetch user data
+  const fetchUser = async () => {
+    try {
+      const response = await fetch('/api/auth/me')
+      if (response.ok) {
+        const data = await response.json()
+        setUser(data.user)
+      } else {
+        throw new Error('Failed to fetch user data')
+      }
+    } catch (error) {
+      console.error('Error fetching user:', error)
+      setError('Failed to load user data')
+    }
+  }
+
+  // Fetch permitted modules
+  const fetchModules = async () => {
+    try {
+      const response = await fetch('/api/user/permitted-modules')
+      if (response.ok) {
+        const data = await response.json()
+        setModules(data.modules || [])
+      } else {
+        throw new Error('Failed to fetch modules')
+      }
+    } catch (error) {
+      console.error('Error fetching modules:', error)
+      setError('Failed to load modules')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    console.log("[DynamicSidebar] Sidebar component mounted, fetching user data");
+    fetchUser()
+    fetchModules()
+  }, [])
 
-    async function fetchUserAndPermissions() {
-      try {
-        setLoading(true);
-        setError(null);
+  // Build hierarchical structure
+  const buildModuleTree = (modules: Module[]): Module[] => {
+    const moduleMap = new Map<string, Module & { children: Module[] }>()
 
-        // Fetch user data
-        console.log("[DynamicSidebar] Fetching user data from /api/auth/me");
-        const response = await fetch("/api/auth/me");
-        console.log("[DynamicSidebar] User fetch response status:", response.status);
-        const result = await response.json();
-        console.log("[DynamicSidebar] User fetch result:", result);
+    // Initialize all modules
+    modules.forEach(module => {
+      moduleMap.set(module.module_id, { ...module, children: [] })
+    })
 
-        if (!response.ok || !result.success || !result.user?.id) {
-          console.log("[DynamicSidebar] User fetch failed, redirecting to login");
-          setError("User not authenticated");
-          toast({
-            title: "Error",
-            description: "Failed to load user data",
-            variant: "destructive",
-          });
-          router.push("/login");
-          return;
-        }
+    const rootModules: (Module & { children: Module[] })[] = []
 
-        console.log("[DynamicSidebar] User data loaded successfully:", result.user);
-        setUser({
-          id: result.user.id,
-          name: result.user.name,
-          email: result.user.email,
-          email_verified: result.user.email_verified,
-          status: result.user.status,
-          createdAt: result.user.createdAt,
-          unitAssignments: result.user.unitAssignments || [],
-          userRoles: result.user.userRoles || [],
-        });
+    // Build tree structure
+    modules.forEach(module => {
+      const moduleWithChildren = moduleMap.get(module.module_id)!
 
-        // Fetch modules and permissions only if user has roles
-        const roleId = result.user.unitAssignments?.[0]?.roleId || result.user.userRoles?.[0]?.roleId;
-        console.log("[DynamicSidebar] Role ID:", roleId);
-
-        if (!roleId) {
-          console.log("[DynamicSidebar] No roleId found, setting empty menu");
-          setMenuData({ modules: [] });
-          setError("No roles assigned to user");
-          toast({
-            title: "Warning",
-            description: "No roles assigned. Please contact an administrator.",
-            variant: "default",
-          });
-          setLoading(false);
-          return;
-        }
-
-        const [
-          modulesResponse,
-          permissionsResponse,
-          rolePermissionsResponse,
-          userPermissionsResponse,
-        ] = await Promise.all([
-          fetch(`/api/modules?userId=${result.user.id}`, {
-            headers: { Authorization: `Bearer ${result.user.token || ""}` },
-          }),
-          fetch("/api/permissions", {
-            headers: { Authorization: `Bearer ${result.user.token || ""}` },
-          }),
-          fetch(`/api/role-permissions?roleId=${roleId}`, {
-            headers: { Authorization: `Bearer ${result.user.token || ""}` },
-          }),
-          fetch(`/api/user-permissions?userId=${result.user.id}`, {
-            headers: { Authorization: `Bearer ${result.user.token || ""}` },
-          }),
-        ]);
-
-        const modulesData = await modulesResponse.json();
-        const permissionsData = await permissionsResponse.json();
-        const rolePermissionsData = await rolePermissionsResponse.json();
-        const userPermissionsData = await userPermissionsResponse.json();
-
-        console.log("[DynamicSidebar] Fetched data:", {
-          modules: modulesData,
-          permissions: permissionsData,
-          rolePermissions: rolePermissionsData,
-          userPermissions: userPermissionsData,
-        });
-
-        if (!modulesData.success) {
-          throw new Error(modulesData.error || "Failed to fetch modules");
-        }
-        if (!permissionsData.success) {
-          throw new Error(permissionsData.error || "Failed to fetch permissions");
-        }
-        if (!rolePermissionsData.success) {
-          throw new Error(rolePermissionsData.error || "Failed to fetch role permissions");
-        }
-        if (!userPermissionsData.success) {
-          throw new Error(userPermissionsData.error || "Failed to fetch user permissions");
-        }
-
-        setMenuData({ modules: modulesData.data || [] });
-        setPermissions(permissionsData.data || []);
-        setRolePermissions(rolePermissionsData.data || []);
-        setUserPermissions(userPermissionsData.data || []);
-      } catch (error) {
-        console.error("[DynamicSidebar] Error fetching data:", error);
-        setError(error instanceof Error ? error.message : "Failed to load data");
-        toast({
-          title: "Error",
-          description: error instanceof Error ? error.message : "Failed to load data",
-          variant: "destructive",
-        });
-        setMenuData({ modules: [] });
-        router.push("/login");
-      } finally {
-        setLoading(false);
+      if (module.parent_id && module.parent_id !== null && moduleMap.has(module.parent_id)) {
+        const parent = moduleMap.get(module.parent_id)!
+        parent.children.push(moduleWithChildren)
+      } else {
+        // This is a root module (no parent_id or parent not found)
+        rootModules.push(moduleWithChildren)
       }
+    })
+
+    // Recursively sort all modules by sort_order
+    const sortModules = (modules: (Module & { children: Module[] })[]) => {
+      modules.forEach(module => {
+        if (module.children.length > 0) {
+          module.children.sort((a, b) => a.sort_order - b.sort_order)
+          // Cast children to correct type for recursion
+          sortModules(module.children as (Module & { children: Module[] })[])
+        }
+      })
+      return modules.sort((a, b) => a.sort_order - b.sort_order)
     }
 
-    fetchUserAndPermissions();
-  }, [router, toast]);
+    return sortModules(rootModules)
+  }
 
-  const hasPermissionForModule = (moduleId: string): boolean => {
-    console.log("[DynamicSidebar] Checking permissions for moduleId:", moduleId);
-
-    // Check for system admin
-    const isSystemAdmin = userPermissions.some((up) => up.isSystemAdmin);
-    if (isSystemAdmin) {
-      console.log("[DynamicSidebar] User is system admin, granting access to moduleId:", moduleId);
-      return true;
+  const toggleModule = (moduleId: string) => {
+    const newExpanded = new Set(expandedModules)
+    if (newExpanded.has(moduleId)) {
+      newExpanded.delete(moduleId)
+    } else {
+      newExpanded.add(moduleId)
     }
+    setExpandedModules(newExpanded)
+  }
 
-    const userHasPermission = userPermissions.some((up) => {
-      const match =
-        up.userId === user?.id &&
-        up.moduleId === moduleId &&
-        up.granted &&
-        up.isActive &&
-        up.canView;
-      console.log("[DynamicSidebar] User permission check:", {
-        userId: up.userId,
-        moduleId: up.moduleId,
-        granted: up.granted,
-        isActive: up.isActive,
-        canView: up.canView,
-        match,
-      });
-      return match;
-    });
+  const handleModuleClick = (module: Module & { children?: Module[] }) => {
+    const moduleHasChildren = hasChildren(module)
 
-    if (userHasPermission) {
-      console.log("[DynamicSidebar] User has permission for moduleId:", moduleId);
-      return true;
+    if (moduleHasChildren) {
+      // If it has children, toggle expand/collapse
+      toggleModule(module.module_id)
+    } else if (module.path) {
+      // If it's a leaf node with a path, navigate to it
+      router.push(module.path)
+      setIsMobileOpen(false)
     }
+  }
 
-    const userRoleId = user?.unitAssignments?.[0]?.roleId || user?.userRoles?.[0]?.roleId;
-    console.log("[DynamicSidebar] User roleId:", userRoleId);
+  const hasChildren = (module: Module & { children?: Module[] }) => {
+    return module.children && module.children.length > 0
+  }
 
-    if (!userRoleId) {
-      console.log("[DynamicSidebar] No roleId found for user, denying access");
-      return false;
-    }
+  const renderModule = (module: Module & { children?: Module[] }, depth = 0) => {
+    const IconComponent = getModuleIcon(module.icon, module.module_type)
+    const moduleHasChildren = hasChildren(module)
+    const isExpanded = expandedModules.has(module.module_id)
 
-    const roleHasPermission = rolePermissions.some((rp) => {
-      const match = rp.roleId === userRoleId && rp.moduleId === moduleId && rp.granted;
-      console.log("[DynamicSidebar] Role permission check:", {
-        roleId: rp.roleId,
-        moduleId: rp.moduleId,
-        granted: rp.granted,
-        match,
-      });
-      return match;
-    });
-
-    console.log("[DynamicSidebar] Role permission result for moduleId:", moduleId, roleHasPermission);
-    return roleHasPermission;
-  };
-
-  const transformMenuData = (modules: Module[]): MenuItem[] => {
-    const baseMenuItems: MenuItem[] = [];
-
-    const createMenuItem = (module: Module, parentPath = ""): MenuItem | null => {
-      console.log("[DynamicSidebar] Processing module:", module.id, module.name);
-
-      const modulePath = parentPath ? `${parentPath}/${module.path}` : module.path;
-      const href =
-        module.moduleType === "child" ? `/${modulePath}?id=${module.id}` : `/${modulePath}`;
-
-      const moduleChildren: MenuItem[] = (module.children || [])
-        .map((child) => createMenuItem(child, modulePath))
-        .filter((child): child is MenuItem => child !== null);
-
-      const hasDirectPermission = hasPermissionForModule(module.id);
-      console.log("[DynamicSidebar] Module permission check:", {
-        moduleId: module.id,
-        hasDirectPermission,
-        hasChildren: moduleChildren.length > 0,
-      });
-
-      if (!hasDirectPermission && moduleChildren.length === 0) {
-        console.log("[DynamicSidebar] Skipping module (no permissions or children):", module.id);
-        return null;
-      }
-
-      const menuItem = {
-        id: module.id,
-        title: module.name,
-        href: href,
-        icon: module.icon || "Package",
-        children: moduleChildren.length > 0 ? moduleChildren : undefined,
-      };
-
-      console.log("[DynamicSidebar] Created menu item:", menuItem.id, menuItem.title);
-      return menuItem;
-    };
-
-    modules.forEach((module) => {
-      const menuItem = createMenuItem(module);
-      if (menuItem) {
-        baseMenuItems.push(menuItem);
-        console.log("[DynamicSidebar] Added menu item:", menuItem.id);
-      }
-    });
-
-    console.log("[DynamicSidebar] Total menu items created:", baseMenuItems.length);
-    return baseMenuItems;
-  };
-
-  const toggleExpanded = (title: string) => {
-    setExpandedItems((prev) =>
-      prev.includes(title) ? prev.filter((item) => item !== title) : [...prev, title]
-    );
-  };
-
-  const handleMobileMenuClose = () => {
-    setIsMobileMenuOpen(false);
-  };
-
-  if (loading) {
     return (
-      <>
-        <div className="lg:hidden fixed top-4 left-4 z-50">
-          <Button variant="outline" size="icon" disabled>
-            <Menu className="h-4 w-4" />
-          </Button>
-        </div>
-        <div className="hidden lg:flex w-64 bg-white border-r border-gray-200 flex-col">
-          <div className="p-[1.4rem] border-b border-gray-200">
-            <h1 className="text-xl font-bold text-gray-900">ERP System</h1>
-            <p className="text-xs text-gray-500 mt-1">Loading...</p>
+      <div key={module.module_id} className="w-full">
+        <div
+          className={cn(
+            "flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 cursor-pointer group",
+            moduleHasChildren
+              ? "hover:bg-blue-50 dark:hover:bg-blue-900/20"
+              : "hover:bg-gray-100 dark:hover:bg-gray-700",
+            "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2",
+            moduleHasChildren && "font-semibold",
+            depth > 0 && !isCollapsed && "ml-4"
+          )}
+          style={{ paddingLeft: isCollapsed ? '12px' : `${depth * 16 + 12}px` }}
+          onClick={() => handleModuleClick(module)}
+        >
+          <div className="flex items-center flex-1 min-w-0">
+            <div
+              className={cn(
+                "flex-shrink-0 w-5 h-5 mr-3 transition-colors duration-200",
+                module.color ? `text-[${module.color}]` :
+                  moduleHasChildren
+                    ? "text-blue-600 dark:text-blue-400"
+                    : "text-gray-500 dark:text-gray-400"
+              )}
+            >
+              <IconComponent className="w-5 h-5" />
+            </div>
+
+            {!isCollapsed && (
+              <>
+                <span className="truncate text-gray-700 dark:text-gray-200 group-hover:text-gray-900 dark:group-hover:text-white">
+                  {module.module_name}
+                </span>
+
+                {moduleHasChildren && (
+                  <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                    ({module.children!.length})
+                  </span>
+                )}
+              </>
+            )}
           </div>
-          <div className="flex-1 flex items-center justify-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-          </div>
+
+          {!isCollapsed && moduleHasChildren && (
+            <div className="flex-shrink-0 ml-2">
+              {isExpanded ? (
+                <ChevronDown className="w-4 h-4 text-gray-400 transition-transform duration-200" />
+              ) : (
+                <ChevronRight className="w-4 h-4 text-gray-400 transition-transform duration-200" />
+              )}
+            </div>
+          )}
         </div>
-      </>
-    );
+
+        {!isCollapsed && moduleHasChildren && isExpanded && (
+          <div className="mt-1 space-y-1 border-l-2 border-gray-200 dark:border-gray-600 ml-6">
+            {module.children!.map(child => renderModule(child, depth + 1))}
+          </div>
+        )}
+      </div>
+    )
   }
 
-  const modules = menuData?.modules || [];
-  const menuItems = transformMenuData(modules);
-
-  if (menuItems.length === 0 && !error) {
-    setError("No accessible modules available");
-    toast({
-      title: "Warning",
-      description: "No accessible modules available. Please contact an administrator.",
-      variant: "default",
-    });
-  }
+  const moduleTree = buildModuleTree(modules)
 
   return (
     <>
-      <div className="lg:hidden fixed top-4 left-4 z-50">
-        <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
-          <SheetTrigger asChild>
-            <Button variant="outline" size="icon" className="bg-white shadow-md">
-              <Menu className="h-4 w-4" />
-              <span className="sr-only">Open menu</span>
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="p-0 w-80 sm:w-96">
-            <SidebarContent
-              menuItems={menuItems}
-              pathname={pathname}
-              menuData={menuData}
-              error={error}
-              expandedItems={expandedItems}
-              toggleExpanded={toggleExpanded}
-              onItemClick={handleMobileMenuClose}
-            />
-          </SheetContent>
-        </Sheet>
-      </div>
-      <div className="hidden lg:flex w-64 bg-white border-r border-gray-200 flex-col">
-        <SidebarContent
-          menuItems={menuItems}
-          pathname={pathname}
-          menuData={menuData}
-          error={error}
-          expandedItems={expandedItems}
-          toggleExpanded={toggleExpanded}
+      {/* Mobile menu button */}
+      <button
+        className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-white dark:bg-gray-800 shadow-lg border border-gray-200 dark:border-gray-700"
+        onClick={() => setIsMobileOpen(!isMobileOpen)}
+      >
+        {isMobileOpen ? (
+          <X className="w-6 h-6 text-gray-600 dark:text-gray-300" />
+        ) : (
+          <Menu className="w-6 h-6 text-gray-600 dark:text-gray-300" />
+        )}
+      </button>
+
+      {/* Overlay for mobile */}
+      {isMobileOpen && (
+        <div
+          className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40"
+          onClick={() => setIsMobileOpen(false)}
         />
+      )}
+
+      {/* Sidebar */}
+      <div className={cn(
+        "fixed inset-y-0 left-0 z-50 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transform transition-all duration-300 ease-in-out lg:static lg:inset-0",
+        isCollapsed ? "w-16" : "w-72",
+        isMobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+      )}>
+        <div className="flex flex-col h-full">
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+            {!isCollapsed ? (
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                  <Database className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Admin Panel
+                  </h1>
+                </div>
+              </div>
+            ) : (
+              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                <Database className="w-5 h-5 text-white" />
+              </div>
+            )}
+            <button
+              className="hidden lg:block absolute -right-3  p-1 rounded-full bg-gray-100 dark:hover:bg-gray-700"
+              onClick={() => setIsCollapsed(!isCollapsed)}
+            >
+              <ChevronLeft className={cn(
+                "w-5 h-5 text-gray-600 dark:text-gray-300 transition-transform duration-200",
+                isCollapsed && "rotate-180"
+              )} />
+            </button>
+          </div>
+
+          {/* Navigation */}
+          <div className={cn(
+            "flex-1 overflow-y-auto",
+            isCollapsed ? "p-2" : "p-4"
+          )}>
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              </div>
+            ) : error ? (
+              <div className={cn(
+                "p-4 bg-red-50 dark:bg-red-900/20 rounded-lg",
+                isCollapsed && "flex justify-center p-2"
+              )}>
+                <p className={cn(
+                  "text-sm text-red-600 dark:text-red-400",
+                  isCollapsed && "sr-only"
+                )}>{error}</p>
+              </div>
+            ) : modules.length === 0 ? (
+              <div className={cn(
+                "p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg",
+                isCollapsed && "flex justify-center p-2"
+              )}>
+                <p className={cn(
+                  "text-sm text-yellow-600 dark:text-yellow-400",
+                  isCollapsed && "sr-only"
+                )}>
+                  No modules available
+                </p>
+              </div>
+            ) : (
+              <nav className="space-y-1">
+                {moduleTree.map(module => renderModule(module))}
+              </nav>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 bg-gray-300 dark:bg-gray-600 rounded-full flex items-center justify-center">
+                <Users className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+              </div>
+              {!isCollapsed && (
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                    {user?.name || 'User'}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                    {user?.email}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </>
-  );
+  )
 }

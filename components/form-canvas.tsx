@@ -398,13 +398,13 @@ export default function FormCanvas({
   return (
     <div
       ref={setNodeRef}
-      className={`p-6 min-h-full transition-all duration-200 ${isOver ? "bg-blue-50 border-2 border-dashed border-blue-300" : ""
+      className={`p-4 min-h-full transition-all duration-200 ${isOver ? "bg-blue-50 border-2 border-dashed border-blue-300" : ""
         }`}
     >
-      <div className="max-w-4xl mx-auto space-y-6">
-        <div className="text-center mb-8">
+      <div className="max-w-4xl mx-auto space-y-4">
+        <div className="text-center mb-4">
           <h1 className="text-2xl font-bold text-gray-900">{form.name}</h1>
-          {form.description && <p className="text-gray-600 mt-2">{form.description}</p>}
+          {form.description && <p className="text-gray-600 mt-1">{form.description}</p>}
         </div>
 
         {visibleSections.length > 0 ? (

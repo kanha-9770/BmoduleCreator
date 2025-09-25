@@ -1,16 +1,29 @@
 import { NextResponse } from "next/server"
 import { NextRequest } from "next/server"
 import { DatabaseService } from "@/lib/database-service"
-import { AuthMiddleware } from "@/lib/auth-middleware"
+import { withAuth, AuthContext, AuthMiddleware } from "@/lib/auth-middleware"
 
-export async function POST(request: NextRequest, { params }: { params: { moduleId: string } }) {
+export const POST = withAuth(async (
+  request: NextRequest & { user?: any; authContext?: AuthContext },
+  { params }: { params: { moduleId: string } }
+) => {
   try {
-    // Check user permissions for creating forms in this module
+    // The user and authContext are now available on the request object
+    const { user, authContext } = request;
+
+    if (!user || !authContext) {
+      return NextResponse.json(
+        { success: false, error: "Authentication required" },
+        { status: 401 }
+      )
+    }
+
+    // Check if user has permission to create forms in this module
     const authResult = await AuthMiddleware.checkPermission(
       request,
       "module",
       params.moduleId,
-      "manage"
+      "create"
     )
 
     if (!authResult.authorized) {
@@ -33,11 +46,11 @@ export async function POST(request: NextRequest, { params }: { params: { moduleI
       description,
     })
 
-    console.log(`[Forms API] User ${authResult.user!.userEmail} created form: ${name} in module: ${params.moduleId}`)
+    console.log(`[Forms API] User ${authContext.userEmail} created form: ${name} in module: ${params.moduleId}`)
 
     return NextResponse.json({ success: true, data: form })
   } catch (error: any) {
     console.error("Error creating form:", error)
     return NextResponse.json({ success: false, error: error.message }, { status: 500 })
   }
-}
+})

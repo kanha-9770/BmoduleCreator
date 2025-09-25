@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId");
 
-    const modules = await DatabaseService.getModuleHierarchy(userId);
+    const modules = await DatabaseService.getModuleHierarchy(userId ?? undefined);
     console.log(`[API] /api/modules - Retrieved ${modules.length} modules for userId: ${userId || 'unauthenticated'}`);
 
     // Validate module structure
@@ -68,7 +68,6 @@ export async function POST(request: NextRequest) {
       moduleType: moduleType || "standard",
       icon,
       color,
-      path: path || name.toLowerCase().replace(/\s+/g, "-"),
     });
 
     console.log("[API] /api/modules - Module created successfully:", module.id);

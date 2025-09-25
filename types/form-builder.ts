@@ -67,6 +67,7 @@ export interface Subform {
 }
 
 export interface FormSection {
+  name: any
   id: string
   formId: string
   title: string
@@ -85,6 +86,7 @@ export interface FormSection {
 }
 
 export interface Form {
+  recordCount: number
   id: string
   moduleId: string
   name: string

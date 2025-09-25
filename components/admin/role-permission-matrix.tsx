@@ -90,8 +90,6 @@ interface RolePermissionMatrixProps {
 
 export function RolePermissionMatrix({
   searchTerm,
-  selectedRole,
-  onRoleSelect,
 }: RolePermissionMatrixProps) {
   const [modules, setModules] = useState<Module[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);

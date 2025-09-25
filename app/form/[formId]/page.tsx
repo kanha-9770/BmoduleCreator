@@ -747,8 +747,8 @@ export default function PublicFormPage() {
               >
                 <Star
                   className={`h-6 w-6 ${rating <= (value || 0)
-                      ? "fill-yellow-400 text-yellow-400"
-                      : "text-gray-300"
+                    ? "fill-yellow-400 text-yellow-400"
+                    : "text-gray-300"
                     }`}
                 />
               </button>
@@ -869,8 +869,8 @@ export default function PublicFormPage() {
                       {pathParts.map((part, index) => (
                         <div key={index} className="flex items-center gap-1">
                           <span className={`px-2 py-1 rounded ${index === pathParts.length - 1
-                              ? `${colorScheme.levelBadge} font-medium`
-                              : 'bg-gray-100 text-gray-600'
+                            ? `${colorScheme.levelBadge} font-medium`
+                            : 'bg-gray-100 text-gray-600'
                             }`}>
                             {part}
                           </span>
@@ -942,7 +942,7 @@ export default function PublicFormPage() {
                     </div>
                   ) : (
                     <div key={item.id} className={`ml-6 ${colorScheme.bg} rounded-lg p-2`}>
-                      {renderSubform(item.item as Subform, level + 1, currentPath)}
+                      {renderSubform(item.item as unknown as Subform, level + 1, currentPath)}
                     </div>
                   )
                 ))}
@@ -1071,8 +1071,8 @@ export default function PublicFormPage() {
                   {section.fields.length > 0 && (
                     <div
                       className={`grid gap-6 ${section.columns > 1
-                          ? `md:grid-cols-${section.columns}`
-                          : ""
+                        ? `md:grid-cols-${section.columns}`
+                        : ""
                         }`}
                     >
                       {section.fields.map((field) => (

@@ -354,10 +354,11 @@ export default function SubformComponent({
           setDroppableRef(node)
         }}
         style={style}
-        className={`group transition-all duration-300 border-2 ${colorScheme.shadow} ${isDragging
+        className={`group transition-all duration-300 border-2 ${colorScheme.shadow} ${
+          isDragging
             ? `shadow-2xl scale-105 rotate-1 ${colorScheme.border} ${colorScheme.bg} z-50`
             : `hover:shadow-lg ${colorScheme.border} ${colorScheme.bg}`
-          } ${isOver ? `ring-2 ring-opacity-50 ${colorScheme.border.replace("border-", "ring-")}` : ""}`}
+        } ${isOver ? `ring-2 ring-opacity-50 ${colorScheme.border.replace("border-", "ring-")}` : ""}`}
       >
         {/* Subform Header */}
         <CardHeader className={`pb-2 ${colorScheme.headerBg} border-b ${colorScheme.border}`}>
@@ -377,10 +378,11 @@ export default function SubformComponent({
                 <div
                   {...attributes}
                   {...listeners}
-                  className={`cursor-grab hover:cursor-grabbing p-1 rounded transition-all duration-200 flex-shrink-0 ${isDragging
+                  className={`cursor-grab hover:cursor-grabbing p-1 rounded transition-all duration-200 flex-shrink-0 ${
+                    isDragging
                       ? `${colorScheme.accent} bg-white`
                       : `${colorScheme.hover} ${colorScheme.accent} opacity-0 group-hover:opacity-100`
-                    }`}
+                  }`}
                 >
                   <GripVertical className="w-4 h-4" />
                 </div>
@@ -523,11 +525,12 @@ export default function SubformComponent({
                         item.type === "field" ? (
                           <div key={item.id} className="relative">
                             <FieldComponent
-                              field={item.item as FormField}
-                              onUpdate={onUpdateField}
-                              onDelete={onDeleteField}
-                              isOverlay={false}
-                            />
+                                      field={item.item as FormField}
+                                      onUpdate={onUpdateField}
+                                      onDelete={onDeleteField}
+                                      isOverlay={false} onCopy={function(field: FormField): void {
+                                          throw new Error("Function not implemented.")
+                                      } }                            />
                           </div>
                         ) : (
                           // Added unique key prefix and improved nesting structure to prevent duplicates
@@ -563,8 +566,9 @@ export default function SubformComponent({
                 </ScrollArea>
               ) : (
                 <div
-                  className={`border-2 border-dashed rounded-lg p-4 text-center transition-all duration-200 ${isOver ? `${colorScheme.border} ${colorScheme.bg}` : `border-gray-300 bg-gray-50`
-                    }`}
+                  className={`border-2 border-dashed rounded-lg p-4 text-center transition-all duration-200 ${
+                    isOver ? `${colorScheme.border} ${colorScheme.bg}` : `border-gray-300 bg-gray-50`
+                  }`}
                 >
                   <Layers className={`w-5 h-5 mx-auto mb-2 ${colorScheme.accent}`} />
                   <p className={`text-xs mb-2 ${colorScheme.accent}`}>Empty subform</p>
