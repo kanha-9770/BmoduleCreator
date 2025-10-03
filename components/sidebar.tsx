@@ -19,6 +19,7 @@ import {
   ChevronLeft
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import Link from 'next/link'
 
 interface Module {
   module_id: string
@@ -63,6 +64,7 @@ const getModuleIcon = (iconName?: string, moduleType?: string) => {
     case 'user': return Users
     case 'form': return FileText
     case 'data': return Database
+    case 'master': return Shield // Added for 'master' type in your sample data
     default: return Folder
   }
 }
@@ -76,6 +78,22 @@ export function DynamicSidebar() {
   const [isMobileOpen, setIsMobileOpen] = useState(false)
   const [isCollapsed, setIsCollapsed] = useState(false)
   const router = useRouter()
+
+  // Function to generate path from module_name if path is null/undefined
+  const generatePath = (module: Module): string => {
+    if (module.path) {
+      return module.path
+    }
+    // Convert module_name to kebab-case slug for routing (e.g., "Admin" -> "/admin")
+    const slug = module.module_name
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
+      .replace(/\s+/g, '-') // Replace spaces with hyphens
+      .replace(/-+/g, '-') // Replace multiple hyphens with single
+      .replace(/^-+|-+$/g, '') // Trim leading/trailing hyphens
+    return `/${slug || 'module'}` // Fallback to '/module' if slug is empty
+  }
 
   // Fetch user data
   const fetchUser = async () => {
@@ -99,13 +117,15 @@ export function DynamicSidebar() {
       const response = await fetch('/api/user/permitted-modules')
       if (response.ok) {
         const data = await response.json()
+        console.log("i am akash ", data)
         setModules(data.modules || [])
       } else {
-        throw new Error('Failed to fetch modules')
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to fetch modules')
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching modules:', error)
-      setError('Failed to load modules')
+      setError(error.message || 'Failed to load modules')
     } finally {
       setLoading(false)
     }
@@ -171,9 +191,10 @@ export function DynamicSidebar() {
     if (moduleHasChildren) {
       // If it has children, toggle expand/collapse
       toggleModule(module.module_id)
-    } else if (module.path) {
-      // If it's a leaf node with a path, navigate to it
-      router.push(module.path)
+    } else {
+      // For leaf modules, navigate using generated or existing path with name and id
+      const generatedPath = generatePath(module)
+      router.push(`${generatedPath}?name=${encodeURIComponent(module.module_name)}&id=${encodeURIComponent(module.module_id)}`)
       setIsMobileOpen(false)
     }
   }
@@ -186,12 +207,18 @@ export function DynamicSidebar() {
     const IconComponent = getModuleIcon(module.icon, module.module_type)
     const moduleHasChildren = hasChildren(module)
     const isExpanded = expandedModules.has(module.module_id)
+    
+    // Generate href only for leaf modules (no children); use '#' for parents to prevent navigation
+    const href = !moduleHasChildren 
+      ? `${generatePath(module)}?name=${encodeURIComponent(module.module_name)}&id=${encodeURIComponent(module.module_id)}` 
+      : '#'
 
     return (
       <div key={module.module_id} className="w-full">
-        <div
+        <Link
+          href={href}
           className={cn(
-            "flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 cursor-pointer group",
+            "flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 cursor-pointer group block",
             moduleHasChildren
               ? "hover:bg-blue-50 dark:hover:bg-blue-900/20"
               : "hover:bg-gray-100 dark:hover:bg-gray-700",
@@ -200,7 +227,15 @@ export function DynamicSidebar() {
             depth > 0 && !isCollapsed && "ml-4"
           )}
           style={{ paddingLeft: isCollapsed ? '12px' : `${depth * 16 + 12}px` }}
-          onClick={() => handleModuleClick(module)}
+          onClick={(e) => {
+            if (moduleHasChildren) {
+              e.preventDefault() // Prevent navigation for parent modules
+              toggleModule(module.module_id)
+            } else {
+              // For leaf modules, allow default Link navigation (which uses href)
+              // handleModuleClick is called separately if needed, but Link handles it
+            }
+          }}
         >
           <div className="flex items-center flex-1 min-w-0">
             <div
@@ -239,7 +274,7 @@ export function DynamicSidebar() {
               )}
             </div>
           )}
-        </div>
+        </Link>
 
         {!isCollapsed && moduleHasChildren && isExpanded && (
           <div className="mt-1 space-y-1 border-l-2 border-gray-200 dark:border-gray-600 ml-6">
@@ -277,7 +312,7 @@ export function DynamicSidebar() {
       {/* Sidebar */}
       <div className={cn(
         "fixed inset-y-0 left-0 z-50 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transform transition-all duration-300 ease-in-out lg:static lg:inset-0",
-        isCollapsed ? "w-16" : "w-72",
+        isCollapsed ? "w-16" : "w-60",
         isMobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
       )}>
         <div className="flex flex-col h-full">
@@ -300,7 +335,7 @@ export function DynamicSidebar() {
               </div>
             )}
             <button
-              className="hidden lg:block absolute -right-3  p-1 rounded-full bg-gray-100 dark:hover:bg-gray-700"
+              className="hidden lg:block absolute -right-3 p-1 rounded-full bg-gray-100 dark:hover:bg-gray-700"
               onClick={() => setIsCollapsed(!isCollapsed)}
             >
               <ChevronLeft className={cn(
@@ -352,7 +387,9 @@ export function DynamicSidebar() {
           <div className="p-4 border-t border-gray-200 dark:border-gray-700">
             <div className="flex items-center space-x-3">
               <div className="w-8 h-8 bg-gray-300 dark:bg-gray-600 rounded-full flex items-center justify-center">
-                <Users className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+                <Link href="/profile">
+                  <Users className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+                </Link>
               </div>
               {!isCollapsed && (
                 <div className="flex-1 min-w-0">

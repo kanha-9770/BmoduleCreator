@@ -57,12 +57,27 @@ export interface DatabaseModule {
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
+  forms?: DatabaseForm[];
+}
+
+export interface DatabaseForm {
+  id: string;
+  name: string;
+  description?: string;
+  moduleId: string;
+  isPublished: boolean;
+  isEmployeeForm?: boolean;
+  isUserForm?: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface RolePermissionUpdate {
   roleId: string;
   permissionId: string;
   moduleId?: string;
+  
+  formId?: string;
   granted: boolean;
   canDelegate?: boolean;
 }
@@ -71,6 +86,8 @@ export interface UserPermissionUpdate {
   userId: string;
   permissionId: string;
   moduleId?: string;
+  
+  formId?: string;
   granted: boolean;
   reason?: string;
   grantedBy?: string;
@@ -145,10 +162,10 @@ async function ensureStandardPermissionsExist(): Promise<void> {
     const organizationId = await getValidOrganizationId();
 
     const standardPermissions = [
-      { id: "1", name: "VIEW", category: "READ", resource: "general" },
-      { id: "2", name: "CREATE", category: "WRITE", resource: "general" },
-      { id: "3", name: "EDIT", category: "WRITE", resource: "general" },
-      { id: "4", name: "DELETE", category: "DELETE", resource: "general" },
+      { id: "1", name: "VIEW", category: "READ", resource: "form" },
+      { id: "2", name: "CREATE", category: "WRITE", resource: "form" },
+      { id: "3", name: "EDIT", category: "WRITE", resource: "form" },
+      { id: "4", name: "DELETE", category: "DELETE", resource: "form" },
     ];
 
     for (const perm of standardPermissions) {
@@ -171,47 +188,6 @@ async function ensureStandardPermissionsExist(): Promise<void> {
     console.log("[v0] Standard permissions ensured in database");
   } catch (error) {
     console.error("[v0] Failed to ensure standard permissions:", error);
-  }
-}
-
-// Helper function to ensure all required permissions exist
-async function ensureAllPermissionsExist(): Promise<void> {
-  const isConnected = await isDatabaseConnected();
-  if (!isConnected) {
-    console.log("[v0] Database not connected, skipping permissions setup");
-    return;
-  }
-
-  try {
-    const organizationId = await getValidOrganizationId();
-
-    const allPermissions = [
-      { id: "1", name: "VIEW", category: "READ", resource: "general" },
-      { id: "2", name: "CREATE", category: "WRITE", resource: "general" },
-      { id: "3", name: "EDIT", category: "WRITE", resource: "general" },
-      { id: "4", name: "DELETE", category: "DELETE", resource: "general" },
-    ];
-
-    for (const perm of allPermissions) {
-      await prisma.permission.upsert({
-        where: { id: perm.id },
-        update: {},
-        create: {
-          id: perm.id,
-          name: perm.name,
-          category: perm.category as any,
-          resource: perm.resource,
-          organizationId,
-          isActive: true,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      });
-      console.log(`[v0] Ensured permission: ${perm.id} - ${perm.name}`);
-    }
-    console.log("[v0] All required permissions ensured in database");
-  } catch (error) {
-    console.error("[v0] Failed to ensure all permissions:", error);
   }
 }
 
@@ -323,7 +299,7 @@ export async function getPermissions(): Promise<any[]> {
   }
 
   try {
-    await ensureAllPermissionsExist();
+    await ensureStandardPermissionsExist();
 
     const permissions = await prisma.permission.findMany({
       where: { isActive: true },
@@ -389,6 +365,7 @@ export async function getRolePermissions(p0: string | undefined): Promise<any[]>
       roleId: rp.roleId,
       permissionId: rp.permissionId,
       moduleId: rp.moduleId || "general",
+      formId: rp.formId,
       granted: rp.granted,
       canDelegate: rp.canDelegate,
     }));
@@ -426,6 +403,7 @@ export async function getUserPermissionOverrides(): Promise<any[]> {
       userId: override.userId,
       permissionId: override.permissionId,
       moduleId: override.moduleId || "general",
+      formId: override.formId || null,
       granted: override.granted,
       reason: override.reason,
       grantedBy: override.grantedBy,
@@ -442,7 +420,7 @@ export async function getUserPermissionOverrides(): Promise<any[]> {
   }
 }
 
-export async function getModules(): Promise<any[]> {
+export async function getModulesWithForms(): Promise<any[]> {
   const isConnected = await isDatabaseConnected();
   if (!isConnected) {
     console.log("[v0] Database not connected, returning empty modules data");
@@ -450,11 +428,40 @@ export async function getModules(): Promise<any[]> {
   }
 
   try {
-    console.log("[v0] Fetching modules from database...");
+    console.log("[v0] Fetching modules with forms from database...");
     const modules = await prisma.formModule.findMany({
       where: { isActive: true, parentId: null },
       include: {
-        children: true,
+        children: {
+          where: { isActive: true },
+          include: {
+            forms: {
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                isEmployeeForm: true,
+                isUserForm: true,
+                moduleId: true,
+                createdAt: true,
+                updatedAt: true,
+              },
+            },
+          },
+          orderBy: { sortOrder: "asc" },
+        },
+        forms: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            isEmployeeForm: true,
+            isUserForm: true,
+            moduleId: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
       },
       orderBy: { sortOrder: "asc" },
     });
@@ -468,14 +475,26 @@ export async function getModules(): Promise<any[]> {
       icon: module.icon,
       color: module.color,
       level: module.level,
+      forms: module.forms || [],
       children: module.children.map((child: any) => ({
         id: child.id,
         name: child.name,
         description: child.description,
         icon: child.icon,
         color: child.color,
+        parentId: module.id,
+        level: child.level,
+        forms: child.forms || [],
       })),
     }));
+
+    // Log form counts for debugging
+    result.forEach(module => {
+      console.log(`[v0] Module ${module.name}: ${module.forms.length} forms`);
+      module.children.forEach((child: any) => {
+        console.log(`[v0] Submodule ${child.name}: ${child.forms.length} forms`);
+      });
+    });
 
     console.log("[v0] GET /api/modules response:", {
       success: true,
@@ -491,6 +510,10 @@ export async function getModules(): Promise<any[]> {
   }
 }
 
+export async function getModules(): Promise<any[]> {
+  return await getModulesWithForms();
+}
+
 export async function updateRolePermissions(
   updates: RolePermissionUpdate[]
 ): Promise<boolean> {
@@ -504,7 +527,7 @@ export async function updateRolePermissions(
 
   try {
     console.log("[v0] Updating role permissions in database:", updates);
-    await ensureAllPermissionsExist();
+    await ensureStandardPermissionsExist();
     let updateCount = 0;
     await prisma.$transaction(
       async (tx: Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">) => {
@@ -533,29 +556,56 @@ export async function updateRolePermissions(
             console.log(`[v0] Role ${update.roleId} does not exist, skipping`);
             continue;
           }
-          let cleanModuleId: string | null = null;
-          if (update.moduleId) {
-            cleanModuleId = update.moduleId
+          let targetModuleId: string | null = null;
+          let targetFormId: string | null = null;
+
+          // Handle form-based permissions first
+          if (update.formId) {
+            targetFormId = update.formId;
+            const formExists = await tx.form.findUnique({
+              where: { id: targetFormId },
+              include: { module: true },
+            });
+            if (!formExists) {
+              console.log(`[v0] Form ${targetFormId} does not exist, skipping`);
+              continue;
+            }
+            targetModuleId = formExists.moduleId;
+            console.log(`[v0] Form permission: formId=${targetFormId}, moduleId=${targetModuleId}`);
+          } else if (update.moduleId) {
+            // Handle module-based permissions
+            targetModuleId = update.moduleId
               .replace("_self-perm", "")
               .replace("_self", "");
             const moduleExists = await tx.formModule.findUnique({
-              where: { id: cleanModuleId },
+              where: { id: targetModuleId },
             });
             if (!moduleExists) {
               console.log(
-                `[v0] Module ${cleanModuleId} does not exist, skipping`
+                `[v0] Module ${targetModuleId} does not exist, skipping`
               );
               continue;
             }
+            console.log(`[v0] Module permission: moduleId=${targetModuleId}`);
+          } else {
+            console.log(
+              `[v0] No moduleId or formId provided for roleId=${update.roleId}, permissionId=${update.permissionId}, skipping`
+            );
+            continue;
           }
-          await tx.rolePermission.upsert({
-            where: {
-              roleId_permissionId_moduleId: {
-                roleId: update.roleId,
-                permissionId: update.permissionId,
-                moduleId: cleanModuleId ?? null,
-              },
+
+          // Create unique constraint key based on whether we have formId or not
+          const whereClause = {
+            roleId_permissionId_moduleId_formId: {
+              roleId: update.roleId,
+              permissionId: update.permissionId,
+              moduleId: targetModuleId!,
+              formId: targetFormId || null,
             },
+          };
+
+          await tx.rolePermission.upsert({
+            where: whereClause,
             update: {
               granted: update.granted,
               canDelegate: update.canDelegate ?? false,
@@ -563,22 +613,20 @@ export async function updateRolePermissions(
             create: {
               roleId: update.roleId,
               permissionId: update.permissionId,
-              moduleId: cleanModuleId ?? null,
+              moduleId: targetModuleId!,
+              formId: targetFormId,
               granted: update.granted,
               canDelegate: update.canDelegate ?? false,
             },
           });
           updateCount++;
           console.log(
-            `[v0] Successfully processed role permission: roleId=${update.roleId}, permissionId=${update.permissionId}, moduleId=${cleanModuleId}`
+            `[v0] Successfully processed role permission: roleId=${update.roleId}, permissionId=${update.permissionId}, moduleId=${targetModuleId}, formId=${targetFormId}`
           );
         }
       }
     );
     console.log(`[v0] Successfully updated ${updateCount} role permissions`);
-    if (updateCount === 0) {
-      throw new Error("No valid role permissions were updated");
-    }
     return true;
   } catch (error) {
     console.error("[v0] Failed to update role permissions:", error);
@@ -621,7 +669,7 @@ export async function updateUserPermissions(updates: UserPermissionUpdate[]): Pr
     console.log(
       `[v0] Processing ${validUpdates.length} valid updates out of ${updates.length} total`
     );
-    await ensureAllPermissionsExist();
+    await ensureStandardPermissionsExist();
     let updateCount = 0;
 
     await prisma.$transaction(
@@ -652,31 +700,57 @@ export async function updateUserPermissions(updates: UserPermissionUpdate[]): Pr
             continue;
           }
 
-          let cleanModuleId: string | null = null;
-          if (update.moduleId) {
-            cleanModuleId = update.moduleId
+          let targetModuleId: string | null = null;
+          let targetFormId: string | null = null;
+
+          // Handle form-based permissions first
+          if (update.formId) {
+            targetFormId = update.formId;
+            const formExists = await tx.form.findUnique({
+              where: { id: targetFormId },
+              include: { module: true },
+            });
+            if (!formExists) {
+              console.log(`[v0] Form ${targetFormId} does not exist, skipping`);
+              continue;
+            }
+            targetModuleId = formExists.moduleId;
+            console.log(`[v0] User form permission: formId=${targetFormId}, moduleId=${targetModuleId}`);
+          } else if (update.moduleId) {
+            // Handle module-based permissions
+            targetModuleId = update.moduleId
               .replace("_self-perm", "")
               .replace("_self", "");
             const moduleExists = await tx.formModule.findUnique({
-              where: { id: cleanModuleId },
+              where: { id: targetModuleId },
             });
 
             if (!moduleExists) {
               console.log(
-                `[v0] Module ${cleanModuleId} does not exist, skipping`
+                `[v0] Module ${targetModuleId} does not exist, skipping`
               );
               continue;
             }
+            console.log(`[v0] User module permission: moduleId=${targetModuleId}`);
+          } else {
+            console.log(
+              `[v0] No moduleId or formId provided for userId=${update.userId}, permissionId=${update.permissionId}, skipping`
+            );
+            continue;
           }
 
-          await tx.userPermission.upsert({
-            where: {
-              userId_permissionId_moduleId: {
-                userId: update.userId,
-                permissionId: update.permissionId,
-                moduleId: cleanModuleId ?? null,
-              },
+          // Create unique constraint key based on whether we have formId or not
+          const whereClause = {
+            userId_permissionId_moduleId_formId: {
+              userId: update.userId,
+              permissionId: update.permissionId,
+              moduleId: targetModuleId!,
+              formId: targetFormId,
             },
+          };
+
+          await tx.userPermission.upsert({
+            where: whereClause,
             update: {
               granted: update.granted,
               reason: update.reason || "Manual assignment",
@@ -688,7 +762,8 @@ export async function updateUserPermissions(updates: UserPermissionUpdate[]): Pr
             create: {
               userId: update.userId,
               permissionId: update.permissionId,
-              moduleId: cleanModuleId ?? null,
+              moduleId: targetModuleId!,
+              formId: targetFormId,
               granted: update.granted,
               reason: update.reason || "Manual assignment",
               grantedBy: update.grantedBy,
@@ -697,10 +772,9 @@ export async function updateUserPermissions(updates: UserPermissionUpdate[]): Pr
               isActive: update.isActive ?? true,
             },
           });
-
           updateCount++;
           console.log(
-            `[v0] Successfully processed user permission: userId=${update.userId}, permissionId=${update.permissionId}, moduleId=${cleanModuleId}`
+            `[v0] Successfully processed user permission: userId=${update.userId}, permissionId=${update.permissionId}, moduleId=${targetModuleId}, formId=${targetFormId}`
           );
         }
       }
@@ -708,28 +782,6 @@ export async function updateUserPermissions(updates: UserPermissionUpdate[]): Pr
 
     console.log(`[v0] Successfully updated ${updateCount} user permissions`);
 
-    console.log("[v0] Verifying updates were saved to database...");
-    const savedPermissions = await prisma.userPermission.findMany({
-      where: {
-        userId: { in: validUpdates.map((u) => u.userId) },
-        permissionId: { in: validUpdates.map((u) => u.permissionId) },
-      },
-      select: {
-        userId: true,
-        permissionId: true,
-        moduleId: true,
-        granted: true,
-        isActive: true,
-      },
-    });
-    console.log(
-      `[v0] Found ${savedPermissions.length} saved permissions in database:`,
-      JSON.stringify(savedPermissions, null, 2)
-    );
-
-    if (updateCount === 0) {
-      throw new Error("No valid user permissions were updated");
-    }
     return true;
   } catch (error) {
     console.error("[v0] Failed to update user permissions:", {
@@ -801,6 +853,7 @@ export async function getUserPermissions(p0: string | undefined): Promise<any[]>
       userId: up.userId,
       permissionId: up.permissionId,
       moduleId: up.moduleId,
+      formId: up.formId,
       granted: up.granted,
       reason: up.reason,
       grantedBy: up.grantedBy,

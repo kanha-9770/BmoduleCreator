@@ -1,8 +1,8 @@
-import nodemailer from 'nodemailer'
+import nodemailer from "nodemailer"
 
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST,
-  port: parseInt(process.env.EMAIL_PORT || '587'),
+  port: Number.parseInt(process.env.EMAIL_PORT || "587"),
   secure: false,
   auth: {
     user: process.env.EMAIL_USER,
@@ -10,7 +10,11 @@ const transporter = nodemailer.createTransport({
   },
 })
 
-export const sendOTPEmail = async (email: string, otp: string, type: 'registration' | 'login' | 'password_reset' = 'registration') => {
+export const sendOTPEmail = async (
+  email: string,
+  otp: string,
+  type: "registration" | "login" | "password_reset" = "registration",
+) => {
   // If email configuration is missing, return success for development
   if (!process.env.EMAIL_HOST || !process.env.EMAIL_USER) {
     console.log(`[DEV] OTP Email would be sent to ${email}: ${otp} (type: ${type})`)
@@ -18,33 +22,33 @@ export const sendOTPEmail = async (email: string, otp: string, type: 'registrati
   }
 
   let subject, title, message
-  
+
   switch (type) {
-    case 'registration':
-      subject = 'Verify Your Email - Registration OTP'
-      title = 'Complete Your Registration'
-      message = 'Thank you for signing up! Please use the verification code below to complete your registration:'
+    case "registration":
+      subject = "Verify Your Email - Registration OTP"
+      title = "Complete Your Registration"
+      message = "Thank you for signing up! Please use the verification code below to complete your registration:"
       break
-    case 'login':
-      subject = 'Login Verification Code'
-      title = 'Login Verification'
-      message = 'Please use the verification code below to complete your login:'
+    case "login":
+      subject = "Login Verification Code"
+      title = "Login Verification"
+      message = "Please use the verification code below to complete your login:"
       break
-    case 'password_reset':
-      subject = 'Password Reset Code'
-      title = 'Reset Your Password'
-      message = 'You requested to reset your password. Please use the verification code below to proceed:'
+    case "password_reset":
+      subject = "Password Reset Code"
+      title = "Reset Your Password"
+      message = "You requested to reset your password. Please use the verification code below to proceed:"
       break
     default:
-      subject = 'Verification Code'
-      title = 'Email Verification'
-      message = 'Please use the verification code below:'
+      subject = "Verification Code"
+      title = "Email Verification"
+      message = "Please use the verification code below:"
   }
-  
+
   const mailOptions = {
     from: {
-      name: process.env.EMAIL_FROM_NAME || 'App5',
-      address: process.env.EMAIL_FROM || '',
+      name: process.env.EMAIL_FROM_NAME || "App5",
+      address: process.env.EMAIL_FROM || "",
     },
     to: email,
     subject,
@@ -79,12 +83,12 @@ export const sendOTPEmail = async (email: string, otp: string, type: 'registrati
                 This verification code will expire in <strong>10 minutes</strong> for your security.
               </p>
               <div class="warning">
-                <strong>Security Note:</strong> Never share this code with anyone. ${type === 'password_reset' ? 'If you did not request a password reset, please ignore this email and contact support.' : 'Our team will never ask for your verification code.'}
+                <strong>Security Note:</strong> Never share this code with anyone. ${type === "password_reset" ? "If you did not request a password reset, please ignore this email and contact support." : "Our team will never ask for your verification code."}
               </div>
             </div>
             <div class="footer">
               <p style="margin: 0;">
-                If you didn't ${type === 'registration' ? 'sign up' : type === 'password_reset' ? 'request a password reset' : 'request this login'}, please ignore this email.
+                If you didn't ${type === "registration" ? "sign up" : type === "password_reset" ? "request a password reset" : "request this login"}, please ignore this email.
               </p>
               <p style="margin: 10px 0 0 0;">© 2025 App5. All rights reserved.</p>
             </div>
@@ -97,8 +101,8 @@ export const sendOTPEmail = async (email: string, otp: string, type: 'registrati
   try {
     await transporter.sendMail(mailOptions)
     return { success: true }
-  } catch (error:any) {
-    console.error('Email sending failed:', error)
+  } catch (error: any) {
+    console.error("Email sending failed:", error)
     return { success: false, error: error.message }
   }
 }

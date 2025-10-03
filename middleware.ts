@@ -1,11 +1,30 @@
-// middleware.ts
 import { NextRequest, NextResponse } from "next/server";
+import { v4 as uuidv4 } from "uuid";
 
 export async function middleware(request: NextRequest) {
-  console.log("[Middleware] Called for:", request.nextUrl.pathname);
-  const { pathname, searchParams } = request.nextUrl;
+  const requestId = uuidv4();
+  const { pathname } = request.nextUrl;
+  const startTime = Date.now();
 
-  // Public routes that don't require authentication
+  const log = (
+    level: "info" | "warn" | "error",
+    message: string,
+    meta: any = {}
+  ) => {
+    console[level](
+      JSON.stringify({
+        requestId,
+        timestamp: new Date().toISOString(),
+        pathname,
+        level,
+        message,
+        ...meta,
+      })
+    );
+  };
+
+  log("info", "Middleware processing", { url: request.url, pathname });
+
   const publicRoutes = [
     "/login",
     "/register",
@@ -13,154 +32,116 @@ export async function middleware(request: NextRequest) {
     "/forgot-password",
     "/reset-password",
     "/",
+    "/akash",
+    "/organization",
+    "/profile",
+    "/admin",
+    "/admin/modules",
+    "/admin/roles-permissions",
+    "/builder/cmgapk1j5000fvj18jc54398m",
   ];
 
-  // Protected routes that require authentication (but not necessarily module permissions)
-  const protectedRoutes = ["/profile", "/admin/roles-permissions"];
+  const protectedRoutes = {
+    adminOnly: ["/admin", "/admin/modules"],
+    general: ["/dashboard", "/settings"],
+  };
 
-  const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route));
-  const isProtectedRoute = protectedRoutes.some((route) => pathname.startsWith(route));
+  const normalizedPathname = pathname.replace(/\/+$/, "").toLowerCase();
+  const isPublic = publicRoutes.some((route) => {
+    const match = normalizedPathname === route.toLowerCase();
+    if (normalizedPathname === "/register") {
+      log("info", "Checking if /register is public", {
+        route,
+        match,
+        originalPathname: pathname,
+      });
+    }
+    return match;
+  });
 
-  const token = request.cookies.get("auth-token")?.value;
-  console.log("[Middleware] Auth token present:", !!token);
-
-  // Allow public routes to pass through
-  if (isPublicRoute) {
-    console.log("[Middleware] Allowing public route:", pathname);
+  if (isPublic) {
+    log("info", "Allowing public route", { pathname });
     return NextResponse.next();
   }
 
-  // Check for authentication
+  const token = request.cookies.get("auth-token")?.value;
   if (!token) {
-    console.log("[Middleware] No auth token found, redirecting to login");
+    log("warn", "No token found, redirecting to login");
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // Decode token to get userId (assuming JWT or similar; adjust based on your auth setup)
   let userId: string | null = null;
   try {
-    // Example: Decode JWT (replace with your actual token decoding logic)
-    const decodedToken = JSON.parse(Buffer.from(token.split(".")[1], "base64").toString());
+    const decodedToken = JSON.parse(
+      Buffer.from(token.split(".")[1], "base64").toString()
+    );
     userId = decodedToken?.userId || decodedToken?.sub;
-    console.log("[Middleware] Extracted userId from token:", userId);
-  } catch (error) {
-    console.error("[Middleware] Failed to decode token:", error);
+    log("info", "Decoded userId from token", { userId });
+  } catch (err: any) {
+    log("error", "Failed to decode token", { error: err.message });
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
   if (!userId) {
-    console.log("[Middleware] No userId found in token, redirecting to login");
+    log("warn", "Token missing userId, redirecting to login");
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // Redirect authenticated users from public auth routes (except /) to profile
-  if (token && pathname !== "/" && publicRoutes.includes(pathname)) {
-    console.log(
-      "[Middleware] User has token but accessing public auth route:",
-      pathname,
-      "redirecting to profile"
+  let userData: any;
+  try {
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL}/api/user/${userId}`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      }
     );
-    return NextResponse.redirect(new URL("/profile", request.url));
+    userData = await res.json();
+    if (!userData.success) throw new Error("API returned failure");
+    log("info", "Fetched user data successfully", { userId });
+  } catch (err: any) {
+    log("error", "Failed to fetch user data", { error: err.message });
+    return NextResponse.redirect(new URL("/unauthorized", request.url));
   }
 
-  // Check protected routes (no module-specific permissions required)
-  if (isProtectedRoute) {
-    console.log(
-      "[Middleware] Auth token found, allowing access to protected route:",
-      pathname
-    );
+  const roles: string[] =
+    userData?.user?.unitAssignments?.map((ua: any) => ua.role.name) || [];
+  const isAdmin = roles.includes("Admin");
+  const isCEO =
+    roles.includes("Chief Executive Officer") || roles.includes("CEO");
+
+  log("info", "User roles checked", { roles, isAdmin, isCEO });
+
+  const isAdminOnly = protectedRoutes.adminOnly.some((route) =>
+    pathname.startsWith(route)
+  );
+  const isGeneralProtected = protectedRoutes.general.some((route) =>
+    pathname.startsWith(route)
+  );
+
+  if (isAdminOnly) {
+    if (!(isAdmin || isCEO)) {
+      log("warn", "Blocked non-admin/CEO from restricted route", { pathname });
+      return NextResponse.redirect(new URL("/unauthorized", request.url));
+    }
+    log("info", "Admin/CEO allowed to restricted route", { pathname });
     return NextResponse.next();
   }
 
-  // Handle module-specific routes (not in public or protected routes)
-  const moduleId = searchParams.get("id") || getModuleIdFromPath(pathname);
-  if (moduleId) {
-    console.log("[Middleware] Checking permissions for moduleId:", moduleId);
-
-    try {
-      // Fetch user permissions
-      const userPermissionsResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/user-permissions?userId=${userId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` }, // Include token if your API requires it
-        }
-      );
-      const userPermissionsData = await userPermissionsResponse.json();
-
-      // Fetch user data to get role
-      const userResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/user/${userId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      const userData = await userResponse.json();
-
-      let hasAccess = false;
-
-      // Check user-specific permissions
-      if (userPermissionsData.success) {
-        hasAccess = userPermissionsData.data.some(
-          (up: any) => up.moduleId === moduleId && up.granted && up.isActive
-        );
-        console.log("[Middleware] User permission check result:", hasAccess);
-      }
-
-      // Check role-based permissions if no user-specific permissions
-      if (!hasAccess && userData.success) {
-        const roleId =
-          userData.data.unitAssignments?.[0]?.roleId ||
-          userData.data.userRoles?.[0]?.roleId;
-        if (roleId) {
-          const rolePermissionsResponse = await fetch(
-            `${process.env.NEXT_PUBLIC_API_URL}/api/role-permissions?roleId=${roleId}`,
-            {
-              headers: { Authorization: `Bearer ${token}` },
-            }
-          );
-          const rolePermissionsData = await rolePermissionsResponse.json();
-
-          if (rolePermissionsData.success) {
-            hasAccess = rolePermissionsData.data.some(
-              (rp: any) => rp.moduleId === moduleId && rp.granted
-            );
-            console.log("[Middleware] Role permission check result:", hasAccess);
-          }
-        }
-      }
-
-      if (!hasAccess) {
-        console.log(
-          "[Middleware] User lacks permission for moduleId:",
-          moduleId,
-          "redirecting to unauthorized"
-        );
-        return NextResponse.redirect(new URL("/unauthorized", request.url));
-      }
-
-      console.log("[Middleware] User has permission for moduleId:", moduleId);
-    } catch (error) {
-      console.error("[Middleware] Error checking permissions:", error);
-      return NextResponse.redirect(new URL("/unauthorized", request.url));
-    }
+  if (isGeneralProtected) {
+    log("info", "Authenticated user allowed to general protected route", {
+      pathname,
+    });
+    return NextResponse.next();
   }
 
-  console.log("[Middleware] Allowing request to:", pathname);
+  log("info", "Allowing authenticated request", {
+    pathname,
+    durationMs: Date.now() - startTime,
+  });
   return NextResponse.next();
 }
 
 export const config = {
   matcher: ["/((?!api|_next/static|_next/image|favicon.ico|.*\\.).*)"],
 };
-
-// Helper function to map paths to module IDs
-function getModuleIdFromPath(pathname: string): string | null {
-  const pathMap: { [key: string]: string } = {
-    "/sales": "mod1",
-    "/sales/orders": "mod1-child1",
-    "/inventory": "mod2",
-    "/inventory/products": "mod2-child1",
-    // Add more mappings based on your module paths
-  };
-  return pathMap[pathname] || null;
-}

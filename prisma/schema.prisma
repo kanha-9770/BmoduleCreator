@@ -184,7 +184,7 @@ model OrganizationUnit {
 
 model Role {
   id                 String               @id @default(cuid())
-  name               String               @unique
+  name               String               
   description        String?
   organizationId     String               @map("organization_id")
   organization       Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -202,6 +202,7 @@ model Role {
   createdAt          DateTime             @default(now()) @map("created_at")
   updatedAt          DateTime             @updatedAt @map("updated_at")
 
+  @@unique([name, organizationId]) // Ensure unique role names per organization
   @@index([organizationId])
   @@index([parentId])
   @@index([level])
@@ -1079,4 +1080,3 @@ model Activity {
   @@index([createdAt])
   @@map("activities")
 }
-

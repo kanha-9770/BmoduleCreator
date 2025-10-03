@@ -2,11 +2,13 @@
   "name": "my-v0-project",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "build": "next build",
     "dev": "next dev",
     "lint": "next lint",
-    "start": "next start"
+    "start": "next start",
+    "create-default-org": "ts-node --esm --transpile-only scripts/create-default-organization.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "latest",
@@ -69,12 +71,14 @@
     "sonner": "^1.7.1",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
+    "ts-node": "^10.9.2",
     "twilio": "^5.9.0",
     "uuid": "latest",
     "vaul": "^0.9.6",
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@swc/core": "^1.13.5",
     "@types/bcrypt": "^5.0.2",
     "@types/bcryptjs": "^3.0.0",
     "@types/node": "^22",
@@ -85,6 +89,7 @@
     "install": "^0.13.0",
     "postcss": "^8.5",
     "tailwindcss": "^3.4.17",
-    "typescript": "^5"
+ 
+   "typescript": "^5"
   }
 }

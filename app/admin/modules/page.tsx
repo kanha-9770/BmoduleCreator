@@ -1,66 +1,33 @@
 "use client";
 
-import { DialogFooter } from "@/components/ui/dialog";
-import React from "react";
-import { useEffect, useState, useRef } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useEffect, useState, useRef } from "react";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Plus,
-  Edit,
-  Trash2,
-  FileText,
   Loader2,
-  Settings,
-  Eye,
-  BarChart3,
-  Copy,
-  CheckCircle,
-  XCircle,
-  Clock,
-  FolderPlus,
+  Plus,
+  FileSpreadsheet,
+  Table,
   Grid,
   List,
-  Table,
-  FileSpreadsheet,
-  Search,
-  ArrowUpDown,
+  Edit,
+  Trash2,
+  FolderPlus,
+  Settings,
+  Copy,
   Mail,
   Hash,
   Type,
@@ -70,7 +37,6 @@ import {
   CheckSquare,
   Radio,
   ChevronDown,
-  MoreHorizontal,
   Save,
   X,
   Lock,
@@ -78,10 +44,33 @@ import {
   MousePointer2,
   ArrowUp,
   ArrowDown,
+  ArrowUpDown,
+  MoreHorizontal,
+  Eye,
+  BarChart3,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Search,
+  Filter,
+  FileText,
 } from "lucide-react";
 import NextLink from "next/link";
 import { cn } from "@/lib/utils";
 import { PublicFormDialog } from "@/components/public-form-dialog";
+import ModuleSidebar from "@/components/modules/moduleSidebar";
+import FormsContent from "@/components/modules/formsContent";
+import RecordsDisplay from "@/components/modules/recordsDisplay";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+// Interfaces
 
 interface FormModule {
   id: string;
@@ -123,6 +112,7 @@ interface FormField {
 interface FormRecord {
   id: string;
   formId: string;
+  formName?: string;
   recordData: Record<string, any>;
   submittedAt: string;
   status: "pending" | "approved" | "rejected" | "submitted";
@@ -138,6 +128,7 @@ interface ProcessedFieldData {
   order: number;
   sectionId?: string;
   sectionTitle?: string;
+  formId?: string;
 }
 
 interface EnhancedFormRecord extends FormRecord {
@@ -145,8 +136,11 @@ interface EnhancedFormRecord extends FormRecord {
 }
 
 interface FormFieldWithSection extends FormField {
+  originalId: string;
   sectionTitle: string;
   sectionId: string;
+  formId: string;
+  formName: string;
 }
 
 interface EditingCell {
@@ -180,11 +174,10 @@ export default function HomePage() {
   const [selectedModule, setSelectedModule] = useState<FormModule | null>(null);
   const [selectedForm, setSelectedForm] = useState<Form | null>(null);
   const [formRecords, setFormRecords] = useState<EnhancedFormRecord[]>([]);
-  
+  const [allModuleForms, setAllModuleForms] = useState<Form[]>([]);
   const [formFieldsWithSections, setFormFieldsWithSections] = useState<
     FormFieldWithSection[]
   >([]);
-
   const [loading, setLoading] = useState(true);
   const [recordsLoading, setRecordsLoading] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -207,7 +200,6 @@ export default function HomePage() {
   );
   const [searchQuery, setSearchQuery] = useState("");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
-  // Records state
   const [recordSearchQuery, setRecordSearchQuery] = useState("");
   const [filteredRecords, setFilteredRecords] = useState<EnhancedFormRecord[]>(
     []
@@ -219,12 +211,11 @@ export default function HomePage() {
   const [selectedRecords, setSelectedRecords] = useState<Set<string>>(
     new Set()
   );
-  // Form dialog state
+  const [selectedFormFilter, setSelectedFormFilter] = useState<string>("all");
   const [selectedFormForFilling, setSelectedFormForFilling] = useState<
     string | null
   >(null);
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
-  // ENHANCED INLINE EDITING STATE - DOUBLE CLICK + GLOBAL EDIT MODE
   const [editMode, setEditMode] = useState<
     "locked" | "single-click" | "double-click"
   >("double-click");
@@ -235,7 +226,10 @@ export default function HomePage() {
   const [savingChanges, setSavingChanges] = useState(false);
   const [clickTimeout, setClickTimeout] = useState<NodeJS.Timeout | null>(null);
   const [clickCount, setClickCount] = useState<Map<string, number>>(new Map());
-  // Refs for input focus
+  const [mergeMode, setMergeMode] = useState<"vertical" | "horizontal">(
+    "horizontal"
+  );
+  const [mergedRecords, setMergedRecords] = useState<EnhancedFormRecord[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -249,7 +243,6 @@ export default function HomePage() {
     setSelectedFormForFilling(null);
   };
 
-  // Helper function to get field icon
   const getFieldIcon = (fieldType: string) => {
     switch (fieldType) {
       case "text":
@@ -283,7 +276,6 @@ export default function HomePage() {
     }
   };
 
-  // Enhanced helper function to format field values based on type
   const formatFieldValue = (fieldType: string, value: any): string => {
     if (value === null || value === undefined) return "";
     if (value === "") return "";
@@ -349,55 +341,60 @@ export default function HomePage() {
     }
   };
 
-  // Process record data to extract field values properly
   const processRecordData = (
-    record: FormRecord,
-    formFields: FormFieldWithSection[]
-  ): EnhancedFormRecord => {
-    const processedData: ProcessedFieldData[] = [];
-    // Create field lookup map by ID
-    const fieldById = new Map<string, FormFieldWithSection>();
-    formFields.forEach((field) => {
-      fieldById.set(field.id, field);
-    });
+  record: FormRecord,
+  formFields: FormFieldWithSection[]
+): EnhancedFormRecord => {
+  console.log("Processing record:", record);
+  const processedData: ProcessedFieldData[] = [];
+  const fieldById = new Map<string, FormFieldWithSection>();
+  formFields.forEach((field) => {
+    fieldById.set(field.id, field);
+    fieldById.set(field.originalId, field); // Also map by originalId for flexibility
+  });
 
-    if (record.recordData && typeof record.recordData === "object") {
-      // Process each field in the record data
-      Object.entries(record.recordData).forEach(([fieldKey, fieldData]) => {
-        // Ensure fieldData is an object and not null
-        if (typeof fieldData === "object" && fieldData !== null) {
-          const fieldInfo = fieldData as any;
-          // Get the form field definition
-          const formField = fieldById.get(fieldKey);
+  if (record.recordData && typeof record.recordData === "object") {
+    Object.entries(record.recordData).forEach(([fieldKey, fieldData]) => {
+      console.log(`Processing field ${fieldKey}:`, fieldData);
+      if (typeof fieldData === "object" && fieldData !== null) {
+        const fieldInfo = fieldData as any;
+        const formField = fieldById.get(fieldKey) || formFields.find(f => f.originalId === fieldKey.split('_').pop());
+        if (formField) {
           const displayValue = formatFieldValue(
-            fieldInfo.type || "text",
+            fieldInfo.type || formField.type || "text",
             fieldInfo.value
           );
           processedData.push({
             fieldId: fieldKey,
-            fieldLabel: fieldInfo.label || fieldKey,
-            fieldType: fieldInfo.type || "text",
+            fieldLabel: fieldInfo.label || formField.label || fieldKey,
+            fieldType: fieldInfo.type || formField.type || "text",
             value: fieldInfo.value,
             displayValue: displayValue,
-            icon: fieldInfo.type || "text",
-            order: formField?.order || fieldInfo.order || 999,
-            sectionId: fieldInfo.sectionId,
-            sectionTitle: fieldInfo.sectionTitle,
+            icon: fieldInfo.type || formField.type || "text",
+            order: formField.order || 999,
+            sectionId: formField.sectionId,
+            sectionTitle: formField.sectionTitle,
+            formId: record.formId,
           });
+        } else {
+          console.warn(`No matching field found for ${fieldKey}`);
         }
-      });
-    }
+      } else {
+        console.warn(`Unexpected field data format for ${fieldKey}:`, fieldData);
+      }
+    });
+  } else {
+    console.warn("recordData is not an object:", record.recordData);
+  }
 
-    // Sort by field order
-    processedData.sort((a, b) => a.order - b.order);
+  processedData.sort((a, b) => a.order - b.order);
 
-    return {
-      ...record,
-      processedData,
-    };
+  return {
+    ...record,
+    processedData,
   };
+};
 
-  // ENHANCED CLICK HANDLING - DOUBLE CLICK + SINGLE CLICK MODES
   const handleCellClick = (
     recordId: string,
     fieldId: string,
@@ -408,7 +405,6 @@ export default function HomePage() {
     event.preventDefault();
     event.stopPropagation();
     const cellKey = `${recordId}-${fieldId}`;
-    // Don't allow editing of file fields
     if (fieldType === "file") {
       toast({
         title: "Cannot Edit",
@@ -418,41 +414,33 @@ export default function HomePage() {
       return;
     }
 
-    // If table is locked, do nothing
     if (editMode === "locked") {
       return;
     }
 
-    // If single-click mode, edit immediately
     if (editMode === "single-click") {
       startCellEdit(recordId, fieldId, currentValue, fieldType);
       return;
     }
 
-    // Double-click mode logic
     if (editMode === "double-click") {
       const currentCount = clickCount.get(cellKey) || 0;
       const newCount = currentCount + 1;
-      // Clear any existing timeout for this cell
       if (clickTimeout) {
         clearTimeout(clickTimeout);
       }
 
-      // Update click count
       setClickCount((prev) => new Map(prev.set(cellKey, newCount)));
       if (newCount === 1) {
-        // First click - set timeout to reset count
         const timeout = setTimeout(() => {
           setClickCount((prev) => {
             const newMap = new Map(prev);
             newMap.delete(cellKey);
             return newMap;
           });
-        }, 300); // 300ms window for double click
+        }, 300);
         setClickTimeout(timeout);
       } else if (newCount >= 2) {
-        // Double click detected - start editing
-        // Clear timeout and reset count
         if (clickTimeout) {
           clearTimeout(clickTimeout);
         }
@@ -466,7 +454,6 @@ export default function HomePage() {
     }
   };
 
-  // ENHANCED CELL EDIT FUNCTIONS
   const startCellEdit = (
     recordId: string,
     fieldId: string,
@@ -487,7 +474,6 @@ export default function HomePage() {
       options: field.options,
     });
 
-    // Focus the input after state update
     setTimeout(() => {
       if (inputRef.current) {
         inputRef.current.focus();
@@ -520,7 +506,6 @@ export default function HomePage() {
       (f) => f.id === editingCell.fieldId
     );
 
-    // Add to pending changes
     setPendingChanges((prev) => {
       const newChanges = new Map(prev);
       newChanges.set(changeKey, {
@@ -534,7 +519,6 @@ export default function HomePage() {
       return newChanges;
     });
 
-    // Update the record in the UI immediately for visual feedback
     setFormRecords((prevRecords) => {
       return prevRecords.map((record) => {
         if (record.id === editingCell.recordId) {
@@ -575,7 +559,6 @@ export default function HomePage() {
     if (pendingChanges.size === 0) return;
     setSavingChanges(true);
     try {
-      // Group changes by record ID
       const changesByRecord = new Map<string, PendingChange[]>();
       pendingChanges.forEach((change) => {
         if (!changesByRecord.has(change.recordId)) {
@@ -585,13 +568,10 @@ export default function HomePage() {
       });
 
       let savedCount = 0;
-      // Save each record's changes
       for (const [recordId, changes] of changesByRecord) {
-        // Find the record
         const record = formRecords.find((r) => r.id === recordId);
         if (!record) continue;
 
-        // Create updated record data
         const updatedRecordData = { ...record.recordData };
         changes.forEach((change) => {
           if (updatedRecordData[change.fieldId]) {
@@ -602,9 +582,8 @@ export default function HomePage() {
           }
         });
 
-        // Save to API
         const response = await fetch(
-          `/api/forms/${selectedForm?.id}/records/${recordId}`,
+          `/api/forms/${record.formId}/records/${recordId}`,
           {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
@@ -622,9 +601,8 @@ export default function HomePage() {
         savedCount += changes.length;
       }
 
-      // Clear pending changes and refresh data
       setPendingChanges(new Map());
-      await fetchFormRecords(selectedForm!.id);
+      await fetchAllModuleRecords();
       toast({
         title: "Success",
         description: `Successfully saved ${savedCount} changes across ${changesByRecord.size} records`,
@@ -644,9 +622,8 @@ export default function HomePage() {
   const discardAllPendingChanges = () => {
     setPendingChanges(new Map());
     setEditingCell(null);
-    // Refresh records to revert UI changes
-    if (selectedForm) {
-      fetchFormRecords(selectedForm.id);
+    if (selectedModule) {
+      fetchAllModuleRecords();
     }
     toast({
       title: "Changes Discarded",
@@ -654,10 +631,8 @@ export default function HomePage() {
     });
   };
 
-  // ENHANCED EDIT MODE TOGGLE
   const toggleEditMode = () => {
     if (editMode !== "locked" && (pendingChanges.size > 0 || editingCell)) {
-      // If there are unsaved changes, ask user what to do
       const shouldSave = window.confirm(
         "You have unsaved changes. Do you want to save them before changing edit mode?"
       );
@@ -687,7 +662,6 @@ export default function HomePage() {
     }
   };
 
-  // Get current value for a field (either from pending changes or original data)
   const getCurrentFieldValue = (
     recordId: string,
     fieldId: string,
@@ -698,13 +672,11 @@ export default function HomePage() {
     return pendingChange ? pendingChange.value : originalValue;
   };
 
-  // Check if a field has pending changes
   const hasFieldChanged = (recordId: string, fieldId: string) => {
     const changeKey = `${recordId}-${fieldId}`;
     return pendingChanges.has(changeKey);
   };
 
-  // ENHANCED RENDER EDITABLE CELL WITH CLICK HANDLING
   const renderEditableCell = (
     record: EnhancedFormRecord,
     field: FormFieldWithSection,
@@ -724,7 +696,8 @@ export default function HomePage() {
     const cellKey = `${record.id}-${field.id}`;
     const isBeingClicked = (clickCount.get(cellKey) || 0) > 0;
 
-    // If currently editing this cell
+    const hasFieldData = processedField !== undefined;
+
     if (isCurrentlyEditing) {
       switch (field.type) {
         case "text":
@@ -882,28 +855,45 @@ export default function HomePage() {
       }
     }
 
-    // Normal display mode with responsive Excel-like styling
     return (
       <div
         className={cn(
-          "h-7 px-1 sm:px-2 flex items-center text-[10px] sm:text-xs font-normal border-r border-b border-gray-300 bg-white",
-          "cursor-cell select-none overflow-hidden whitespace-nowrap",
-          // Edit mode styling
-          editMode === "locked" && "cursor-default",
-          editMode === "single-click" && "hover:bg-blue-50",
-          editMode === "double-click" && "hover:bg-green-50",
-          // Change highlighting
+          "h-7 px-1 sm:px-2 flex items-center text-[10px] sm:text-xs font-normal border-r border-b border-gray-300",
+          hasFieldData
+            ? "bg-white cursor-cell"
+            : "bg-gray-50 cursor-not-allowed",
+          "select-none overflow-hidden whitespace-nowrap",
+          hasFieldData && editMode === "locked" && "cursor-default",
+          hasFieldData && editMode === "single-click" && "hover:bg-blue-50",
+          hasFieldData && editMode === "double-click" && "hover:bg-green-50",
           hasChanged && "bg-yellow-100 text-yellow-800 font-medium",
-          // Click feedback
-          isBeingClicked && editMode === "double-click" && "bg-green-100"
+          isBeingClicked &&
+            editMode === "double-click" &&
+            hasFieldData &&
+            "bg-green-100"
         )}
-        onClick={(e) =>
-          handleCellClick(record.id, field.id, currentValue, field.type, e)
+        onClick={
+          hasFieldData
+            ? (e) =>
+                handleCellClick(
+                  record.id,
+                  field.id,
+                  currentValue,
+                  field.type,
+                  e
+                )
+            : undefined
         }
-        title={formatFieldValue(field.type, currentValue)}
+        title={
+          hasFieldData
+            ? formatFieldValue(field.type, currentValue)
+            : `Field not available in ${record.formName}`
+        }
       >
         <span className="truncate">
-          {formatFieldValue(field.type, currentValue) || ""}
+          {hasFieldData
+            ? formatFieldValue(field.type, currentValue) || ""
+            : "—"}
         </span>
         {hasChanged && (
           <span className="ml-1 text-yellow-600 font-bold">*</span>
@@ -912,7 +902,6 @@ export default function HomePage() {
     );
   };
 
-  // Get edit mode display info
   const getEditModeInfo = () => {
     switch (editMode) {
       case "locked":
@@ -940,108 +929,78 @@ export default function HomePage() {
     }
   };
 
-  useEffect(() => {
-    fetchModules();
-  }, []);
-
-  useEffect(() => {
-    if (selectedForm) {
-      fetchFormRecords(selectedForm.id);
-    }
-  }, [selectedForm]);
-
-  useEffect(() => {
-    // Filter and sort modules based on search query and sort order
-    let updatedModules = [...modules];
-
-    // Filter by search query
-    if (searchQuery) {
-      const filterModules = (modules: FormModule[]): FormModule[] => {
-        return modules
-          .filter((module) =>
-            module.name.toLowerCase().includes(searchQuery.toLowerCase())
-          )
-          .map((module) => ({
-            ...module,
-            children: module.children ? filterModules(module.children) : [],
-          }))
-          .filter(
-            (module) =>
-              module.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-              module.children?.length > 0
-          );
-      };
-      updatedModules = filterModules(modules);
-    }
-
-    // Sort modules
-    const sortModules = (modules: FormModule[]): FormModule[] => {
-      const sorted = [...modules].sort((a, b) => {
-        return sortOrder === "asc"
-          ? a.name.localeCompare(b.name)
-          : b.name.localeCompare(a.name);
-      });
-      return sorted.map((module) => ({
-        ...module,
-        children: module.children ? sortModules(module.children) : [],
-      }));
-    };
-    setFilteredModules(sortModules(updatedModules));
-  }, [modules, searchQuery, sortOrder]);
-
-  // Records filtering and sorting
-  useEffect(() => {
-    let filtered = [...formRecords];
-    // Apply search filter
-    if (recordSearchQuery) {
-      filtered = filtered.filter((record) => {
-        return (
-          record.processedData.some((field) =>
-            field.displayValue
-              .toLowerCase()
-              .includes(recordSearchQuery.toLowerCase())
-          ) || record.id.toLowerCase().includes(recordSearchQuery.toLowerCase())
-        );
-      });
-    }
-
-    // Apply sorting
-    if (recordSortField) {
-      filtered.sort((a, b) => {
-        let aValue = "";
-        let bValue = "";
-        if (recordSortField === "submittedAt") {
-          aValue = a.submittedAt;
-          bValue = b.submittedAt;
-        } else if (recordSortField === "status") {
-          aValue = a.status || "";
-          bValue = b.status || "";
-        } else {
-          const aField = a.processedData.find(
-            (f) => f.fieldId === recordSortField
-          );
-          const bField = b.processedData.find(
-            (f) => f.fieldId === recordSortField
-          );
-          aValue = aField?.displayValue || "";
-          bValue = bField?.displayValue || "";
-        }
-        const comparison = aValue.localeCompare(bValue);
-        return recordSortOrder === "asc" ? comparison : -comparison;
-      });
-    }
-    setFilteredRecords(filtered);
-    setCurrentPage(1); // Reset to first page when filters change
-  }, [formRecords, recordSearchQuery, recordSortField, recordSortOrder]);
-
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (clickTimeout) {
-        clearTimeout(clickTimeout);
+  const mergeRecordsHorizontally = (
+    records: EnhancedFormRecord[]
+  ): EnhancedFormRecord[] => {
+    const recordsByForm = new Map<string, EnhancedFormRecord[]>();
+    records.forEach((record) => {
+      const formId = record.formId;
+      if (!recordsByForm.has(formId)) {
+        recordsByForm.set(formId, []);
       }
-    };
-  }, [clickTimeout]);
+      recordsByForm.get(formId)!.push(record);
+    });
+
+    const formsWithOneRecord = Array.from(recordsByForm.entries()).filter(
+      ([formId, formRecords]) => formRecords.length === 1
+    );
+
+    const formsWithMultipleRecords = Array.from(recordsByForm.entries()).filter(
+      ([formId, formRecords]) => formRecords.length > 1
+    );
+
+    const mergedResults: EnhancedFormRecord[] = [];
+
+    if (formsWithOneRecord.length > 1) {
+      const baseRecord = formsWithOneRecord[0][1][0];
+      const mergedProcessedData: ProcessedFieldData[] = [];
+      const mergedFormNames: string[] = [];
+
+      formsWithOneRecord.forEach(([formId, formRecords]) => {
+        const record = formRecords[0];
+        mergedFormNames.push(record.formName || formId);
+
+        record.processedData.forEach((field) => {
+          mergedProcessedData.push({
+            ...field,
+            fieldId: `${formId}_${field.fieldId}`,
+            fieldLabel: `${record.formName || formId} - ${field.fieldLabel}`,
+            sectionTitle: `${record.formName || formId} - ${
+              field.sectionTitle
+            }`,
+          });
+        });
+      });
+
+      mergedProcessedData.sort((a, b) => {
+        const aFormName = a.sectionTitle?.split(" - ")[0] || "";
+        const bFormName = b.sectionTitle?.split(" - ")[0] || "";
+        if (aFormName !== bFormName) {
+          return aFormName.localeCompare(bFormName);
+        }
+        return a.order - b.order;
+      });
+
+      const mergedRecord: EnhancedFormRecord = {
+        ...baseRecord,
+        id: `merged_${formsWithOneRecord.map(([formId]) => formId).join("_")}`,
+        formId: "merged",
+        formName: `Merged: ${mergedFormNames.join(" + ")}`,
+        processedData: mergedProcessedData,
+        recordData: {},
+      };
+
+      mergedResults.push(mergedRecord);
+    } else if (formsWithOneRecord.length === 1) {
+      mergedResults.push(...formsWithOneRecord[0][1]);
+    }
+
+    formsWithMultipleRecords.forEach(([formId, formRecords]) => {
+      mergedResults.push(...formRecords);
+    });
+
+    return mergedResults;
+  };
 
   const fetchModules = async () => {
     try {
@@ -1089,49 +1048,101 @@ export default function HomePage() {
     setAvailableParents(flattenModules(moduleList));
   };
 
-  const fetchFormRecords = async (formId: string) => {
+  const fetchAllModuleRecords = async () => {
+    if (!selectedModule) return;
+
     try {
       setRecordsLoading(true);
-      // First fetch the form to get field definitions
-      const formResponse = await fetch(`/api/forms/${formId}`);
-      const formData = await formResponse.json();
-      if (formData.success && formData.data) {
-        const form = formData.data;
-        // Extract all form fields with section information
-        const fieldsWithSections: FormFieldWithSection[] = [];
-        if (form.sections) {
-          let fieldOrder = 0;
-          form.sections.forEach((section: any) => {
-            if (section.fields) {
-              section.fields.forEach((field: any) => {
-                fieldsWithSections.push({
-                  ...field,
-                  order: field.order || fieldOrder++,
-                  sectionTitle: section.title,
-                  sectionId: section.id,
+      const moduleForms = selectedModule.forms || [];
+      setAllModuleForms(moduleForms);
+
+      const allFieldsWithSections: FormFieldWithSection[] = [];
+      const allRecords: FormRecord[] = [];
+
+      for (const form of moduleForms) {
+        const formResponse = await fetch(`/api/forms/${form.id}`);
+        const formData = await formResponse.json();
+
+        if (formData.success && formData.data) {
+          const formDetail = formData.data;
+
+          if (formDetail.sections) {
+            let fieldOrder = 0;
+            formDetail.sections.forEach((section: any) => {
+              if (section.fields) {
+                section.fields.forEach((field: any) => {
+                  const uniqueFieldId = `${form.id}_${field.id}`;
+                  allFieldsWithSections.push({
+                    ...field,
+                    id: uniqueFieldId,
+                    originalId: field.id,
+                    order: field.order || fieldOrder++,
+                    sectionTitle: section.title,
+                    sectionId: section.id,
+                    formId: form.id,
+                    formName: form.name,
+                  });
                 });
-              });
-            }
-          });
-        }
-        setFormFieldsWithSections(fieldsWithSections);
-        // Then fetch records
-        const response = await fetch(`/api/forms/${formId}/records`);
-        const data = await response.json();
-        console.log("Fetched records:", data);
-        if (data.success && data.records) {
-          // Process records with field data
-          const processedRecords = (data.records || []).map(
-            (record: FormRecord) =>
-              processRecordData(record, fieldsWithSections)
-          );
-          setFormRecords(processedRecords);
+              }
+            });
+          }
+
+          const recordsResponse = await fetch(`/api/forms/${form.id}/records`);
+          const recordsData = await recordsResponse.json();
+
+          if (recordsData.success && recordsData.records) {
+            const formRecords = (recordsData.records || []).map(
+              (record: FormRecord) => ({
+                ...record,
+                formName: form.name,
+              })
+            );
+            allRecords.push(...formRecords);
+            console.log(
+              `Fetched ${formRecords.length} records for form ${form.name}`
+            );
+          } else {
+            console.warn(`No records found for form ${form.id}`);
+          }
         } else {
-          setFormRecords([]);
+          console.warn(`Failed to fetch form details for ${form.id}`);
         }
       }
+
+      const uniqueFieldsMap = new Map<string, FormFieldWithSection>();
+      allFieldsWithSections.forEach((field) => {
+        const key = `${field.label}_${field.type}`;
+        if (!uniqueFieldsMap.has(key)) {
+          uniqueFieldsMap.set(key, field);
+        }
+      });
+
+      const uniqueFields = Array.from(uniqueFieldsMap.values());
+      setFormFieldsWithSections(uniqueFields);
+      console.log("Processed fields:", uniqueFields);
+
+      const processedRecords = allRecords.map((record: FormRecord) =>
+        processRecordData(record, uniqueFields)
+      );
+      console.log("Processed records:", processedRecords);
+      setFormRecords(processedRecords);
+
+      if (processedRecords.length === 0) {
+        toast({
+          title: "No Data",
+          description: "No records found for the selected module.",
+          variant: "default", // Changed from "warning" to "default"
+        });
+      }
     } catch (error: any) {
+      console.error("Error fetching module records:", error);
       setFormRecords([]);
+      setFormFieldsWithSections([]);
+      toast({
+        title: "Error",
+        description: "Failed to load records. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setRecordsLoading(false);
     }
@@ -1271,8 +1282,9 @@ export default function HomePage() {
         await fetchModules();
         toast({
           title: "Success",
-          description: `Form ${form.isPublished ? "unpublished" : "published"
-            } successfully!`,
+          description: `Form ${
+            form.isPublished ? "unpublished" : "published"
+          } successfully!`,
         });
       } else {
         throw new Error(data.error || "Failed to publish form");
@@ -1315,417 +1327,131 @@ export default function HomePage() {
     setIsSubmoduleDialogOpen(true);
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "approved":
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
-      case "rejected":
-        return <XCircle className="h-4 w-4 text-red-500" />;
-      default:
-        return <Clock className="h-4 w-4 text-yellow-500" />;
+  useEffect(() => {
+    fetchModules();
+  }, []);
+
+  useEffect(() => {
+    if (selectedModule) {
+      fetchAllModuleRecords();
     }
-  };
+  }, [selectedModule]);
 
-  const renderModuleAccordion = (modules: FormModule[], level = 0) => {
-    return modules.map((module) => (
-      <AccordionItem
-        key={module.id}
-        value={module.id}
-        className="border-b border-gray-200"
-      >
-        <AccordionTrigger
-          className={`py-2 pl-${4 + level * 2
-            } pr-4 hover:bg-gray-50 rounded-lg transition-colors duration-200`}
-        >
-          <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-            <FileText className="h-4 w-4 text-gray-500" />
-            {module.name}
-            {(module.forms ?? []).length > 0 && (
-              <Badge
-                variant="secondary"
-                className="ml-2 bg-gray-100 text-gray-600 text-xs"
-              >
-                {(module.forms ?? []).length}
-              </Badge>
-            )}
-          </div>
-        </AccordionTrigger>
-        <AccordionContent className="pl-4">
-          <div className="space-y-2">
-            <div className="flex gap-2">
-              <Button
-                variant={
-                  selectedModule?.id === module.id ? "secondary" : "ghost"
-                }
-                className="flex-1 justify-start text-left text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
-                onClick={() => {
-                  setSelectedModule(module);
-                  setSelectedForm(null);
-                }}
-              >
-                Select Module
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => openSubmoduleDialog(module)}
-                title="Add Submodule"
-                className="hover:bg-gray-100 rounded-lg"
-              >
-                <FolderPlus className="h-4 w-4 text-gray-500" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => openEditDialog(module)}
-                title="Edit Module"
-                className="hover:bg-gray-100 rounded-lg"
-              >
-                <Edit className="h-4 w-4 text-gray-500" />
-              </Button>
-            </div>
-            {module.children && module.children.length > 0 && (
-              <Accordion type="single" collapsible className="ml-2">
-                {renderModuleAccordion(module.children, level + 1)}
-              </Accordion>
-            )}
-          </div>
-        </AccordionContent>
-      </AccordionItem>
-    ));
-  };
+  useEffect(() => {
+    if (mergeMode === "horizontal") {
+      const merged = mergeRecordsHorizontally(formRecords);
+      setMergedRecords(merged);
+    } else {
+      setMergedRecords(formRecords);
+    }
+  }, [formRecords, mergeMode]);
 
-  // Get field labels from current form structure
-  const getFormFieldLabels = () => {
-    return formFieldsWithSections.map((field) => ({
-      id: field.id,
-      label: field.label,
-      type: field.type,
-      order: field.order,
-      sectionTitle: field.sectionTitle,
-    }));
-  };
+  useEffect(() => {
+    let updatedModules = [...modules];
 
-  const renderSortIcon = (field: string) => {
-    if (sortOrder === "asc") return <ArrowUp className="h-4 w-4" />;
-    return <ArrowDown className="h-4 w-4" />;
-  };
+    if (searchQuery) {
+      const filterModules = (modules: FormModule[]): FormModule[] => {
+        return modules
+          .filter((module) =>
+            module.name.toLowerCase().includes(searchQuery.toLowerCase())
+          )
+          .map((module) => ({
+            ...module,
+            children: module.children ? filterModules(module.children) : [],
+          }))
+          .filter(
+            (module) =>
+              module.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+              module.children?.length > 0
+          );
+      };
+      updatedModules = filterModules(modules);
+    }
 
-  const renderFormsExcel = (forms: Form[]) => (
-    <div className="overflow-auto border border-gray-300 rounded-lg shadow-sm bg-white">
-      <table className="w-full text-xs">
-        <thead className="bg-gray-100 sticky top-0 z-10 border-b border-gray-300">
-          <tr>
-            <th className="p-2 text-left font-semibold text-gray-700 border-r border-gray-300">
-              <div className="flex items-center gap-1">
-                Name
-                <ArrowUpDown className="h-3 w-3 text-gray-500" />
-              </div>
-            </th>
-            <th className="p-2 text-left font-semibold text-gray-700 border-r border-gray-300">
-              <div className="flex items-center gap-1">
-                Status
-                <ArrowUpDown className="h-3 w-3 text-gray-500" />
-              </div>
-            </th>
-            <th className="p-2 text-left font-semibold text-gray-700 border-r border-gray-300">
-              <div className="flex items-center gap-1">
-                Updated
-                <ArrowUpDown className="h-3 w-3 text-gray-500" />
-              </div>
-            </th>
-            <th className="p-2 text-right font-semibold text-gray-700">
-              Actions
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {forms.map((form: Form, index) => (
-            <tr
-              key={form.id}
-              className={`border-b border-gray-300 hover:bg-gray-50 cursor-pointer ${selectedForm?.id === form.id
-                  ? "bg-blue-50"
-                  : index % 2 === 0
-                    ? "bg-white"
-                    : "bg-gray-50"
-                }`}
-              onClick={() => setSelectedForm(form)}
-            >
-              <td className="p-2 text-gray-700 border-r border-gray-300">
-                <Button
-                  variant="link"
-                  className="text-blue-500 hover:underline"
-                  onClick={() => openFormDialog(form.id)}
-                >
-                  {form.name}
-                </Button>
-              </td>
-              <td className="p-2 border-r border-gray-300">
-                <Badge
-                  variant={form.isPublished ? "default" : "secondary"}
-                  className="text-xs"
-                >
-                  {form.isPublished ? "Published" : "Draft"}
-                </Badge>
-              </td>
-              <td className="p-2 text-gray-700 border-r border-gray-300">
-                {new Date(form.updatedAt).toLocaleDateString()}
-              </td>
-              <td className="p-2 text-right">
-                <div className="flex gap-1 justify-end">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handlePublishForm(form)}
-                    className="text-xs border-gray-300 hover:bg-gray-100"
-                  >
-                    {form.isPublished ? "Unpublish" : "Publish"}
-                  </Button>
-                  <NextLink href={`/builder/${form.id}`}>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-xs border-gray-300 hover:bg-gray-100 bg-transparent"
-                    >
-                      Edit
-                    </Button>
-                  </NextLink>
-                  <NextLink href={`/preview/${form.id}`} target="_blank">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-xs border-gray-300 hover:bg-gray-100 bg-transparent"
-                    >
-                      Preview
-                    </Button>
-                  </NextLink>
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+    const sortModules = (modules: FormModule[]): FormModule[] => {
+      const sorted = [...modules].sort((a, b) => {
+        return sortOrder === "asc"
+          ? a.name.localeCompare(b.name)
+          : b.name.localeCompare(a.name);
+      });
+      return sorted.map((module) => ({
+        ...module,
+        children: module.children ? sortModules(module.children) : [],
+      }));
+    };
+    setFilteredModules(sortModules(updatedModules));
+  }, [modules, searchQuery, sortOrder]);
 
-  const renderFormsTable = (forms: Form[]) => (
-    <div className="overflow-x-auto border border-gray-300 rounded-lg shadow-sm">
-      <table className="w-full text-sm bg-white">
-        <thead className="bg-gray-100">
-          <tr className="border-b border-gray-300">
-            <th className="p-3 text-left font-semibold text-gray-700">Name</th>
-            <th className="p-3 text-left font-semibold text-gray-700">
-              Status
-            </th>
-            <th className="p-3 text-left font-semibold text-gray-700">
-              Updated
-            </th>
-            <th className="p-3 text-right font-semibold text-gray-700">
-              Actions
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {forms.map((form: Form, index) => (
-            <tr
-              key={form.id}
-              className={`border-b border-gray-300 hover:bg-gray-50 cursor-pointer ${selectedForm?.id === form.id
-                  ? "bg-blue-50"
-                  : index % 2 === 0
-                    ? "bg-white"
-                    : "bg-gray-50"
-                }`}
-              onClick={() => setSelectedForm(form)}
-            >
-              <td className="p-3 text-gray-700">
-                <Button
-                  variant="link"
-                  className="text-blue-500 hover:underline"
-                  onClick={() => openFormDialog(form.id)}
-                >
-                  {form.name}
-                </Button>
-              </td>
-              <td className="p-3">
-                <Badge
-                  variant={form.isPublished ? "default" : "secondary"}
-                  className="text-xs"
-                >
-                  {form.isPublished ? "Published" : "Draft"}
-                </Badge>
-              </td>
-              <td className="p-3 text-gray-700">
-                {new Date(form.updatedAt).toLocaleDateString()}
-              </td>
-              <td className="p-3 text-right">
-                <div className="flex gap-2 justify-end">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handlePublishForm(form)}
-                    className="text-xs border-gray-300 hover:bg-gray-100"
-                  >
-                    {form.isPublished ? "Unpublish" : "Publish"}
-                  </Button>
-                  <NextLink href={`/builder/${form.id}`}>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-xs border-gray-300 hover:bg-gray-100 bg-transparent"
-                    >
-                      Edit
-                    </Button>
-                  </NextLink>
-                  <NextLink href={`/preview/${form.id}`} target="_blank">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-xs border-gray-300 hover:bg-gray-100 bg-transparent"
-                    >
-                      Preview
-                    </Button>
-                  </NextLink>
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+  useEffect(() => {
+    let filtered = [...mergedRecords];
 
-  const renderFormsGrid = (forms: Form[]) => (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      {forms.map((form: Form) => (
-        <Card
-          key={form.id}
-          className={`hover:shadow-md transition-shadow duration-200 border border-gray-300 rounded-lg`}
-        >
-          <CardHeader>
-            <CardTitle className="text-sm font-semibold text-gray-700">
-              <Button
-                variant="link"
-                className="text-blue-500 hover:underline"
-                onClick={() => openFormDialog(form.id)}
-              >
-                {form.name}
-              </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Badge
-                  variant={form.isPublished ? "default" : "secondary"}
-                  className="text-xs"
-                >
-                  {form.isPublished ? "Published" : "Draft"}
-                </Badge>
-                <span className="text-xs text-gray-500">
-                  Updated {new Date(form.updatedAt).toLocaleDateString()}
-                </span>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handlePublishForm(form)}
-                  className="text-xs border-gray-300 hover:bg-gray-100"
-                >
-                  {form.isPublished ? "Unpublish" : "Publish"}
-                </Button>
-                <NextLink href={`/builder/${form.id}`}>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-xs border-gray-300 hover:bg-gray-100 bg-transparent"
-                  >
-                    Edit
-                  </Button>
-                </NextLink>
-                <NextLink href={`/preview/${form.id}`} target="_blank">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-xs border-gray-300 hover:bg-gray-100 bg-transparent"
-                  >
-                    Preview
-                  </Button>
-                </NextLink>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  );
+    if (selectedFormFilter !== "all") {
+      filtered = filtered.filter(
+        (record) => record.formId === selectedFormFilter
+      );
+    }
 
-  const renderFormsList = (forms: Form[]) => (
-    <div className="space-y-2">
-      {forms.map((form: Form) => (
-        <Card
-          key={form.id}
-          className={`hover:shadow-md transition-shadow duration-200 border border-gray-300 rounded-lg`}
-        >
-          <CardContent className="p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <FileText className="h-5 w-5 text-gray-400" />
-              <div>
-                <h3 className="text-sm font-semibold text-gray-700">
-                  <Button
-                    variant="link"
-                    className="text-blue-500 hover:underline"
-                    onClick={() => openFormDialog(form.id)}
-                  >
-                    {form.name}
-                  </Button>
-                </h3>
-                <div className="flex items-center gap-2">
-                  <Badge
-                    variant={form.isPublished ? "default" : "secondary"}
-                    className="text-xs"
-                  >
-                    {form.isPublished ? "Published" : "Draft"}
-                  </Badge>
-                  <span className="text-xs text-gray-500">
-                    Updated {new Date(form.updatedAt).toLocaleDateString()}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePublishForm(form)}
-                className="text-xs border-gray-300 hover:bg-gray-100"
-              >
-                {form.isPublished ? "Unpublish" : "Publish"}
-              </Button>
-              <NextLink href={`/builder/${form.id}`}>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-xs border-gray-300 hover:bg-gray-100 bg-transparent"
-                >
-                  Edit
-                </Button>
-              </NextLink>
-              <NextLink href={`/preview/${form.id}`} target="_blank">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-xs border-gray-300 hover:bg-gray-100 bg-transparent"
-                >
-                  Preview
-                </Button>
-              </NextLink>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  );
+    if (recordSearchQuery) {
+      filtered = filtered.filter((record) => {
+        return (
+          record.processedData.some((field) =>
+            field.displayValue
+              .toLowerCase()
+              .includes(recordSearchQuery.toLowerCase())
+          ) ||
+          record.id.toLowerCase().includes(recordSearchQuery.toLowerCase()) ||
+          (record.formName &&
+            record.formName
+              .toLowerCase()
+              .includes(recordSearchQuery.toLowerCase()))
+        );
+      });
+    }
+
+    if (recordSortField) {
+      filtered.sort((a, b) => {
+        let aValue = "";
+        let bValue = "";
+        if (recordSortField === "submittedAt") {
+          aValue = a.submittedAt;
+          bValue = b.submittedAt;
+        } else if (recordSortField === "status") {
+          aValue = a.status || "";
+          bValue = b.status || "";
+        } else if (recordSortField === "formName") {
+          aValue = a.formName || "";
+          bValue = b.formName || "";
+        } else {
+          const aField = a.processedData.find(
+            (f) => f.fieldId === recordSortField
+          );
+          const bField = b.processedData.find(
+            (f) => f.fieldId === recordSortField
+          );
+          aValue = aField?.displayValue || "";
+          bValue = bField?.displayValue || "";
+        }
+        const comparison = aValue.localeCompare(bValue);
+        return recordSortOrder === "asc" ? comparison : -comparison;
+      });
+    }
+    setFilteredRecords(filtered);
+    setCurrentPage(1);
+  }, [
+    mergedRecords,
+    recordSearchQuery,
+    recordSortField,
+    recordSortOrder,
+    selectedFormFilter,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      if (clickTimeout) {
+        clearTimeout(clickTimeout);
+      }
+    };
+  }, [clickTimeout]);
 
   if (loading) {
     return (
@@ -1735,11 +1461,8 @@ export default function HomePage() {
     );
   }
 
-  const editModeInfo = getEditModeInfo();
-
   return (
     <div className="h-screen bg-gray-100 flex flex-col">
-      {/* Fixed Header */}
       <div className="bg-white shadow-md border-b border-gray-200 flex-shrink-0">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
@@ -1782,145 +1505,29 @@ export default function HomePage() {
                   </TabsTrigger>
                 </TabsList>
               </Tabs>
-              <Dialog
-                open={isCreateDialogOpen}
-                onOpenChange={setIsCreateDialogOpen}
+              <Button
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+                onClick={() => setIsCreateDialogOpen(true)}
               >
-                <DialogTrigger asChild>
-                  <Button className="bg-blue-600 hover:bg-blue-700 text-white">
-                    <Plus className="mr-2 h-4 w-4" /> New Module
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="bg-white rounded-lg">
-                  <DialogHeader>
-                    <DialogTitle>Create Module</DialogTitle>
-                    <DialogDescription>Create a new module</DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="name" className="text-gray-700">
-                        Name
-                      </Label>
-                      <Input
-                        id="name"
-                        value={moduleData.name}
-                        onChange={(e) =>
-                          setModuleData({ ...moduleData, name: e.target.value })
-                        }
-                        placeholder="Module name"
-                        className="border-gray-300 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="description" className="text-gray-700">
-                        Description
-                      </Label>
-                      <Textarea
-                        id="description"
-                        value={moduleData.description}
-                        onChange={(e) =>
-                          setModuleData({
-                            ...moduleData,
-                            description: e.target.value,
-                          })
-                        }
-                        placeholder="Module description"
-                        rows={3}
-                        className="border-gray-300 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="parentId" className="text-gray-700">
-                        Parent Module
-                      </Label>
-                      <select
-                        id="parentId"
-                        value={moduleData.parentId}
-                        onChange={(e) =>
-                          setModuleData({
-                            ...moduleData,
-                            parentId: e.target.value,
-                          })
-                        }
-                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                      >
-                        <option value="">No Parent (Top-level)</option>
-                        {availableParents.map((parent) => (
-                          <option key={parent.id} value={parent.id}>
-                            {"  ".repeat(parent.level)}
-                            {parent.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button
-                      variant="outline"
-                      onClick={() => setIsCreateDialogOpen(false)}
-                      className="border-gray-300 text-gray-700"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      onClick={handleCreateModule}
-                      disabled={isSubmitting}
-                      className="bg-blue-600 hover:bg-blue-700 text-white"
-                    >
-                      {isSubmitting ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : null}
-                      Create
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+                <Plus className="mr-2 h-4 w-4" /> New Module
+              </Button>
             </div>
           </div>
         </div>
       </div>
-      {/* Main Content Area */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Sticky Sidebar */}
-        <div className="w-72 bg-white border-r border-gray-200 shadow-sm flex flex-col">
-          <div className="p-4 space-y-4 flex-shrink-0">
-            <h2 className="text-lg font-semibold text-gray-800">Modules</h2>
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Search modules..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-8 border-gray-300 focus:ring-blue-500 text-sm"
-                />
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setSortOrder(sortOrder === "asc" ? "desc" : "asc")
-                }
-                className="border-gray-300 text-gray-700 hover:bg-gray-100"
-                title={sortOrder === "asc" ? "Sort Z-A" : "Sort A-Z"}
-              >
-                <ArrowUpDown className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-          <div className="flex-1 overflow-y-auto px-4 pb-4">
-            {filteredModules.length ? (
-              <Accordion type="single" collapsible className="w-full">
-                {renderModuleAccordion(filteredModules)}
-              </Accordion>
-            ) : (
-              <div className="text-center text-gray-500 py-4">
-                No modules found
-              </div>
-            )}
-          </div>
-        </div>
-        {/* Main Content Area */}
+        <ModuleSidebar
+          filteredModules={filteredModules}
+          searchQuery={searchQuery}
+          sortOrder={sortOrder}
+          selectedModule={selectedModule}
+          setSearchQuery={setSearchQuery}
+          setSortOrder={setSortOrder}
+          setSelectedModule={setSelectedModule}
+          setSelectedForm={setSelectedForm}
+          openSubmoduleDialog={openSubmoduleDialog}
+          openEditDialog={openEditDialog}
+        />
         <div className="flex-1 flex flex-col overflow-hidden">
           <div className="p-6 flex-1 overflow-y-auto">
             {selectedModule ? (
@@ -1970,693 +1577,130 @@ export default function HomePage() {
                     </NextLink>
                   </div>
                 </div>
-                {/* Forms Display */}
-                <Card className="border-gray-300 shadow-sm">
-                  <CardHeader>
-                    <CardTitle className="text-lg font-semibold text-gray-800">
-                      Forms
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {selectedModule.forms?.length ? (
-                      <>
-                        {viewMode === "excel" &&
-                          renderFormsExcel(selectedModule.forms)}
-                        {viewMode === "table" &&
-                          renderFormsTable(selectedModule.forms)}
-                        {viewMode === "grid" &&
-                          renderFormsGrid(selectedModule.forms)}
-                        {viewMode === "list" &&
-                          renderFormsList(selectedModule.forms)}
-                      </>
-                    ) : (
-                      <div className="text-center py-4 text-gray-500">
-                        No forms in this module
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-                {/* Records Excel View */}
-                {selectedForm && (
-                  <Card className="border-gray-300 shadow-sm">
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-lg font-semibold text-gray-800">
-                          Records ({formRecords.length})
-                        </CardTitle>
-                        {/* ENHANCED EDIT MODE CONTROLS */}
-                        <div className="flex items-center gap-2">
-                          {/* Edit Mode Toggle Button */}
-                          <Button
-                            variant="outline"
-                            onClick={toggleEditMode}
-                            className={cn(
-                              "flex items-center gap-2 font-medium border-2 transition-all",
-                              editModeInfo.color
-                            )}
-                          >
-                            <editModeInfo.icon className="h-4 w-4" />
-                            {editModeInfo.label}
-                          </Button>
-                          {/* Pending Changes Indicator */}
-                          {pendingChanges.size > 0 && (
-                            <div className="flex items-center gap-2">
-                              <Badge
-                                variant="secondary"
-                                className="bg-yellow-100 text-yellow-800 border-yellow-300"
-                              >
-                                {pendingChanges.size} changes
-                              </Badge>
-                              <Button
-                                onClick={saveAllPendingChanges}
-                                disabled={savingChanges}
-                                className="bg-green-600 hover:bg-green-700 text-white"
-                                size="sm"
-                              >
-                                {savingChanges ? (
-                                  <>
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                    Saving...
-                                  </>
-                                ) : (
-                                  <>
-                                    <Save className="h-4 w-4 mr-2" />
-                                    Save All Changes
-                                  </>
-                                )}
-                              </Button>
-                              <Button
-                                onClick={discardAllPendingChanges}
-                                variant="outline"
-                                size="sm"
-                              >
-                                <X className="h-4 w-4 mr-2" />
-                                Discard
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      {/* Edit Mode Help Text */}
-                      <div className="text-sm text-muted-foreground bg-gray-50 p-3 rounded-lg border mt-4">
-                        <div className="flex items-center gap-2">
-                          <editModeInfo.icon className="h-4 w-4" />
-                          <span className="font-medium">
-                            {editModeInfo.description}
-                          </span>
-                        </div>
-                        {editMode === "double-click" && (
-                          <div className="mt-1 text-xs">
-                            Double-click any cell to start editing. Press Enter
-                            to save, Escape to cancel.
-                          </div>
-                        )}
-                        {editMode === "single-click" && (
-                          <div className="mt-1 text-xs">
-                            Click any cell to start editing. Press Enter to
-                            save, Escape to cancel.
-                          </div>
-                        )}
-                        {editMode === "locked" && (
-                          <div className="mt-1 text-xs">
-                            Table is in read-only mode. Click the edit mode
-                            button to enable editing.
-                          </div>
-                        )}
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      {recordsLoading ? (
-                        <div className="flex justify-center py-4">
-                          <Loader2 className="h-6 w-6 animate-spin text-gray-600" />
-                        </div>
-                      ) : (
-                        <div className="space-y-4">
-                          {/* Search and Filter Controls */}
-                          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between bg-gray-50 p-4 rounded-lg">
-                            <div className="flex flex-col sm:flex-row gap-2 flex-1">
-                              <div className="relative flex-1 min-w-[200px]">
-                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                                <Input
-                                  placeholder="Search records..."
-                                  value={recordSearchQuery}
-                                  onChange={(e) =>
-                                    setRecordSearchQuery(e.target.value)
-                                  }
-                                  className="pl-10 border-gray-300 focus:ring-blue-500"
-                                />
-                              </div>
-                              <Select
-                                value={recordsPerPage.toString()}
-                                onValueChange={(value) =>
-                                  setRecordsPerPage(Number(value))
-                                }
-                              >
-                                <SelectTrigger className="w-[120px]">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="10">
-                                    10 per page
-                                  </SelectItem>
-                                  <SelectItem value="20">
-                                    20 per page
-                                  </SelectItem>
-                                  <SelectItem value="50">
-                                    50 per page
-                                  </SelectItem>
-                                  <SelectItem value="100">
-                                    100 per page
-                                  </SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline" className="text-xs">
-                                {filteredRecords.length} of {formRecords.length}{" "}
-                                records
-                              </Badge>
-                              {selectedRecords.size > 0 && (
-                                <Badge variant="secondary" className="text-xs">
-                                  {selectedRecords.size} selected
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                          {filteredRecords.length ? (
-                            <>
-                              {/* Responsive Excel-like Table */}
-                              <div className="border border-gray-400 bg-white rounded-lg overflow-hidden shadow-sm">
-                                <div className="overflow-auto max-h-[60vh]">
-                                  <div className="inline-block min-w-full">
-                                    <div
-                                      style={{
-                                        fontFamily: "Calibri, sans-serif",
-                                      }}
-                                    >
-                                      {/* Column Headers Row */}
-                                      <div className="flex bg-gray-100 border-b border-gray-400 sticky top-0 z-20 min-w-max">
-                                        {/* Select All Checkbox */}
-                                        <div className="w-10 h-8 border-r border-gray-400 bg-gray-200 flex items-center justify-center">
-                                          <Checkbox
-                                            checked={
-                                              selectedRecords.size ===
-                                              filteredRecords.length &&
-                                              filteredRecords.length > 0
-                                            }
-                                            onCheckedChange={(checked) => {
-                                              if (checked) {
-                                                setSelectedRecords(
-                                                  new Set(
-                                                    filteredRecords.map(
-                                                      (r) => r.id
-                                                    )
-                                                  )
-                                                );
-                                              } else {
-                                                setSelectedRecords(new Set());
-                                              }
-                                            }}
-                                            className="h-3 w-3"
-                                          />
-                                        </div>
-                                        {/* Row number column header */}
-                                        <div className="w-12 h-8 border-r border-gray-400 bg-gray-200 flex items-center justify-center text-xs font-medium text-gray-700">
-                                          #
-                                        </div>
-                                        {/* Actions column */}
-                                        <div className="w-20 sm:w-24 h-8 border-r border-gray-400 bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-700">
-                                          Actions
-                                        </div>
-                                        {/* Submitted date column */}
-                                        <div
-                                          className="w-28 sm:w-32 h-8 border-r border-gray-400 bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-700 cursor-pointer hover:bg-gray-300"
-                                          onClick={() => {
-                                            if (
-                                              recordSortField === "submittedAt"
-                                            ) {
-                                              setRecordSortOrder(
-                                                recordSortOrder === "asc"
-                                                  ? "desc"
-                                                  : "asc"
-                                              );
-                                            } else {
-                                              setRecordSortField("submittedAt");
-                                              setRecordSortOrder("asc");
-                                            }
-                                          }}
-                                        >
-                                          <div className="flex items-center gap-1">
-                                            <span className="hidden sm:inline">
-                                              Submitted
-                                            </span>
-                                            <span className="sm:hidden">
-                                              Date
-                                            </span>
-                                            {recordSortField ===
-                                              "submittedAt" &&
-                                              (recordSortOrder === "asc" ? (
-                                                <ArrowUp className="h-3 w-3" />
-                                              ) : (
-                                                <ArrowDown className="h-3 w-3" />
-                                              ))}
-                                          </div>
-                                        </div>
-                                        {/* Status column */}
-                                        <div
-                                          className="w-20 sm:w-24 h-8 border-r border-gray-400 bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-700 cursor-pointer hover:bg-gray-300"
-                                          onClick={() => {
-                                            if (recordSortField === "status") {
-                                              setRecordSortOrder(
-                                                recordSortOrder === "asc"
-                                                  ? "desc"
-                                                  : "asc"
-                                              );
-                                            } else {
-                                              setRecordSortField("status");
-                                              setRecordSortOrder("asc");
-                                            }
-                                          }}
-                                        >
-                                          <div className="flex items-center gap-1">
-                                            Status
-                                            {recordSortField === "status" &&
-                                              (recordSortOrder === "asc" ? (
-                                                <ArrowUp className="h-3 w-3" />
-                                              ) : (
-                                                <ArrowDown className="h-3 w-3" />
-                                              ))}
-                                          </div>
-                                        </div>
-                                        {/* Dynamic field columns */}
-                                        {getFormFieldLabels().map((field) => (
-                                          <div
-                                            key={field.id}
-                                            className="w-32 sm:w-40 h-8 border-r border-gray-400 bg-gray-200 flex flex-col items-center justify-center text-xs font-bold text-gray-700 px-1 cursor-pointer hover:bg-gray-300"
-                                            title={`${field.sectionTitle} - ${field.label} (${field.type})`}
-                                            onClick={() => {
-                                              if (
-                                                recordSortField === field.id
-                                              ) {
-                                                setRecordSortOrder(
-                                                  recordSortOrder === "asc"
-                                                    ? "desc"
-                                                    : "asc"
-                                                );
-                                              } else {
-                                                setRecordSortField(field.id);
-                                                setRecordSortOrder("asc");
-                                              }
-                                            }}
-                                          >
-                                            <div className="flex flex-col items-center gap-0.5 truncate w-full">
-                                              <div className="text-[9px] sm:text-[10px] text-gray-500 font-normal truncate w-full text-center">
-                                                {field.sectionTitle}
-                                              </div>
-                                              <div className="flex items-center gap-1 truncate w-full justify-center">
-                                                {React.createElement(
-                                                  getFieldIcon(field.type),
-                                                  {
-                                                    className:
-                                                      "h-2.5 w-2.5 sm:h-3 sm:w-3 flex-shrink-0",
-                                                  }
-                                                )}
-                                                <span className="truncate text-[10px] sm:text-xs font-bold">
-                                                  {field.label}
-                                                </span>
-                                                {recordSortField === field.id &&
-                                                  (recordSortOrder === "asc" ? (
-                                                    <ArrowUp className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
-                                                  ) : (
-                                                    <ArrowDown className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
-                                                  ))}
-                                              </div>
-                                            </div>
-                                          </div>
-                                        ))}
-                                      </div>
-                                      {/* Data Rows */}
-                                      {filteredRecords
-                                        .slice(
-                                          (currentPage - 1) * recordsPerPage,
-                                          currentPage * recordsPerPage
-                                        )
-                                        .map((record, rowIndex) => (
-                                          <div
-                                            key={record.id}
-                                            className="flex hover:bg-blue-50 min-w-max"
-                                          >
-                                            {/* Select Checkbox */}
-                                            <div className="w-10 h-7 border-r border-b border-gray-300 bg-white flex items-center justify-center">
-                                              <Checkbox
-                                                checked={selectedRecords.has(
-                                                  record.id
-                                                )}
-                                                onCheckedChange={(checked) => {
-                                                  const newSelected = new Set(
-                                                    selectedRecords
-                                                  );
-                                                  if (checked) {
-                                                    newSelected.add(record.id);
-                                                  } else {
-                                                    newSelected.delete(
-                                                      record.id
-                                                    );
-                                                  }
-                                                  setSelectedRecords(
-                                                    newSelected
-                                                  );
-                                                }}
-                                                className="h-3 w-3"
-                                              />
-                                            </div>
-                                            {/* Row number */}
-                                            <div className="w-12 h-7 border-r border-b border-gray-300 bg-gray-100 flex items-center justify-center text-xs font-medium text-gray-600">
-                                              {(currentPage - 1) *
-                                                recordsPerPage +
-                                                rowIndex +
-                                                1}
-                                            </div>
-                                            {/* Actions cell */}
-                                            <div className="w-20 sm:w-24 h-7 border-r border-b border-gray-300 bg-white flex items-center justify-center">
-                                              <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                  <Button
-                                                    variant="ghost"
-                                                    className="h-5 w-5 p-0 hover:bg-gray-100"
-                                                  >
-                                                    <MoreHorizontal className="h-3 w-3" />
-                                                  </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent
-                                                  align="end"
-                                                  className="w-40"
-                                                >
-                                                  <DropdownMenuLabel className="text-xs">
-                                                    Actions
-                                                  </DropdownMenuLabel>
-                                                  <DropdownMenuItem className="text-xs">
-                                                    <Eye className="h-3 w-3 mr-2" />
-                                                    View Details
-                                                  </DropdownMenuItem>
-                                                  <DropdownMenuItem className="text-xs">
-                                                    <Edit className="h-3 w-3 mr-2" />
-                                                    Edit Record
-                                                  </DropdownMenuItem>
-                                                  <DropdownMenuSeparator />
-                                                  <DropdownMenuItem className="text-xs text-red-600">
-                                                    <Trash2 className="h-3 w-3 mr-2" />
-                                                    Delete
-                                                  </DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                              </DropdownMenu>
-                                            </div>
-                                            {/* Submitted date cell */}
-                                            <div className="w-28 sm:w-32 h-7 border-r border-b border-gray-300 bg-white flex items-center px-2 text-[10px] sm:text-xs">
-                                              <span className="hidden sm:inline">
-                                                {new Date(
-                                                  record.submittedAt
-                                                ).toLocaleDateString()}
-                                              </span>
-                                              <span className="sm:hidden">
-                                                {new Date(
-                                                  record.submittedAt
-                                                ).toLocaleDateString("en-US", {
-                                                  month: "short",
-                                                  day: "numeric",
-                                                })}
-                                              </span>
-                                            </div>
-                                            {/* Status cell */}
-                                            <div className="w-20 sm:w-24 h-7 border-r border-b border-gray-300 bg-white flex items-center justify-center px-1">
-                                              <Badge
-                                                variant="outline"
-                                                className="text-[9px] sm:text-xs px-1 py-0 h-4 border"
-                                              >
-                                                <span className="hidden sm:inline">
-                                                  {record.status || "submitted"}
-                                                </span>
-                                                <span className="sm:hidden">
-                                                  {(
-                                                    record.status || "submitted"
-                                                  )
-                                                    .charAt(0)
-                                                    .toUpperCase()}
-                                                </span>
-                                              </Badge>
-                                            </div>
-                                            {/* Dynamic field cells */}
-                                            {getFormFieldLabels().map(
-                                              (fieldDef) => {
-                                                const formField =
-                                                  formFieldsWithSections.find(
-                                                    (f) => f.id === fieldDef.id
-                                                  );
-                                                if (!formField) {
-                                                  return (
-                                                    <div
-                                                      key={fieldDef.id}
-                                                      className="w-32 sm:w-40 h-7 border-r border-b border-gray-300 bg-white flex items-center px-2 text-xs text-gray-400"
-                                                    >
-                                                      —
-                                                    </div>
-                                                  );
-                                                }
-                                                return (
-                                                  <div
-                                                    key={fieldDef.id}
-                                                    className="w-32 sm:w-40"
-                                                  >
-                                                    {renderEditableCell(
-                                                      record,
-                                                      formField,
-                                                      ""
-                                                    )}
-                                                  </div>
-                                                );
-                                              }
-                                            )}
-                                          </div>
-                                        ))}
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                              {/* Pagination Controls */}
-                              {filteredRecords.length > recordsPerPage && (
-                                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-gray-50 p-4 rounded-lg">
-                                  <div className="text-sm text-gray-600">
-                                    Showing{" "}
-                                    {(currentPage - 1) * recordsPerPage + 1} to{" "}
-                                    {Math.min(
-                                      currentPage * recordsPerPage,
-                                      filteredRecords.length
-                                    )}{" "}
-                                    of {filteredRecords.length} records
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() =>
-                                        setCurrentPage(
-                                          Math.max(1, currentPage - 1)
-                                        )
-                                      }
-                                      disabled={currentPage === 1}
-                                      className="text-xs"
-                                    >
-                                      Previous
-                                    </Button>
-                                    <div className="flex items-center gap-1">
-                                      {Array.from(
-                                        {
-                                          length: Math.min(
-                                            5,
-                                            Math.ceil(
-                                              filteredRecords.length /
-                                              recordsPerPage
-                                            )
-                                          ),
-                                        },
-                                        (_, i) => {
-                                          const totalPages = Math.ceil(
-                                            filteredRecords.length /
-                                            recordsPerPage
-                                          );
-                                          let pageNum;
-                                          if (totalPages <= 5) {
-                                            pageNum = i + 1;
-                                          } else if (currentPage <= 3) {
-                                            pageNum = i + 1;
-                                          } else if (
-                                            currentPage >=
-                                            totalPages - 2
-                                          ) {
-                                            pageNum = totalPages - 4 + i;
-                                          } else {
-                                            pageNum = currentPage - 2 + i;
-                                          }
-                                          return (
-                                            <Button
-                                              key={pageNum}
-                                              variant={
-                                                currentPage === pageNum
-                                                  ? "default"
-                                                  : "outline"
-                                              }
-                                              size="sm"
-                                              onClick={() =>
-                                                setCurrentPage(pageNum)
-                                              }
-                                              className="w-8 h-8 p-0 text-xs"
-                                            >
-                                              {pageNum}
-                                            </Button>
-                                          );
-                                        }
-                                      )}
-                                    </div>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() =>
-                                        setCurrentPage(
-                                          Math.min(
-                                            Math.ceil(
-                                              filteredRecords.length /
-                                              recordsPerPage
-                                            ),
-                                            currentPage + 1
-                                          )
-                                        )
-                                      }
-                                      disabled={
-                                        currentPage ===
-                                        Math.ceil(
-                                          filteredRecords.length /
-                                          recordsPerPage
-                                        )
-                                      }
-                                      className="text-xs"
-                                    >
-                                      Next
-                                    </Button>
-                                  </div>
-                                </div>
-                              )}
-                            </>
-                          ) : (
-                            <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
-                              <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                              <p className="text-lg font-medium">
-                                No records found
-                              </p>
-                              <p className="text-sm">
-                                {recordSearchQuery
-                                  ? "Try adjusting your search"
-                                  : "No records have been submitted yet"}
-                              </p>
-                              {recordSearchQuery && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => {
-                                    setRecordSearchQuery("");
-                                  }}
-                                  className="mt-2"
-                                >
-                                  Clear Search
-                                </Button>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
+                <FormsContent
+                  forms={selectedModule.forms || []}
+                  selectedForm={selectedForm}
+                  viewMode={viewMode}
+                  setSelectedForm={setSelectedForm}
+                  openFormDialog={openFormDialog}
+                  handlePublishForm={handlePublishForm}
+                />
+                <RecordsDisplay
+                  allModuleForms={allModuleForms}
+                  formRecords={formRecords}
+                  formFieldsWithSections={formFieldsWithSections}
+                  recordSearchQuery={recordSearchQuery}
+                  selectedFormFilter={selectedFormFilter}
+                  recordsPerPage={recordsPerPage}
+                  currentPage={currentPage}
+                  selectedRecords={selectedRecords}
+                  editMode={editMode}
+                  editingCell={editingCell}
+                  pendingChanges={pendingChanges}
+                  savingChanges={savingChanges}
+                  recordSortField={recordSortField}
+                  recordSortOrder={recordSortOrder}
+                  setRecordSearchQuery={setRecordSearchQuery}
+                  setSelectedFormFilter={setSelectedFormFilter}
+                  setRecordsPerPage={setRecordsPerPage}
+                  setCurrentPage={setCurrentPage}
+                  setSelectedRecords={setSelectedRecords}
+                  setRecordSortField={setRecordSortField}
+                  setRecordSortOrder={setRecordSortOrder}
+                  getFieldIcon={getFieldIcon}
+                  renderEditableCell={renderEditableCell}
+                  getEditModeInfo={getEditModeInfo}
+                  toggleEditMode={toggleEditMode}
+                  saveAllPendingChanges={saveAllPendingChanges}
+                  discardAllPendingChanges={discardAllPendingChanges}
+                />
               </div>
             ) : (
               <div className="text-center py-12 text-gray-500">
-                Select a module to view its forms and records
+                Select a module to view its forms and unified records data
               </div>
             )}
           </div>
         </div>
-        {/* Form Details Panel */}
-        {selectedForm && (
-          <div className="w-80 bg-white border-l border-gray-200 shadow-sm p-4 flex-shrink-0 overflow-y-auto">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4">
-              Form Details
-            </h2>
-            <Card className="border-gray-300 shadow-sm">
-              <CardContent className="p-4 space-y-4">
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-700">
-                    {selectedForm.name}
-                  </h3>
-                  <p className="text-sm text-gray-600">
-                    Status: {selectedForm.isPublished ? "Published" : "Draft"}
-                  </p>
-                </div>
-                {selectedForm.isPublished && (
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-gray-700">
-                      Public Link:
-                    </p>
-                    <div className="flex gap-2">
-                      <Input
-                        value={`${window.location.origin}/form/${selectedForm.id}`}
-                        readOnly
-                        className="text-xs border-gray-300 focus:ring-blue-500"
-                      />
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => copyFormLink(selectedForm.id)}
-                        className="border-gray-300 text-gray-700 hover:bg-gray-100"
-                      >
-                        <Copy className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
-                <div className="space-y-2">
-                  <NextLink href={`/builder/${selectedForm.id}`}>
-                    <Button
-                      variant="outline"
-                      className="w-full border-gray-300 text-gray-700 hover:bg-gray-100 bg-transparent"
-                    >
-                      <Edit className="h-4 w-4 mr-2" /> Edit Form
-                    </Button>
-                  </NextLink>
-                  <NextLink
-                    href={`/preview/${selectedForm.id}`}
-                    target="_blank"
-                  >
-                    <Button
-                      variant="outline"
-                      className="w-full border-gray-300 text-gray-700 hover:bg-gray-100 bg-transparent"
-                    >
-                      <Eye className="h-4 w-4 mr-2" /> Preview
-                    </Button>
-                  </NextLink>
-                  <NextLink href={`/forms/${selectedForm.id}/analytics`}>
-                    <Button
-                      variant="outline"
-                      className="w-full border-gray-300 text-gray-700 hover:bg-gray-100 bg-transparent"
-                    >
-                      <BarChart3 className="h-4 w-4 mr-2" /> Analytics
-                    </Button>
-                  </NextLink>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
       </div>
-      {/* Edit Module Dialog */}
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <DialogContent className="bg-white rounded-lg">
+          <DialogHeader>
+            <DialogTitle>Create Module</DialogTitle>
+            <DialogDescription>Create a new module</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="name" className="text-gray-700">
+                Name
+              </Label>
+              <Input
+                id="name"
+                value={moduleData.name}
+                onChange={(e) =>
+                  setModuleData({ ...moduleData, name: e.target.value })
+                }
+                placeholder="Module name"
+                className="border-gray-300 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <Label htmlFor="description" className="text-gray-700">
+                Description
+              </Label>
+              <Textarea
+                id="description"
+                value={moduleData.description}
+                onChange={(e) =>
+                  setModuleData({ ...moduleData, description: e.target.value })
+                }
+                placeholder="Module description"
+                rows={3}
+                className="border-gray-300 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <Label htmlFor="parentId" className="text-gray-700">
+                Parent Module
+              </Label>
+              <select
+                id="parentId"
+                value={moduleData.parentId}
+                onChange={(e) =>
+                  setModuleData({ ...moduleData, parentId: e.target.value })
+                }
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">No Parent (Top-level)</option>
+                {availableParents.map((parent) => (
+                  <option key={parent.id} value={parent.id}>
+                    {"  ".repeat(parent.level)} {parent.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsCreateDialogOpen(false)}
+              className="border-gray-300 text-gray-700"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateModule}
+              disabled={isSubmitting}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {isSubmitting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="bg-white rounded-lg">
           <DialogHeader>
@@ -2710,8 +1754,7 @@ export default function HomePage() {
                   .filter((parent) => parent.id !== editingModule?.id)
                   .map((parent) => (
                     <option key={parent.id} value={parent.id}>
-                      {"  ".repeat(parent.level)}
-                      {parent.name}
+                      {"  ".repeat(parent.level)} {parent.name}
                     </option>
                   ))}
               </select>
@@ -2738,7 +1781,6 @@ export default function HomePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {/* Create Submodule Dialog */}
       <Dialog
         open={isSubmoduleDialogOpen}
         onOpenChange={setIsSubmoduleDialogOpen}

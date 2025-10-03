@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { sendOTPEmail } from '@/lib/email'
-import { generateOTP, hashPassword } from '@/lib/auth'
-import { RegisterSchema } from '@/lib/validations'
+import { type NextRequest, NextResponse } from "next/server"
+import { prisma } from "@/lib/prisma"
+import { sendOTPEmail } from "@/lib/email"
+import { generateOTP, hashPassword } from "@/lib/auth"
+import { RegisterSchema } from "@/lib/validations"
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,10 +15,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (existingUser && existingUser.email_verified) {
-      return NextResponse.json(
-        { error: 'User already exists with this email' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: "User already exists with this email" }, { status: 400 })
     }
 
     // Hash the password
@@ -27,25 +24,25 @@ export async function POST(request: NextRequest) {
     // Generate OTP
     const otp = generateOTP()
     const expiresAt = new Date()
-    expiresAt.setMinutes(expiresAt.getMinutes() + 10) // 10 minutes expiry
+    expiresAt.setMinutes(expiresAt.getMinutes() + 10)
 
-    let user = existingUser
+    let user
 
-    if (!user) {
-      // Create new user if doesn't exist
+    if (!existingUser) {
+      // Create new user without an organization
       user = await prisma.user.create({
         data: {
           first_name: name,
           email,
           password: hashedPassword,
           email_verified: false,
-          status: 'PENDING_VERIFICATION',
+          status: "PENDING_VERIFICATION",
         },
       })
     } else {
       // Update existing user with new data
       user = await prisma.user.update({
-        where: { id: user.id },
+        where: { id: existingUser.id },
         data: {
           first_name: name,
           password: hashedPassword,
@@ -54,17 +51,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Create or update OTP
-    await prisma.oTPCode.upsert({
+    await prisma.OTPCode.upsert({
       where: {
         userId_type: {
           userId: user.id,
-          type: 'REGISTRATION',
+          type: "REGISTRATION",
         },
       },
       create: {
         userId: user.id,
         code: otp,
-        type: 'REGISTRATION',
+        type: "REGISTRATION",
         expiresAt,
       },
       update: {
@@ -76,25 +73,19 @@ export async function POST(request: NextRequest) {
     })
 
     // Send OTP email
-    const emailResult = await sendOTPEmail(email, otp, 'registration')
+    const emailResult = await sendOTPEmail(email, otp, "registration")
 
     if (!emailResult.success) {
-      return NextResponse.json(
-        { error: 'Failed to send verification email' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: "Failed to send verification email" }, { status: 500 })
     }
 
     return NextResponse.json({
       success: true,
-      message: 'Verification code sent to your email',
+      message: "Verification code sent to your email",
       userId: user.id,
     })
   } catch (error) {
-    console.error('Registration error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    console.error("Registration error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

@@ -1,6 +1,5 @@
-// pages/api/user-permissions.ts
 import { type NextRequest, NextResponse } from "next/server";
-import { getUserPermissions, updateUserPermissions } from "@/lib/database";
+import { getUserPermissions, updateUserPermissions, type UserPermissionUpdate } from "@/lib/database";
 
 export async function GET(request: NextRequest) {
   try {
@@ -57,7 +56,7 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const updates = body
+    const updates: UserPermissionUpdate[] = body
       .filter((update: any) => {
         if (!update.userId || !update.permissionId) {
           console.log(
@@ -72,6 +71,7 @@ export async function PUT(request: NextRequest) {
         userId: update.userId,
         permissionId: update.permissionId,
         moduleId: update.moduleId || null,
+        formId: update.formId || null, // FIXED: Now properly handling formId
         granted: Boolean(update.granted),
         reason: update.reason || "Manual assignment",
         grantedBy: update.grantedBy || null,

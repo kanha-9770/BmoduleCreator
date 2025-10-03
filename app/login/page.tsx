@@ -1,111 +1,124 @@
-"use client"
+"use client";
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { LoginSchema } from '@/lib/validations'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
-import { useToast } from '@/hooks/use-toast'
-import { Loader2, LogIn, Mail, Lock, Eye, EyeOff } from 'lucide-react'
-import Link from 'next/link'
-import type { z } from 'zod'
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { LoginSchema } from "@/lib/validations";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { useToast } from "@/hooks/use-toast";
+import { Loader2, LogIn, Mail, Lock, Eye, EyeOff } from "lucide-react";
+import Link from "next/link";
+import type { z } from "zod";
 
-type LoginFormData = z.infer<typeof LoginSchema>
+type LoginFormData = z.infer<typeof LoginSchema>;
 
 export default function LoginPage() {
-  const [isLoading, setIsLoading] = useState(false)
-  const [showPassword, setShowPassword] = useState(false)
-  const router = useRouter()
-  const { toast } = useToast()
+  const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const router = useRouter();
+  const { toast } = useToast();
 
   const form = useForm<LoginFormData>({
     resolver: zodResolver(LoginSchema),
     defaultValues: {
-      email: '',
-      password: '',
+      email: "",
+      password: "",
     },
-  })
+  });
 
   const onSubmit = async (data: LoginFormData) => {
-    setIsLoading(true)
+    setIsLoading(true);
 
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(data),
-      })
+      });
 
-      const result = await response.json()
+      const result = await response.json();
 
       if (!response.ok) {
-        console.error('Login failed:', result)
+        console.error("Login failed:", result);
         toast({
-          title: 'Login Failed',
-          description: result.error || 'Something went wrong',
-          variant: 'destructive',
-        })
-        return
+          title: "Login Failed",
+          description: result.error || "Something went wrong",
+          variant: "destructive",
+        });
+        return;
       }
 
-      console.log('Login response:', result)
+      console.log("Login response:", result);
 
       if (result.requiresOTP) {
         toast({
-          title: 'Login Code Sent',
-          description: 'Check your email for the login verification code',
-        })
-        
+          title: "Login Code Sent",
+          description: "Check your email for the login verification code",
+        });
+
         // Redirect to OTP verification page
-        router.push(`/verify-otp?userId=${result.userId}&type=login`)
+        router.push(`/verify-otp?userId=${result.userId}&type=login`);
       } else {
         toast({
-          title: 'Welcome back!',
-          description: 'You have been successfully logged in',
-        })
+          title: "Welcome back!",
+          description: "You have been successfully logged in",
+        });
 
         // Force immediate redirect to profile with multiple fallbacks
-        console.log('Login successful, redirecting to profile...')
-        
+        console.log("Login successful, redirecting to profile...");
+
         // Try multiple redirect methods for reliability
         setTimeout(() => {
-          console.log('Attempting redirect...')
-          window.location.href = '/profile'
-        }, 100)
-        
+          console.log("Attempting redirect...");
+          window.location.href = "/profile";
+        }, 100);
+
         // Fallback redirect
         setTimeout(() => {
-          if (window.location.pathname === '/login') {
-            console.log('First redirect failed, trying again...')
-            router.replace('/profile')
+          if (window.location.pathname === "/login") {
+            console.log("First redirect failed, trying again...");
+            router.replace("/profile");
           }
-        }, 500)
-        
+        }, 500);
+
         // Final fallback
         setTimeout(() => {
-          if (window.location.pathname === '/login') {
-            console.log('Router redirect failed, forcing window location...')
-            window.location.assign('/profile')
+          if (window.location.pathname === "/login") {
+            console.log("Router redirect failed, forcing window location...");
+            window.location.assign("/profile");
           }
-        }, 1000)
+        }, 1000);
       }
     } catch (error) {
-      console.error('Login error:', error)
+      console.error("Login error:", error);
       toast({
-        title: 'Error',
-        description: 'Network error. Please try again.',
-        variant: 'destructive',
-      })
+        title: "Error",
+        description: "Network error. Please try again.",
+        variant: "destructive",
+      });
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-4">
@@ -131,13 +144,18 @@ export default function LoginPage() {
           </CardHeader>
           <CardContent>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <form
+                onSubmit={form.handleSubmit(onSubmit)}
+                className="space-y-6"
+              >
                 <FormField
                   control={form.control}
                   name="email"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-sm font-medium">Email Address</FormLabel>
+                      <FormLabel className="text-sm font-medium">
+                        Email Address
+                      </FormLabel>
                       <FormControl>
                         <div className="relative">
                           <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
@@ -160,13 +178,15 @@ export default function LoginPage() {
                   name="password"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-sm font-medium">Password</FormLabel>
+                      <FormLabel className="text-sm font-medium">
+                        Password
+                      </FormLabel>
                       <FormControl>
                         <div className="relative">
                           <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                           <Input
                             {...field}
-                            type={showPassword ? 'text' : 'password'}
+                            type={showPassword ? "text" : "password"}
                             placeholder="Enter your password"
                             className="pl-10 pr-10 h-12 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
                             disabled={isLoading}
@@ -176,7 +196,11 @@ export default function LoginPage() {
                             onClick={() => setShowPassword(!showPassword)}
                             className="absolute right-3 top-3 h-4 w-4 text-gray-400 hover:text-gray-600"
                           >
-                            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            {showPassword ? (
+                              <EyeOff className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
                           </button>
                         </div>
                       </FormControl>
@@ -196,7 +220,7 @@ export default function LoginPage() {
                       <span>Signing in...</span>
                     </div>
                   ) : (
-                    'Sign In'
+                    "Sign In"
                   )}
                 </Button>
               </form>
@@ -204,18 +228,18 @@ export default function LoginPage() {
 
             <div className="mt-6 text-center">
               <p className="text-sm text-gray-600">
-                Don't have an account?{' '}
-                <Link 
-                  href="/register" 
+                Don't have an account?{" "}
+                <Link
+                  href="/register"
                   className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
                 >
                   Sign up
                 </Link>
               </p>
               <p className="text-sm text-gray-600 mt-2">
-                Forgot your password?{' '}
-                <Link 
-                  href="/forgot-password" 
+                Forgot your password?{" "}
+                <Link
+                  href="/forgot-password"
                   className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
                 >
                   Reset it here
@@ -225,7 +249,8 @@ export default function LoginPage() {
 
             <div className="mt-4 text-center">
               <p className="text-xs text-gray-500">
-                For passwordless login, leave password field empty and we'll send you a verification code.
+                For passwordless login, leave password field empty and we'll
+                send you a verification code.
               </p>
             </div>
           </CardContent>
@@ -238,5 +263,5 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
-  )
+  );
 }

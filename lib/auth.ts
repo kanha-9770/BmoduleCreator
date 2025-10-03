@@ -1,12 +1,12 @@
-import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcryptjs';
-import crypto from 'crypto';
-import jwt from 'jsonwebtoken';
+import { PrismaClient } from "@prisma/client"
+import bcrypt from "bcryptjs"
+import crypto from "crypto"
+import jwt from "jsonwebtoken"
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient()
 
 // Environment variable for JWT secret
-const JWT_SECRET = process.env.JWT_SECRET || 'your-fallback-secret-key'
+const JWT_SECRET = process.env.JWT_SECRET || "your-fallback-secret-key"
 
 export interface SessionPayload {
   userId: string
@@ -15,20 +15,20 @@ export interface SessionPayload {
 }
 
 export interface AuthContext {
-  userId: string;
-  userEmail: string;
-  roleId: string | null;
-  roleIds: string[];
-  roleName?: string;
-  permissions: any[];
+  userId: string
+  userEmail: string
+  roleId: string | null
+  roleIds: string[]
+  roleName?: string
+  permissions: any[]
 }
 
 export const hashPassword = async (password: string): Promise<string> => {
-  return await bcrypt.hash(password, 12);
+  return await bcrypt.hash(password, 12)
 }
 
 export async function verifyPassword(password: string, hashedPassword: string): Promise<boolean> {
-  return await bcrypt.compare(password, hashedPassword);
+  return await bcrypt.compare(password, hashedPassword)
 }
 
 export const generateOTP = (): string => {
@@ -36,17 +36,13 @@ export const generateOTP = (): string => {
 }
 
 export function generateSessionToken(): string {
-  return crypto.randomBytes(32).toString('hex');
+  return crypto.randomBytes(32).toString("hex")
 }
 
-export async function createSession(
-  userId: string,
-  ipAddress: string,
-  userAgent: string
-) {
-  const token = generateSessionToken();
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 7); // 7 days
+export async function createSession(userId: string, ipAddress: string, userAgent: string) {
+  const token = generateSessionToken()
+  const expiresAt = new Date()
+  expiresAt.setDate(expiresAt.getDate() + 7) // 7 days
 
   const session = await prisma.userSession.create({
     data: {
@@ -56,9 +52,9 @@ export async function createSession(
       ipAddress,
       userAgent,
     },
-  });
+  })
 
-  return session;
+  return session
 }
 
 export async function validateSession(token: string) {
@@ -69,34 +65,41 @@ export async function validateSession(token: string) {
         user: {
           include: {
             employee: true,
-          }
+            organization: true,
+            unitAssignments: {
+              include: {
+                role: true,
+                unit: true,
+              },
+            },
+          },
         },
       },
-    });
+    })
 
     if (!session || session.expiresAt < new Date()) {
       if (session) {
         // Clean up expired session
         await prisma.userSession.delete({
           where: { id: session.id },
-        });
+        })
       }
-      console.log('[validateSession] Session not found or expired');
-      return null;
+      console.log("[validateSession] Session not found or expired")
+      return null
     }
 
-    console.log(`[validateSession] Valid session found for user: ${session.user.email}`);
-    return session;
+    console.log(`[validateSession] Valid session found for user: ${session.user.email}`)
+    return session
   } catch (error) {
-    console.error('[validateSession] Error validating session:', error);
-    return null;
+    console.error("[validateSession] Error validating session:", error)
+    return null
   }
 }
 
 export async function deleteSession(token: string) {
   await prisma.userSession.delete({
     where: { token },
-  });
+  })
 }
 
 export async function cleanupExpiredSessions() {
@@ -106,31 +109,31 @@ export async function cleanupExpiredSessions() {
         lt: new Date(),
       },
     },
-  });
+  })
 }
 
 // JWT utilities for additional token verification
-export function generateJWT(payload: any, secret?: string, expiresIn: string = '7d'): string {
-  const jwtSecret = secret || JWT_SECRET;
-  return jwt.sign(payload, jwtSecret, { expiresIn });
+export function generateJWT(payload: any, secret?: string, expiresIn = "7d"): string {
+  const jwtSecret = secret || JWT_SECRET
+  return jwt.sign(payload, jwtSecret, { expiresIn })
 }
 
 export function verifyJWT(token: string, secret?: string): any {
-  const jwtSecret = secret || JWT_SECRET;
+  const jwtSecret = secret || JWT_SECRET
   try {
-    return jwt.verify(token, jwtSecret);
+    return jwt.verify(token, jwtSecret)
   } catch (error) {
-    return null;
+    return null
   }
 }
 
 // Enhanced session validation with JWT support
 export async function validateSessionWithJWT(token: string, jwtSecret?: string) {
   // First validate session in database
-  const session = await validateSession(token);
+  const session = await validateSession(token)
 
   if (!session) {
-    return null;
+    return null
   }
 
   // Optional JWT validation if secret provided
@@ -139,16 +142,16 @@ export async function validateSessionWithJWT(token: string, jwtSecret?: string) 
       {
         userId: session.userId,
         sessionId: session.id,
-        email: session.user.email
+        email: session.user.email,
       },
-      jwtSecret
-    );
+      jwtSecret,
+    )
 
     return {
       ...session,
       jwtToken,
-    };
+    }
   }
 
-  return session;
+  return session
 }

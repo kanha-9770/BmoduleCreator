@@ -1,4 +1,3 @@
-// pages/api/role-permissions.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getRolePermissions, updateRolePermissions, type RolePermissionUpdate } from "@/lib/database";
 
@@ -47,7 +46,7 @@ export async function PUT(request: NextRequest) {
     console.log("[v0] PUT /api/role-permissions - Starting request");
 
     const body = await request.json();
-    console.log("[v0] Request body:", body);
+    console.log("[v0] Request body:", JSON.stringify(body, null, 2));
 
     if (!Array.isArray(body)) {
       console.log("[v0] Invalid request body: must be an array");
@@ -69,6 +68,7 @@ export async function PUT(request: NextRequest) {
         roleId: update.roleId,
         permissionId: update.permissionId,
         moduleId: update.moduleId || null,
+        formId: update.formId || null, // FIXED: Now properly handling formId
         granted: Boolean(update.granted),
         canDelegate: Boolean(update.canDelegate ?? false),
       }));
@@ -82,6 +82,7 @@ export async function PUT(request: NextRequest) {
     }
 
     console.log(`[v0] Processing ${updates.length} role permission updates`);
+    console.log("[v0] Mapped updates:", JSON.stringify(updates, null, 2));
 
     const success = await updateRolePermissions(updates);
 
