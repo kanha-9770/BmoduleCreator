@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useRoles } from "@/context/role-context";
 import { OrganizationTreeNode } from "./organization-tree-node";
 import { StatisticsPopup } from "./statistics-popup";
@@ -20,9 +21,41 @@ import {
 import type { OrganizationUnit } from "@/types/role";
 import { cn } from "@/lib/utils";
 import { OrganizationUnitFormModal } from "./organization-unit-form-modal";
+import { useToast } from "@/hooks/use-toast";
+
+interface Organization {
+  id: string;
+  name: string;
+}
 
 export function OrganizationTree() {
   const { state, dispatch } = useRoles();
+  const [organizationName, setOrganizationName] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    const fetchOrganization = async () => {
+      try {
+        const response = await fetch("/api/auth/me");
+        if (!response.ok) {
+          throw new Error("Failed to fetch user data");
+        }
+        const result = await response.json();
+        if (result.user?.organization?.name) {
+          setOrganizationName(result.user.organization.name);
+        }
+      } catch (error) {
+        console.error("Error fetching organization data:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load organization data",
+          variant: "destructive",
+        });
+      }
+    };
+
+    fetchOrganization();
+  }, [toast]);
 
   const handleExpandAll = () => {
     dispatch({ type: "EXPAND_ALL_ORG" });
@@ -96,9 +129,9 @@ export function OrganizationTree() {
                     <Building2 className="h-5 w-5 text-blue-600" />
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Total Units</p>
+                    <p className="text-sm text-gray-600">Organization</p>
                     <p className="text-2xl font-semibold text-gray-900">
-                      {getTotalNodes(organizationUnits)}
+                      {organizationName || "N/A"}
                     </p>
                   </div>
                 </div>
@@ -110,9 +143,9 @@ export function OrganizationTree() {
                     <Database className="h-5 w-5 text-green-600" />
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Max Depth</p>
+                    <p className="text-sm text-gray-600">Total Units</p>
                     <p className="text-2xl font-semibold text-gray-900">
-                      {getMaxDepth(organizationUnits)}
+                      {getTotalNodes(organizationUnits)}
                     </p>
                   </div>
                 </div>
@@ -124,9 +157,9 @@ export function OrganizationTree() {
                     <Users className="h-5 w-5 text-purple-600" />
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Expanded</p>
+                    <p className="text-sm text-gray-600">Max Depth</p>
                     <p className="text-2xl font-semibold text-gray-900">
-                      {state.expandedOrgNodes?.size || 0}
+                      {getMaxDepth(organizationUnits)}
                     </p>
                   </div>
                 </div>
@@ -257,11 +290,12 @@ export function OrganizationTree() {
                 </h3>
                 <p className="text-sm text-blue-700">
                   This hierarchical view shows the complete organizational
-                  structure with all units and departments.
+                  structure with all units and departments for{" "}
+                  {organizationName || "your organization"}.
                 </p>
               </div>
             )}
-            <div className="font-mono text-sm">
+            <div className="font-mono text-sm ">
               {organizationUnits.map((unit, index) => (
                 <OrganizationTreeNode
                   key={unit.id}

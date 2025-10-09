@@ -5,6 +5,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 enum AuthProvider {
@@ -149,6 +150,7 @@ model Organization {
   permissions       Permission[]
   dataSharingRules  DataSharingRule[]
   activities        Activity[]
+  formModules       FormModule[]       @relation("UserOrganization") // Add this line
   createdAt         DateTime           @default(now()) @map("created_at")
   updatedAt         DateTime           @updatedAt @map("updated_at")
 
@@ -338,6 +340,8 @@ model DataSharingRule {
 model FormModule {
   id              String           @id @default(cuid())
   name            String
+  organizationId  String?          @map("organization_id")
+  organization    Organization?    @relation("UserOrganization", fields: [organizationId], references: [id], onDelete: SetNull)
   description     String?
   icon            String?
   color           String?
@@ -358,6 +362,7 @@ model FormModule {
   updatedAt       DateTime         @updatedAt @map("updated_at")
 
   @@index([parentId])
+  @@index([organizationId])
   @@index([level])
   @@index([sortOrder])
   @@index([moduleType])

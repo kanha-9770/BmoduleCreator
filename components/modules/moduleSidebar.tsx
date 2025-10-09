@@ -67,28 +67,29 @@ const ModuleSidebar: React.FC<ModuleSidebarProps> = ({
         <AccordionTrigger
           className={`py-2 pl-${
             4 + level * 2
-          } pr-4 hover:bg-gray-50 rounded-lg transition-colors duration-200`}
+          } pr-2 hover:bg-gray-100 rounded-lg transition-colors duration-200`}
         >
-          <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-            <FileText className="h-4 w-4 text-gray-500 text-wrap" />
+          <div className="flex items-center text-left text-sm font-medium text-gray-700">
+            <FileText className="h-4 w-4 text-gray-500 text-wrap mr-1 min-w-max" />
             {module.name}
             {(module.forms ?? []).length > 0 && (
               <Badge
                 variant="secondary"
-                className="ml-2 bg-gray-100 text-gray-600 text-xs"
+                className="ml-1 bg-gray-100 text-gray-600 text-xs"
               >
                 {(module.forms ?? []).length}
               </Badge>
             )}
           </div>
         </AccordionTrigger>
-        <AccordionContent className="pl-4">
-          <div className="space-y-2">
+        <AccordionContent className="pl-3">
+          <div className="mt-1 space-y-2">
             <div className="flex gap-1">
               <Button
                 variant={
                   selectedModule?.id === module.id ? "secondary" : "ghost"
                 }
+                size="sm"
                 className="flex-1 justify-start text-left text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
                 onClick={() => {
                   setSelectedModule(module);
@@ -102,7 +103,7 @@ const ModuleSidebar: React.FC<ModuleSidebarProps> = ({
                 size="sm"
                 onClick={() => openSubmoduleDialog(module)}
                 title="Add Submodule"
-                className="hover:bg-gray-100 rounded-lg"
+                className="hover:bg-gray-100 rounded-lg px-2"
               >
                 <FolderPlus className="h-4 w-4 text-gray-500" />
               </Button>
@@ -111,13 +112,13 @@ const ModuleSidebar: React.FC<ModuleSidebarProps> = ({
                 size="sm"
                 onClick={() => openEditDialog(module)}
                 title="Edit Module"
-                className="hover:bg-gray-100 rounded-lg"
+                className="hover:bg-gray-100 rounded-lg px-2"
               >
                 <Edit className="h-4 w-4 text-gray-500" />
               </Button>
             </div>
             {module.children && module.children.length > 0 && (
-              <Accordion type="single" collapsible className="ml-2">
+              <Accordion type="single" collapsible className="ml-1">
                 {renderModuleAccordion(module.children, level + 1)}
               </Accordion>
             )}

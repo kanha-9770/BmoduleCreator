@@ -114,6 +114,7 @@ export function OrganizationUnitFormModal() {
     try {
       if (state.selectedOrgUnit?.id === "new") {
         // Creating new unit
+        console.log("organization id", state.organizationId)
         const response = await fetch(
           `/api/organizations/${state.organizationId}/units`,
           {

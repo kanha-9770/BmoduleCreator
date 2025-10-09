@@ -48,17 +48,27 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-
 export async function POST(request: NextRequest) {
   try {
     console.log("[API] /api/modules - Starting request to create module");
 
     const body = await request.json();
-    const { name, description, parentId, moduleType, icon, color, path } = body;
+    console.log("[API] /api/modules - Request body:", body);
+
+    const { name, description, parentId, moduleType, icon, color, organizationId } = body;
 
     if (!name) {
       console.log("[API] /api/modules - Missing required field: name");
       return NextResponse.json({ success: false, error: "Name is required" }, { status: 400 });
+    }
+
+    // Optionally validate organizationId
+    if (!organizationId) {
+      console.log("[API] /api/modules - Missing required field: organizationId");
+      return NextResponse.json(
+        { success: false, error: "Organization ID is required" },
+        { status: 400 }
+      );
     }
 
     const module = await DatabaseService.createModule({
@@ -68,6 +78,7 @@ export async function POST(request: NextRequest) {
       moduleType: moduleType || "standard",
       icon,
       color,
+      organizationId,
     });
 
     console.log("[API] /api/modules - Module created successfully:", module.id);

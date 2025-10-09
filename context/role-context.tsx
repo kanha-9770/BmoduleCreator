@@ -3,6 +3,7 @@
 import type React from "react"
 import { createContext, useContext, useReducer, useEffect, type ReactNode } from "react"
 import type { Role, RoleFormData, OrganizationUnit, OrganizationUnitFormData } from "@/types/role"
+import { useToast } from "@/hooks/use-toast"
 
 interface RoleState {
   roles: Role[]
@@ -19,7 +20,7 @@ interface RoleState {
   isOrgStatsPopupOpen: boolean
   loading: boolean
   error: string | null
-  organizationId: string
+  organizationId: string | null
 }
 
 type RoleAction =
@@ -53,6 +54,7 @@ type RoleAction =
   | { type: "REMOVE_ROLE_FROM_UNIT"; payload: { unitId: string; roleId: string } }
   | { type: "ASSIGN_USER_TO_UNIT"; payload: { unitId: string; userId: string; roleId: string } }
   | { type: "REMOVE_USER_FROM_UNIT"; payload: { unitId: string; userId: string } }
+  | { type: "SET_ORGANIZATION_ID"; payload: string | null }
 
 const initialState: RoleState = {
   roles: [],
@@ -69,7 +71,7 @@ const initialState: RoleState = {
   isOrgStatsPopupOpen: false,
   loading: false,
   error: null,
-  organizationId: "org_default", // Default organization ID
+  organizationId: null,
 }
 
 const RoleContext = createContext<{
@@ -91,6 +93,9 @@ function roleReducer(state: RoleState, action: RoleAction): RoleState {
 
     case "SET_ORGANIZATION_UNITS":
       return { ...state, organizationUnits: action.payload, loading: false }
+
+    case "SET_ORGANIZATION_ID":
+      return { ...state, organizationId: action.payload }
 
     case "ADD_ROLE": {
       // This will be handled by API call and then refreshed
@@ -257,12 +262,42 @@ function getAllOrgIds(units: OrganizationUnit[]): string[] {
 
 export function RoleProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(roleReducer, initialState)
+  const { toast } = useToast()
+
+  const fetchUserOrganization = async () => {
+    try {
+      dispatch({ type: "SET_LOADING", payload: true })
+      const response = await fetch("/api/auth/me")
+      if (!response.ok) {
+        throw new Error("Failed to fetch user data")
+      }
+      const result = await response.json()
+      if (result.user?.organization?.id) {
+        dispatch({ type: "SET_ORGANIZATION_ID", payload: result.user.organization.id })
+      } else {
+        throw new Error("Organization ID not found")
+      }
+    } catch (error) {
+      console.error("Error fetching organization ID:", error)
+      dispatch({ type: "SET_ERROR", payload: "Failed to load organization data" })
+      toast({
+        title: "Error",
+        description: "Failed to load organization data",
+        variant: "destructive",
+      })
+    } finally {
+      dispatch({ type: "SET_LOADING", payload: false })
+    }
+  }
 
   const refreshData = async () => {
+    if (!state.organizationId) {
+      return // Wait until organizationId is set
+    }
     try {
       dispatch({ type: "SET_LOADING", payload: true })
 
-      // Ensure organization exists first
+      // Ensure organization exists
       await fetch("/api/organizations/ensure", {
         method: "POST",
         headers: {
@@ -292,12 +327,26 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error("Error refreshing data:", error)
       dispatch({ type: "SET_ERROR", payload: "Failed to load data" })
+      toast({
+        title: "Error",
+        description: "Failed to load data",
+        variant: "destructive",
+      })
+    } finally {
+      dispatch({ type: "SET_LOADING", payload: false })
     }
   }
 
-  // Load initial data
+  // Load initial user data
   useEffect(() => {
-    refreshData()
+    fetchUserOrganization()
+  }, [])
+
+  // Refresh data when organizationId changes
+  useEffect(() => {
+    if (state.organizationId) {
+      refreshData()
+    }
   }, [state.organizationId])
 
   return <RoleContext.Provider value={{ state, dispatch, refreshData }}>{children}</RoleContext.Provider>

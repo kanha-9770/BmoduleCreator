@@ -19,6 +19,21 @@ export async function GET(request: NextRequest) {
 
     const userId = session.user.id;
 
+    // 🔹 Fetch the user's organizationId
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { organizationId: true },
+    });
+
+    if (!user?.organizationId) {
+      return NextResponse.json(
+        { error: "User is not associated with an organization" },
+        { status: 403 }
+      );
+    }
+
+    const organizationId = user.organizationId;
+
     // 🔹 Get role names for the user
     const roles = await prisma.$queryRaw<{ role_name: string }[]>`
       SELECT r.name AS role_name
@@ -32,7 +47,7 @@ export async function GET(request: NextRequest) {
     let finalModules: any[] = [];
 
     if (isAdmin) {
-      // 🔹 ADMIN gets ALL active modules
+      // 🔹 ADMIN gets ALL active modules for their organization
       finalModules = await prisma.$queryRaw`
         SELECT 
           fm.id AS module_id,
@@ -47,10 +62,11 @@ export async function GET(request: NextRequest) {
           fm.module_type
         FROM form_modules fm
         WHERE fm.is_active = TRUE
+        AND fm.organization_id = ${organizationId}
         ORDER BY fm.level ASC, fm.sort_order ASC
       `;
     } else {
-      // 🔹 Role-based modules
+      // 🔹 Role-based modules for the user's organization
       const roleBasedModules = await prisma.$queryRaw`
         SELECT DISTINCT 
           fm.id AS module_id,
@@ -69,9 +85,10 @@ export async function GET(request: NextRequest) {
         JOIN role_permissions rp ON rp.role_id = r.id AND rp.granted = TRUE
         JOIN form_modules fm ON fm.id = rp.module_id AND fm.is_active = TRUE
         WHERE u.id = ${userId}
+        AND fm.organization_id = ${organizationId}
       `;
 
-      // 🔹 User-based modules
+      // 🔹 User-based modules for the user's organization
       const userBasedModules = await prisma.$queryRaw`
         SELECT DISTINCT 
           fm.id AS module_id,
@@ -88,9 +105,10 @@ export async function GET(request: NextRequest) {
         JOIN user_permissions up ON up.user_id = u.id AND up.granted = TRUE
         JOIN form_modules fm ON fm.id = up.module_id AND fm.is_active = TRUE
         WHERE u.id = ${userId}
+        AND fm.organization_id = ${organizationId}
       `;
 
-      // 🔹 Deduplicate
+      // 🔹 Deduplicate modules
       const allModules = [
         ...(roleBasedModules as any[]),
         ...(userBasedModules as any[]),
@@ -103,9 +121,9 @@ export async function GET(request: NextRequest) {
         return acc;
       }, [] as any[]);
 
-      const childModuleIds = uniqueModules.map((m) => m.module_id);
+      const childModuleIds = uniqueModules.map((m: { module_id: any }) => m.module_id);
 
-      // 🔹 Fetch parent hierarchy for allowed modules
+      // 🔹 Fetch parent hierarchy for allowed modules within the organization
       const parentModules = await prisma.$queryRaw`
         WITH RECURSIVE parent_hierarchy AS (
           SELECT DISTINCT 
@@ -125,8 +143,10 @@ export async function GET(request: NextRequest) {
             FROM form_modules 
             WHERE id = ANY(${childModuleIds}::text[]) 
             AND parent_id IS NOT NULL
+            AND organization_id = ${organizationId}
           )
           AND fm.is_active = TRUE
+          AND fm.organization_id = ${organizationId}
           
           UNION
           
@@ -144,11 +164,12 @@ export async function GET(request: NextRequest) {
           FROM form_modules fm
           INNER JOIN parent_hierarchy ph ON fm.id = ph.parent_id
           WHERE fm.is_active = TRUE
+          AND fm.organization_id = ${organizationId}
         )
         SELECT * FROM parent_hierarchy
       `;
 
-      // 🔹 Merge + deduplicate
+      // 🔹 Merge and deduplicate
       const allVisibleModules = [...uniqueModules, ...(parentModules as any[])];
       finalModules = allVisibleModules.reduce((acc, current) => {
         if (!acc.find((m: any) => m.module_id === current.module_id)) {
@@ -169,5 +190,7 @@ export async function GET(request: NextRequest) {
       { error: "Internal server error" },
       { status: 500 }
     );
+  } finally {
+    await prisma.$disconnect();
   }
 }

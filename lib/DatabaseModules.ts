@@ -18,27 +18,50 @@ export class DatabaseModules {
     moduleType?: string;
     icon?: string;
     color?: string;
+    organizationId: string;
   }): Promise<FormModule> {
     if (!data.name || data.name.trim() === "") {
       throw new Error("Module name is required");
     }
 
+    if (!data.organizationId) {
+      throw new Error("Organization ID is required");
+    }
+
     try {
+      // Validate organization exists
+      const organization = await prisma.organization.findUnique({
+        where: { id: data.organizationId },
+        select: { id: true },
+      });
+
+      if (!organization) {
+        throw new Error(`Organization with ID ${data.organizationId} does not exist`);
+      }
+
       // Calculate hierarchy data
       let level = 0;
       let moduleType = data.moduleType || "standard";
 
       if (data.parentId) {
-        // Get parent module to calculate level
+        // Get parent module to calculate level and validate organization
         const parentModule = await prisma.formModule.findUnique({
           where: { id: data.parentId },
-          select: { level: true },
+          select: {
+            level: true,
+            organization: { select: { id: true } },
+          },
         });
 
-        if (parentModule) {
-          level = parentModule.level + 1;
+        if (!parentModule) {
+          throw new Error(`Parent module with ID ${data.parentId} does not exist`);
         }
 
+        if (parentModule.organization.id !== data.organizationId) {
+          throw new Error("Parent module must belong to the same organization");
+        }
+
+        level = parentModule.level + 1;
         moduleType = "child";
       } else {
         moduleType = "master";
@@ -47,10 +70,13 @@ export class DatabaseModules {
       const module = await prisma.formModule.create({
         data: {
           name: data.name.trim(),
+          organization: {
+            connect: { id: data.organizationId },
+          },
           description: data.description?.trim() || null,
           icon: data.icon || null,
           color: data.color || null,
-          parentId: data.parentId || null,
+          parent: data.parentId ? { connect: { id: data.parentId } } : undefined, // Use connect for parent relation
           moduleType,
           level,
           isActive: true,
@@ -72,13 +98,6 @@ export class DatabaseModules {
                         include: {
                           fields: true,
                           records: true,
-                          childSubforms: {
-                            include: {
-                              fields: true,
-                              records: true,
-                            },
-                            orderBy: { order: "asc" },
-                          },
                         },
                         orderBy: { order: "asc" },
                       },
@@ -98,6 +117,7 @@ export class DatabaseModules {
         moduleId: module.id,
         name: "Default Form",
         description: "Your first form in this module",
+        organizationId: data.organizationId,
       });
 
       const transformedModule = DatabaseTransforms.transformModule(
@@ -113,7 +133,6 @@ export class DatabaseModules {
       throw new Error(`Failed to create module: ${error?.message}`);
     }
   }
-
   // Get modules with proper hierarchy structure
   static async getModuleHierarchy(): Promise<FormModule[]> {
     try {
@@ -732,7 +751,7 @@ export class DatabaseModules {
       }
 
       console.log("[DatabaseModules] Form found with sections:", form.sections?.length || 0);
-      
+
       // Log subform hierarchy information
       form.sections?.forEach((section, sIndex) => {
         if (section.subforms?.length > 0) {
@@ -745,7 +764,7 @@ export class DatabaseModules {
 
       const transformedForm = DatabaseTransforms.transformForm(form);
       console.log("[DatabaseModules] Successfully transformed form with complete hierarchy");
-      
+
       return transformedForm;
     } catch (error: any) {
       console.error("Database error fetching form:", error);
@@ -913,9 +932,8 @@ export class DatabaseModules {
     }
   ): Promise<Form> {
     try {
-      const formUrl = `${
-        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
-      }/form/${id}`;
+      const formUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+        }/form/${id}`;
 
       const form = await this.updateForm(id, {
         isPublished: true,
@@ -1289,9 +1307,9 @@ export class DatabaseModules {
       } else if (data.sectionId) {
         // Count root-level subforms in the section
         const siblingCount = await prisma.subform.count({
-          where: { 
+          where: {
             sectionId: data.sectionId,
-            parentSubformId: null 
+            parentSubformId: null
           },
         });
         path = `${siblingCount + 1}`;

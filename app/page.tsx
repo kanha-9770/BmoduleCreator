@@ -2,9 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { DashboardStats } from "@/components/dashboard/dashboard-stats";
-import { QuickActions } from "@/components/dashboard/quick-actions";
-import { SystemAlerts } from "@/components/dashboard/system-alerts";
 
 export default function Dashboard() {
   const [user, setUser] = useState<any>(null);
@@ -30,14 +27,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Key Metrics */}
-          <DashboardStats />
-
-          {/* Quick Actions */}
-          <QuickActions />
-
-          {/* Alerts */}
-          <SystemAlerts />
+        
         </div>
       </main>
     </div>

@@ -33,7 +33,7 @@ export class DatabaseService {
   static deleteModule = DatabaseModules.deleteModule
 
   // Enhanced module hierarchy with permission filtering - UPDATED LOGIC
-  static async getModuleHierarchy(userId?: string): Promise<any[]> {
+  static async getModuleHierarchy(userId?: string, organizationId?: string): Promise<any[]> {
     try {
       console.log(`[DatabaseService] Getting module hierarchy for userId: ${userId || 'unauthenticated'}`);
 
