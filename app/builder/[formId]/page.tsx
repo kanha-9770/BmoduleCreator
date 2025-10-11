@@ -1,7 +1,7 @@
-"use client";
+"use client"
 
-import React, { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useEffect, useState } from "react"
+import { useParams } from "next/navigation"
 import {
   DndContext,
   DragOverlay,
@@ -11,107 +11,75 @@ import {
   type DragStartEvent,
   type DragEndEvent,
   closestCorners,
-} from "@dnd-kit/core";
-import { arrayMove } from "@dnd-kit/sortable";
-import { createPortal } from "react-dom";
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
-import FormCanvas from "@/components/form-canvas";
-import FieldPalette, {
-  PaletteItemDragOverlay,
-  fieldTypes,
-} from "@/components/field-palette";
-import PublishFormDialog from "@/components/publish-form-dialog";
-import LookupConfigurationDialog from "@/components/lookup-configuration-dialog";
-import UserFormSettingsDialog from "@/components/user-form-settings-dialog";
-import type {
-  Form,
-  FormSection,
-  FormField,
-  Subform,
-} from "@/types/form-builder";
-import {
-  Save,
-  Eye,
-  ArrowLeft,
-  Loader2,
-  Share2,
-  Users,
-  Settings,
-  UserCheck,
-} from "lucide-react";
-import Link from "next/link";
-import FieldComponent from "@/components/field-component";
-import SectionComponent from "@/components/section-component";
-import SubformComponent from "@/components/subform-component";
-import { Badge } from "@/components/ui/badge";
-import { v4 as uuidv4 } from "uuid";
+} from "@dnd-kit/core"
+import { arrayMove } from "@dnd-kit/sortable"
+import { createPortal } from "react-dom"
+import { Button } from "@/components/ui/button"
+import { useToast } from "@/hooks/use-toast"
+import FormCanvas from "@/components/form-canvas"
+import FieldPalette, { PaletteItemDragOverlay, type fieldTypes } from "@/components/field-palette"
+import PublishFormDialog from "@/components/publish-form-dialog"
+import LookupConfigurationDialog from "@/components/lookup-configuration-dialog"
+import UserFormSettingsDialog from "@/components/user-form-settings-dialog"
+import type { Form, FormField, Subform } from "@/types/form-builder"
+import { Save, Eye, ArrowLeft, Loader2, Share2, Users, Settings, UserCheck } from "lucide-react"
+import Link from "next/link"
+import { Badge } from "@/components/ui/badge"
+import { v4 as uuidv4 } from "uuid"
 
 // Enhanced interface for subform hierarchy tracking
 interface SubformHierarchy {
-  id: string;
-  name: string;
-  path: string;
-  level: number;
-  parentPath?: string;
-  sectionId: string;
-  parentSubformId?: string;
-  children: SubformHierarchy[];
+  id: string
+  name: string
+  path: string
+  level: number
+  parentPath?: string
+  sectionId: string
+  parentSubformId?: string
+  children: SubformHierarchy[]
 }
 
 export default function FormBuilderPage() {
-  const params = useParams();
-  const formId = params.formId as string;
-  const { toast } = useToast();
-  const [form, setForm] = useState<Form | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [isPublishDialogOpen, setIsPublishDialogOpen] = useState(false);
-  const [isLookupDialogOpen, setIsLookupDialogOpen] = useState(false);
-  const [isUserFormSettingsOpen, setIsUserFormSettingsOpen] = useState(false);
-  const [pendingLookupSectionId, setPendingLookupSectionId] = useState<
-    string | null
-  >(null);
-  const [pendingLookupSubformId, setPendingLookupSubformId] = useState<
-    string | null
-  >(null);
-  const [activePaletteItem, setActivePaletteItem] = useState<
-    (typeof fieldTypes)[0] | null
-  >(null);
-  const [subformHierarchyMap, setSubformHierarchyMap] = useState<
-    Map<string, SubformHierarchy>
-  >(new Map());
+  const params = useParams()
+  const formId = params.formId as string
+  const { toast } = useToast()
+  const [form, setForm] = useState<Form | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [isPublishDialogOpen, setIsPublishDialogOpen] = useState(false)
+  const [isLookupDialogOpen, setIsLookupDialogOpen] = useState(false)
+  const [isUserFormSettingsOpen, setIsUserFormSettingsOpen] = useState(false)
+  const [pendingLookupSectionId, setPendingLookupSectionId] = useState<string | null>(null)
+  const [pendingLookupSubformId, setPendingLookupSubformId] = useState<string | null>(null)
+  const [activePaletteItem, setActivePaletteItem] = useState<(typeof fieldTypes)[0] | null>(null)
+  const [subformHierarchyMap, setSubformHierarchyMap] = useState<Map<string, SubformHierarchy>>(new Map())
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
         distance: 8,
       },
-    })
-  );
+    }),
+  )
 
   useEffect(() => {
     if (formId) {
-      fetchForm();
+      fetchForm()
     }
-  }, [formId]);
+  }, [formId])
 
   // Build hierarchical path map for all subforms
-  const buildSubformHierarchyMap = (
-    form: Form
-  ): Map<string, SubformHierarchy> => {
-    const hierarchyMap = new Map<string, SubformHierarchy>();
+  const buildSubformHierarchyMap = (form: Form): Map<string, SubformHierarchy> => {
+    const hierarchyMap = new Map<string, SubformHierarchy>()
 
     const processSubforms = (
       subforms: Subform[],
       sectionId: string,
       parentPath = "",
-      level = 0
+      level = 0,
     ): SubformHierarchy[] => {
       return subforms.map((subform, index) => {
-        const currentPath = parentPath
-          ? `${parentPath}.${index + 1}`
-          : `${index + 1}`;
+        const currentPath = parentPath ? `${parentPath}.${index + 1}` : `${index + 1}`
         const hierarchy: SubformHierarchy = {
           id: subform.id,
           name: subform.name,
@@ -121,120 +89,110 @@ export default function FormBuilderPage() {
           sectionId,
           parentSubformId: subform.parentSubformId,
           children: [],
-        };
-
-        if (subform.childSubforms && subform.childSubforms.length > 0) {
-          hierarchy.children = processSubforms(
-            subform.childSubforms,
-            sectionId,
-            currentPath,
-            level + 1
-          );
         }
 
-        hierarchyMap.set(subform.id, hierarchy);
-        return hierarchy;
-      });
-    };
+        if (subform.childSubforms && subform.childSubforms.length > 0) {
+          hierarchy.children = processSubforms(subform.childSubforms, sectionId, currentPath, level + 1)
+        }
+
+        hierarchyMap.set(subform.id, hierarchy)
+        return hierarchy
+      })
+    }
 
     form.sections.forEach((section) => {
       if (section.subforms && section.subforms.length > 0) {
-        processSubforms(section.subforms, section.id);
+        processSubforms(section.subforms, section.id)
       }
-    });
+    })
 
-    return hierarchyMap;
-  };
+    return hierarchyMap
+  }
 
   const getSubformPath = (subformId: string): string => {
-    const hierarchy = subformHierarchyMap.get(subformId);
-    return hierarchy?.path || "";
-  };
+    const hierarchy = subformHierarchyMap.get(subformId)
+    return hierarchy?.path || ""
+  }
 
   const getFullSubformPath = (subformId: string): string => {
-    if (!form) return "";
+    if (!form) return ""
 
-    const hierarchy = subformHierarchyMap.get(subformId);
-    if (!hierarchy) return "";
+    const hierarchy = subformHierarchyMap.get(subformId)
+    if (!hierarchy) return ""
 
-    const section = form.sections.find((s) => s.id === hierarchy.sectionId);
-    const sectionName = section?.title || "Unknown Section";
+    const section = form.sections.find((s) => s.id === hierarchy.sectionId)
+    const sectionName = section?.title || "Unknown Section"
 
-    return `${sectionName} → ${hierarchy.path}`;
-  };
+    return `${sectionName} → ${hierarchy.path}`
+  }
 
   const getParentChildDisplay = (subformId: string): string => {
-    const hierarchy = subformHierarchyMap.get(subformId);
-    if (!hierarchy) return "";
+    const hierarchy = subformHierarchyMap.get(subformId)
+    if (!hierarchy) return ""
 
     if (hierarchy.parentPath) {
-      return `Parent: ${hierarchy.parentPath} → Current: ${hierarchy.path}`;
+      return `Parent: ${hierarchy.parentPath} → Current: ${hierarchy.path}`
     }
 
-    return `Root Level: ${hierarchy.path}`;
-  };
+    return `Root Level: ${hierarchy.path}`
+  }
 
   const getAncestorPaths = (subformId: string): string[] => {
-    const hierarchy = subformHierarchyMap.get(subformId);
-    if (!hierarchy) return [];
+    const hierarchy = subformHierarchyMap.get(subformId)
+    if (!hierarchy) return []
 
-    const ancestors: string[] = [];
-    let currentPath = hierarchy.parentPath;
+    const ancestors: string[] = []
+    let currentPath = hierarchy.parentPath
 
     while (currentPath) {
-      ancestors.unshift(currentPath);
-      const parentHierarchy = Array.from(subformHierarchyMap.values()).find(
-        (h) => h.path === currentPath
-      );
-      currentPath = parentHierarchy?.parentPath;
+      ancestors.unshift(currentPath)
+      const parentHierarchy = Array.from(subformHierarchyMap.values()).find((h) => h.path === currentPath)
+      currentPath = parentHierarchy?.parentPath
     }
 
-    return ancestors;
-  };
+    return ancestors
+  }
 
   const fetchForm = async () => {
-    setLoading(true);
+    setLoading(true)
     try {
-      const response = await fetch(`/api/forms/${formId}`);
-      if (!response.ok) throw new Error("Failed to fetch form");
-      const result = await response.json();
+      const response = await fetch(`/api/forms/${formId}`)
+      if (!response.ok) throw new Error("Failed to fetch form")
+      const result = await response.json()
       if (result.success) {
-        setForm(result.data);
-        const hierarchyMap = buildSubformHierarchyMap(result.data);
-        setSubformHierarchyMap(hierarchyMap);
+        setForm(result.data)
+        const hierarchyMap = buildSubformHierarchyMap(result.data)
+        setSubformHierarchyMap(hierarchyMap)
       } else {
-        throw new Error(result.error || "Failed to fetch form");
+        throw new Error(result.error || "Failed to fetch form")
       }
     } catch (error: any) {
       toast({
         title: "Error",
         description: error.message,
         variant: "destructive",
-      });
+      })
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   const optimisticFormUpdate = (updatedForm: Form) => {
-    setForm(updatedForm);
-    const hierarchyMap = buildSubformHierarchyMap(updatedForm);
-    setSubformHierarchyMap(hierarchyMap);
-  };
+    setForm(updatedForm)
+    const hierarchyMap = buildSubformHierarchyMap(updatedForm)
+    setSubformHierarchyMap(hierarchyMap)
+  }
 
   const handleFormUpdate = (updatedForm: Form) => {
-    optimisticFormUpdate(updatedForm);
-  };
+    optimisticFormUpdate(updatedForm)
+  }
 
   const handleFormPublished = (updatedForm: Form) => {
-    optimisticFormUpdate(updatedForm);
-  };
+    optimisticFormUpdate(updatedForm)
+  }
 
-  const handleUserFormSettingsUpdate = async (
-    isUserForm: boolean,
-    isEmployeeForm: boolean
-  ) => {
-    if (!form) return;
+  const handleUserFormSettingsUpdate = async (isUserForm: boolean, isEmployeeForm: boolean) => {
+    if (!form) return
 
     try {
       const response = await fetch(`/api/forms/${formId}`, {
@@ -245,120 +203,108 @@ export default function FormBuilderPage() {
           isUserForm,
           isEmployeeForm,
         }),
-      });
+      })
 
-      if (!response.ok) throw new Error("Failed to update form settings");
-      const result = await response.json();
+      if (!response.ok) throw new Error("Failed to update form settings")
+      const result = await response.json()
       if (result.success) {
-        optimisticFormUpdate(result.data);
+        optimisticFormUpdate(result.data)
         toast({
           title: "Success",
           description: isUserForm
             ? "Form marked as user form"
             : isEmployeeForm
-            ? "Form marked as employee form"
-            : "Form marked as regular form",
-        });
+              ? "Form marked as employee form"
+              : "Form marked as regular form",
+        })
       } else {
-        throw new Error(result.error || "Failed to update form settings");
+        throw new Error(result.error || "Failed to update form settings")
       }
     } catch (error: any) {
       toast({
         title: "Error",
         description: error.message,
         variant: "destructive",
-      });
+      })
     }
-  };
+  }
 
   const handleDragStart = (event: DragStartEvent) => {
     if (event.active.data.current?.type === "PaletteField") {
-      setActivePaletteItem(event.active.data.current.fieldData);
+      setActivePaletteItem(event.active.data.current.fieldData)
     } else {
-      setActivePaletteItem(null);
+      setActivePaletteItem(null)
     }
-  };
+  }
 
   const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
+    const { active, over } = event
 
-    setActivePaletteItem(null);
+    setActivePaletteItem(null)
 
-    if (!over) return;
+    if (!over) return
 
     if (active.data.current?.type === "PaletteField") {
-      const fieldType = active.data.current.fieldType as string;
-      let sectionId: string | null = null;
-      let subformId: string | null = null;
-      let insertIndex = 0;
+      const fieldType = active.data.current.fieldType as string
+      let sectionId: string | null = null
+      let subformId: string | null = null
+      let insertIndex = 0
 
       if (over.data.current?.isSectionDropzone) {
-        sectionId = over.data.current.sectionId;
-        const section = form?.sections.find((s) => s.id === sectionId);
+        sectionId = over.data.current.sectionId
+        const section = form?.sections.find((s) => s.id === sectionId)
         if (section) {
-          insertIndex = section.fields.length + section.subforms.length;
+          insertIndex = section.fields.length + section.subforms.length
         }
-      } else if (
-        over.data.current?.type === "Field" ||
-        over.data.current?.type === "Subform"
-      ) {
-        sectionId =
-          over.data.current?.field?.sectionId ||
-          over.data.current?.subform?.sectionId;
-        subformId =
-          over.data.current?.field?.subformId || over.data.current?.subform?.id;
-        const itemId =
-          over.data.current?.field?.id || over.data.current?.subform?.id;
-        const section = form?.sections.find((s) => s.id === sectionId);
+      } else if (over.data.current?.type === "Field" || over.data.current?.type === "Subform") {
+        sectionId = over.data.current?.field?.sectionId || over.data.current?.subform?.sectionId
+        subformId = over.data.current?.field?.subformId || over.data.current?.subform?.id
+        const itemId = over.data.current?.field?.id || over.data.current?.subform?.id
+        const section = form?.sections.find((s) => s.id === sectionId)
         if (section) {
-          const allItems: (FormField | Subform)[] = [
-            ...section.fields,
-            ...section.subforms,
-          ].sort((a, b) => a.order - b.order);
-          insertIndex = allItems.findIndex((i) => i.id === itemId);
+          const allItems: (FormField | Subform)[] = [...section.fields, ...section.subforms].sort(
+            (a, b) => a.order - b.order,
+          )
+          insertIndex = allItems.findIndex((i) => i.id === itemId)
           const activeCenter = active.rect.current.translated
-            ? active.rect.current.translated.top +
-              active.rect.current.translated.height / 2
-            : 0;
-          const overCenter = over.rect.top + over.rect.height / 2;
-          const isAfter = activeCenter > overCenter;
-          insertIndex += isAfter ? 1 : 0;
+            ? active.rect.current.translated.top + active.rect.current.translated.height / 2
+            : 0
+          const overCenter = over.rect.top + over.rect.height / 2
+          const isAfter = activeCenter > overCenter
+          insertIndex += isAfter ? 1 : 0
         }
       } else {
-        return;
+        return
       }
 
-      if (!sectionId) return;
+      if (!sectionId) return
 
       if (fieldType === "subform") {
-        await createSubform(sectionId, subformId);
+        await createSubform(sectionId, subformId)
       } else if (fieldType === "lookup") {
-        setPendingLookupSectionId(sectionId);
-        setPendingLookupSubformId(subformId);
-        setIsLookupDialogOpen(true);
+        setPendingLookupSectionId(sectionId)
+        setPendingLookupSubformId(subformId)
+        setIsLookupDialogOpen(true)
       } else {
-        await createSingleField(fieldType, sectionId, subformId, insertIndex);
+        await createSingleField(fieldType, sectionId, subformId, insertIndex)
       }
-    } else if (
-      active.data.current?.type === "Field" ||
-      active.data.current?.type === "Subform"
-    ) {
-      handleReorderItem(event);
+    } else if (active.data.current?.type === "Field" || active.data.current?.type === "Subform") {
+      handleReorderItem(event)
     } else if (active.data.current?.type === "Section") {
-      handleReorderSection(event);
+      handleReorderSection(event)
     }
-  };
+  }
 
   const createSingleField = async (
     fieldType: string,
     sectionId: string,
     subformId: string | null,
-    insertionIndex: number
+    insertionIndex: number,
   ) => {
-    if (!form) return;
+    if (!form) return
 
     try {
-      const tempId = `temp_${uuidv4()}`;
+      const tempId = `temp_${uuidv4()}`
       const newField: FormField = {
         id: tempId,
         sectionId: subformId ? undefined : sectionId,
@@ -382,47 +328,47 @@ export default function FormBuilderPage() {
         formula: null,
         createdAt: new Date(),
         updatedAt: new Date(),
-      };
+      }
 
-      const updatedForm = { ...form };
+      const updatedForm = { ...form }
       if (subformId) {
         const addToSubform = (subforms: Subform[]): boolean => {
           for (const subform of subforms) {
             if (subform.id === subformId) {
-              subform.fields.splice(insertionIndex, 0, newField);
-              subform.fields.forEach((f, idx) => (f.order = idx));
-              return true;
+              subform.fields.splice(insertionIndex, 0, newField)
+              subform.fields.forEach((f, idx) => (f.order = idx))
+              return true
             }
             if (subform.childSubforms && addToSubform(subform.childSubforms)) {
-              return true;
+              return true
             }
           }
-          return false;
-        };
+          return false
+        }
 
         for (const section of updatedForm.sections) {
-          if (addToSubform(section.subforms)) break;
+          if (addToSubform(section.subforms)) break
         }
       } else {
-        const section = updatedForm.sections.find((s) => s.id === sectionId);
+        const section = updatedForm.sections.find((s) => s.id === sectionId)
         if (section) {
-          section.fields.splice(insertionIndex, 0, newField);
-          section.fields.forEach((f, idx) => (f.order = idx));
+          section.fields.splice(insertionIndex, 0, newField)
+          section.fields.forEach((f, idx) => (f.order = idx))
         }
       }
 
-      optimisticFormUpdate(updatedForm);
+      optimisticFormUpdate(updatedForm)
 
-      const fieldData = { ...newField, id: undefined };
+      const fieldData = { ...newField, id: undefined }
       const response = await fetch("/api/fields", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(fieldData),
-      });
+      })
 
-      if (!response.ok) throw new Error("Failed to create field");
+      if (!response.ok) throw new Error("Failed to create field")
 
-      const result = await response.json();
+      const result = await response.json()
       if (result.success) {
         const updatedSections = updatedForm.sections.map((s) => {
           if (s.id === sectionId) {
@@ -432,76 +378,63 @@ export default function FormBuilderPage() {
                   if (sub.id === subformId) {
                     return {
                       ...sub,
-                      fields: sub.fields.map((f) =>
-                        f.id === tempId ? { ...f, id: result.data.id } : f
-                      ),
-                    };
+                      fields: sub.fields.map((f) => (f.id === tempId ? { ...f, id: result.data.id } : f)),
+                    }
                   }
                   if (sub.childSubforms) {
                     return {
                       ...sub,
                       childSubforms: updateSubforms(sub.childSubforms),
-                    };
+                    }
                   }
-                  return sub;
-                });
-              return { ...s, subforms: updateSubforms(s.subforms) };
+                  return sub
+                })
+              return { ...s, subforms: updateSubforms(s.subforms) }
             } else {
               return {
                 ...s,
-                fields: s.fields.map((f) =>
-                  f.id === tempId ? { ...f, id: result.data.id } : f
-                ),
-              };
+                fields: s.fields.map((f) => (f.id === tempId ? { ...f, id: result.data.id } : f)),
+              }
             }
           }
-          return s;
-        });
+          return s
+        })
 
-        optimisticFormUpdate({ ...updatedForm, sections: updatedSections });
+        optimisticFormUpdate({ ...updatedForm, sections: updatedSections })
 
         toast({
           title: "Success",
-          description: `${
-            fieldType.charAt(0).toUpperCase() + fieldType.slice(1)
-          } field added to ${
+          description: `${fieldType.charAt(0).toUpperCase() + fieldType.slice(1)} field added to ${
             subformId ? `subform ${getSubformPath(subformId)}` : "section"
           } successfully`,
-        });
+        })
       } else {
-        throw new Error(result.error || "Failed to create field");
+        throw new Error(result.error || "Failed to create field")
       }
     } catch (error: any) {
       toast({
         title: "Error",
         description: error.message,
         variant: "destructive",
-      });
+      })
     }
-  };
+  }
 
-  const createSubform = async (
-    sectionId: string,
-    parentSubformId: string | null
-  ) => {
-    if (!form) return;
+  const createSubform = async (sectionId: string, parentSubformId: string | null) => {
+    if (!form) return
 
     try {
-      const tempId = `temp_${uuidv4()}`;
-      let nextPath = "1";
+      const tempId = `temp_${uuidv4()}`
+      let nextPath = "1"
       if (parentSubformId) {
-        const parentHierarchy = subformHierarchyMap.get(parentSubformId);
+        const parentHierarchy = subformHierarchyMap.get(parentSubformId)
         if (parentHierarchy) {
-          nextPath = `${parentHierarchy.path}.${
-            parentHierarchy.children.length + 1
-          }`;
+          nextPath = `${parentHierarchy.path}.${parentHierarchy.children.length + 1}`
         }
       } else {
-        const section = form.sections.find((s) => s.id === sectionId);
+        const section = form.sections.find((s) => s.id === sectionId)
         if (section) {
-          nextPath = `${
-            section.subforms.filter((sub) => !sub.parentSubformId).length + 1
-          }`;
+          nextPath = `${section.subforms.filter((sub) => !sub.parentSubformId).length + 1}`
         }
       }
 
@@ -510,55 +443,53 @@ export default function FormBuilderPage() {
         sectionId: parentSubformId ? undefined : sectionId,
         parentSubformId,
         name: `Subform ${nextPath}`,
-        order: parentSubformId
-          ? 0
-          : form.sections.find((s) => s.id === sectionId)?.subforms.length || 0,
+        order: parentSubformId ? 0 : form.sections.find((s) => s.id === sectionId)?.subforms.length || 0,
         columns: 1,
         visible: true,
         collapsible: true,
         collapsed: false,
         fields: [],
         childSubforms: [],
-      };
+      }
 
-      const updatedForm = { ...form };
+      const updatedForm = { ...form }
       if (parentSubformId) {
         const addToSubform = (subforms: Subform[]): boolean => {
           for (const subform of subforms) {
             if (subform.id === parentSubformId) {
-              if (!subform.childSubforms) subform.childSubforms = [];
-              subform.childSubforms.push(newSubform);
-              return true;
+              if (!subform.childSubforms) subform.childSubforms = []
+              subform.childSubforms.push(newSubform)
+              return true
             }
             if (subform.childSubforms && addToSubform(subform.childSubforms)) {
-              return true;
+              return true
             }
           }
-          return false;
-        };
+          return false
+        }
 
         for (const section of updatedForm.sections) {
-          if (addToSubform(section.subforms)) break;
+          if (addToSubform(section.subforms)) break
         }
       } else {
-        const section = updatedForm.sections.find((s) => s.id === sectionId);
+        const section = updatedForm.sections.find((s) => s.id === sectionId)
         if (section) {
-          section.subforms.push(newSubform);
+          section.subforms.push(newSubform)
         }
       }
 
-      optimisticFormUpdate(updatedForm);
+      optimisticFormUpdate(updatedForm)
 
-      const subformData = { ...newSubform, id: undefined };
+      const subformData = { ...newSubform, id: undefined }
       const response = await fetch("/api/subforms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(subformData),
-      });
+      })
 
-      if (!response.ok) throw new Error("Failed to create subform");
+      if (!response.ok) throw new Error("Failed to create subform")
 
-      const result = await response.json();
+      const result = await response.json()
       if (result.success) {
         const updatedSections = updatedForm.sections.map((s) => {
           if (s.id === sectionId) {
@@ -569,153 +500,139 @@ export default function FormBuilderPage() {
                     return {
                       ...sub,
                       childSubforms: sub.childSubforms?.map((child) =>
-                        child.id === tempId
-                          ? { ...child, id: result.data.id }
-                          : child
+                        child.id === tempId ? { ...child, id: result.data.id } : child,
                       ),
-                    };
+                    }
                   }
                   if (sub.childSubforms) {
                     return {
                       ...sub,
                       childSubforms: updateSubforms(sub.childSubforms),
-                    };
+                    }
                   }
-                  return sub;
-                });
-              return { ...s, subforms: updateSubforms(s.subforms) };
+                  return sub
+                })
+              return { ...s, subforms: updateSubforms(s.subforms) }
             } else {
               return {
                 ...s,
-                subforms: s.subforms.map((sub) =>
-                  sub.id === tempId ? { ...sub, id: result.data.id } : sub
-                ),
-              };
+                subforms: s.subforms.map((sub) => (sub.id === tempId ? { ...sub, id: result.data.id } : sub)),
+              }
             }
           }
-          return s;
-        });
+          return s
+        })
 
-        optimisticFormUpdate({ ...updatedForm, sections: updatedSections });
+        optimisticFormUpdate({ ...updatedForm, sections: updatedSections })
 
         toast({
           title: "Success",
           description: `Subform ${nextPath} created successfully${
             parentSubformId ? ` under ${getSubformPath(parentSubformId)}` : ""
           }`,
-        });
+        })
       } else {
-        throw new Error(result.error || "Failed to create subform");
+        throw new Error(result.error || "Failed to create subform")
       }
     } catch (error: any) {
       toast({
         title: "Error",
         description: error.message,
         variant: "destructive",
-      });
+      })
     }
-  };
+  }
 
   const handleReorderItem = (event: DragEndEvent) => {
-    if (!form) return;
+    if (!form) return
 
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
+    const { active, over } = event
+    if (!over || active.id === over.id) return
 
-    const activeContainer = active.data.current?.sortable?.containerId;
-    const overContainer = over.data.current?.sortable?.containerId;
+    const activeContainer = active.data.current?.sortable?.containerId
+    const overContainer = over.data.current?.sortable?.containerId
 
-    if (activeContainer !== overContainer) return;
+    if (activeContainer !== overContainer) return
 
-    const sectionId = activeContainer;
-    const section = form.sections.find((s) => s.id === sectionId);
-    if (!section) return;
+    const sectionId = activeContainer
+    const section = form.sections.find((s) => s.id === sectionId)
+    if (!section) return
 
-    const allItems: (FormField | Subform)[] = [
-      ...section.fields,
-      ...section.subforms,
-    ].sort((a, b) => a.order - b.order);
-    const oldIndex = allItems.findIndex((i) => i.id === active.id);
-    let newIndex = allItems.findIndex((i) => i.id === over.id);
+    const allItems: (FormField | Subform)[] = [...section.fields, ...section.subforms].sort((a, b) => a.order - b.order)
+    const oldIndex = allItems.findIndex((i) => i.id === active.id)
+    let newIndex = allItems.findIndex((i) => i.id === over.id)
 
     const activeCenter = active.rect.current.translated
-      ? active.rect.current.translated.top +
-        active.rect.current.translated.height / 2
-      : 0;
-    const overCenter = over.rect.top + over.rect.height / 2;
-    const isAfter = activeCenter > overCenter;
-    newIndex += isAfter ? 1 : 0;
+      ? active.rect.current.translated.top + active.rect.current.translated.height / 2
+      : 0
+    const overCenter = over.rect.top + over.rect.height / 2
+    const isAfter = activeCenter > overCenter
+    newIndex += isAfter ? 1 : 0
 
-    const newAllItems = arrayMove(allItems, oldIndex, newIndex);
-    newAllItems.forEach((item, index) => (item.order = index));
+    const newAllItems = arrayMove(allItems, oldIndex, newIndex)
+    newAllItems.forEach((item, index) => (item.order = index))
 
-    const newFields = newAllItems.filter((i): i is FormField => "type" in i);
-    const newSubforms = newAllItems.filter((i): i is Subform => !type in i);
+    const newFields = newAllItems.filter((i): i is FormField => "type" in i)
+    const newSubforms = newAllItems.filter((i): i is Subform => (!type) in i)
 
     const updatedSections = form.sections.map((s) =>
-      s.id === sectionId
-        ? { ...s, fields: newFields, subforms: newSubforms }
-        : s
-    );
+      s.id === sectionId ? { ...s, fields: newFields, subforms: newSubforms } : s,
+    )
 
-    optimisticFormUpdate({ ...form, sections: updatedSections });
+    optimisticFormUpdate({ ...form, sections: updatedSections })
 
     newFields.forEach((f) =>
       fetch(`/api/fields/${f.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ order: f.order }),
-      })
-    );
+      }),
+    )
     newSubforms.forEach((s) =>
       fetch(`/api/subforms/${s.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ order: s.order }),
-      })
-    );
-  };
+      }),
+    )
+  }
 
   const handleReorderSection = (event: DragEndEvent) => {
-    if (!form) return;
+    if (!form) return
 
-    const { active, over } = event;
-    if (!over) return;
+    const { active, over } = event
+    if (!over) return
 
-    const oldIndex = form.sections.findIndex((s) => s.id === active.id);
-    const newIndex = form.sections.findIndex((s) => s.id === over.id);
+    const oldIndex = form.sections.findIndex((s) => s.id === active.id)
+    const newIndex = form.sections.findIndex((s) => s.id === over.id)
 
-    const newSections = arrayMove(form.sections, oldIndex, newIndex);
-    newSections.forEach((s, index) => (s.order = index));
+    const newSections = arrayMove(form.sections, oldIndex, newIndex)
+    newSections.forEach((s, index) => (s.order = index))
 
-    optimisticFormUpdate({ ...form, sections: newSections });
+    optimisticFormUpdate({ ...form, sections: newSections })
 
     newSections.forEach((s) =>
       fetch(`/api/sections/${s.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ order: s.order }),
-      })
-    );
-  };
+      }),
+    )
+  }
 
-  const handleLookupFieldsConfirm = async (
-    lookupFields: Partial<FormField>[]
-  ) => {
-    if (!form || (!pendingLookupSectionId && !pendingLookupSubformId)) return;
+  const handleLookupFieldsConfirm = async (lookupFields: Partial<FormField>[]) => {
+    if (!form || (!pendingLookupSectionId && !pendingLookupSubformId)) return
 
     try {
-      const updatedForm = { ...form };
-      const createdFields: FormField[] = [];
+      const updatedForm = { ...form }
+      const createdFields: FormField[] = []
 
       for (const fieldData of lookupFields) {
         const response = await fetch("/api/fields", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            sectionId: pendingLookupSubformId
-              ? undefined
-              : pendingLookupSectionId,
+            sectionId: pendingLookupSubformId ? undefined : pendingLookupSectionId,
             subformId: pendingLookupSubformId,
             type: fieldData.type,
             label: fieldData.label,
@@ -730,18 +647,16 @@ export default function FormBuilderPage() {
             order: fieldData.order,
             lookup: fieldData.lookup,
           }),
-        });
+        })
 
-        if (!response.ok) throw new Error("Failed to create lookup field");
-        const result = await response.json();
+        if (!response.ok) throw new Error("Failed to create lookup field")
+        const result = await response.json()
 
         if (result.success) {
           const savedField: FormField = {
             ...fieldData,
             id: result.data.id,
-            sectionId: pendingLookupSubformId
-              ? undefined
-              : pendingLookupSectionId,
+            sectionId: pendingLookupSubformId ? undefined : pendingLookupSectionId,
             subformId: pendingLookupSubformId,
             createdAt: new Date(),
             updatedAt: new Date(),
@@ -753,70 +668,61 @@ export default function FormBuilderPage() {
             formula: null,
             options: fieldData.options || [],
             validation: fieldData.validation || {},
-          } as FormField;
+          } as FormField
 
-          createdFields.push(savedField);
+          createdFields.push(savedField)
 
           if (pendingLookupSubformId) {
             const addToSubform = (subforms: Subform[]): boolean => {
               for (const subform of subforms) {
                 if (subform.id === pendingLookupSubformId) {
-                  subform.fields.push(savedField);
-                  subform.fields.forEach((f, idx) => (f.order = idx));
-                  return true;
+                  subform.fields.push(savedField)
+                  subform.fields.forEach((f, idx) => (f.order = idx))
+                  return true
                 }
-                if (
-                  subform.childSubforms &&
-                  addToSubform(subform.childSubforms)
-                ) {
-                  return true;
+                if (subform.childSubforms && addToSubform(subform.childSubforms)) {
+                  return true
                 }
               }
-              return false;
-            };
+              return false
+            }
 
             for (const section of updatedForm.sections) {
-              if (addToSubform(section.subforms)) break;
+              if (addToSubform(section.subforms)) break
             }
           } else if (pendingLookupSectionId) {
-            const section = updatedForm.sections.find(
-              (s) => s.id === pendingLookupSectionId
-            );
+            const section = updatedForm.sections.find((s) => s.id === pendingLookupSectionId)
             if (section) {
-              section.fields.push(savedField);
-              section.fields.forEach((f, idx) => (f.order = idx));
+              section.fields.push(savedField)
+              section.fields.forEach((f, idx) => (f.order = idx))
             }
           }
         }
       }
 
-      optimisticFormUpdate(updatedForm);
+      optimisticFormUpdate(updatedForm)
 
       toast({
         title: "Success",
-        description: `${createdFields.length} lookup field${
-          createdFields.length !== 1 ? "s" : ""
-        } created in ${
-          pendingLookupSubformId
-            ? `subform ${getSubformPath(pendingLookupSubformId)}`
-            : "section"
+        description: `${createdFields.length} lookup field${createdFields.length !== 1 ? "s" : ""} created in ${
+          pendingLookupSubformId ? `subform ${getSubformPath(pendingLookupSubformId)}` : "section"
         } successfully`,
-      });
+      })
 
-      setPendingLookupSectionId(null);
-      setPendingLookupSubformId(null);
+      setPendingLookupSectionId(null)
+      setPendingLookupSubformId(null)
     } catch (error: any) {
       toast({
         title: "Error",
         description: error.message,
         variant: "destructive",
-      });
+      })
     }
-  };
+  }
 
   const saveForm = async () => {
-    if (!form) return;
-    setSaving(true);
+    if (!form) return
+    setSaving(true)
     try {
       const formToSave = {
         name: form.name,
@@ -824,38 +730,38 @@ export default function FormBuilderPage() {
         settings: form.settings,
         isUserForm: form.isUserForm,
         isEmployeeForm: form.isEmployeeForm,
-      };
+      }
       const response = await fetch(`/api/forms/${formId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formToSave),
-      });
+      })
 
-      if (!response.ok) throw new Error("Failed to save form");
+      if (!response.ok) throw new Error("Failed to save form")
 
-      const result = await response.json();
+      const result = await response.json()
       if (result.success) {
-        toast({ title: "Success", description: "Form saved successfully" });
+        toast({ title: "Success", description: "Form saved successfully" })
       } else {
-        throw new Error(result.error || "Failed to save form");
+        throw new Error(result.error || "Failed to save form")
       }
     } catch (error: any) {
       toast({
         title: "Error",
         description: error.message,
         variant: "destructive",
-      });
+      })
     } finally {
-      setSaving(false);
+      setSaving(false)
     }
-  };
+  }
 
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin" />
       </div>
-    );
+    )
   }
 
   if (!form) {
@@ -863,9 +769,7 @@ export default function FormBuilderPage() {
       <div className="flex h-screen items-center justify-center text-center">
         <div>
           <h2 className="text-2xl font-bold">Form Not Found</h2>
-          <p className="text-muted-foreground">
-            The requested form could not be loaded.
-          </p>
+          <p className="text-muted-foreground">The requested form could not be loaded.</p>
           <Link href="/">
             <Button variant="outline" className="mt-4 bg-transparent">
               <ArrowLeft className="mr-2 h-4 w-4" /> Back to Home
@@ -873,7 +777,7 @@ export default function FormBuilderPage() {
           </Link>
         </div>
       </div>
-    );
+    )
   }
 
   return (
@@ -900,19 +804,13 @@ export default function FormBuilderPage() {
                   <div className="flex items-center gap-2">
                     <h1 className="text-lg font-semibold">{form.name}</h1>
                     {form.isUserForm && (
-                      <Badge
-                        variant="secondary"
-                        className="bg-blue-100 text-blue-800 border-blue-200"
-                      >
+                      <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200">
                         <Users className="w-3 h-3 mr-1" />
                         User Form
                       </Badge>
                     )}
                     {form.isEmployeeForm && (
-                      <Badge
-                        variant="secondary"
-                        className="bg-green-100 text-green-800 border-green-200"
-                      >
+                      <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200">
                         <UserCheck className="w-3 h-3 mr-1" />
                         Employee Form
                       </Badge>
@@ -922,12 +820,7 @@ export default function FormBuilderPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsUserFormSettingsOpen(true)}
-                className="text-xs"
-              >
+              <Button variant="outline" size="sm" onClick={() => setIsUserFormSettingsOpen(true)} className="text-xs">
                 <Settings className="mr-2 h-3 w-3" />
                 Form Settings
               </Button>
@@ -936,18 +829,11 @@ export default function FormBuilderPage() {
                   <Eye className="mr-2 h-4 w-4" /> Preview
                 </Button>
               </Link>
-              <Button
-                variant="outline"
-                onClick={() => setIsPublishDialogOpen(true)}
-              >
+              <Button variant="outline" onClick={() => setIsPublishDialogOpen(true)}>
                 <Share2 className="mr-2 h-4 w-4" /> Publish
               </Button>
               <Button onClick={saveForm} disabled={saving}>
-                {saving ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="mr-2 h-4 w-4" />
-                )}
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                 {saving ? "Saving..." : "Save"}
               </Button>
             </div>
@@ -968,11 +854,9 @@ export default function FormBuilderPage() {
       {typeof window !== "undefined" &&
         createPortal(
           <DragOverlay style={{ zIndex: 10000 }}>
-            {activePaletteItem && (
-              <PaletteItemDragOverlay fieldType={activePaletteItem} />
-            )}
+            {activePaletteItem && <PaletteItemDragOverlay fieldType={activePaletteItem} />}
           </DragOverlay>,
-          document.body
+          document.body,
         )}
       <PublishFormDialog
         form={form}
@@ -994,5 +878,5 @@ export default function FormBuilderPage() {
         onUpdate={handleUserFormSettingsUpdate}
       />
     </DndContext>
-  );
+  )
 }
