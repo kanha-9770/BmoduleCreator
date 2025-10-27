@@ -329,96 +329,8 @@ const RecordsDisplay: React.FC<RecordsDisplayProps> = ({
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg font-semibold text-gray-800">
-            Merged Records ({mergedRecords.length})
+            Merged Records
           </CardTitle>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={toggleEditMode}
-              className={cn(
-                "flex items-center gap-2 font-medium border-2 transition-all",
-                editModeInfo.color
-              )}
-            >
-              {React.createElement(editModeInfo.icon, { className: "h-4 w-4" })}
-              {editModeInfo.label}
-            </Button>
-            {pendingChanges.size > 0 && (
-              <div className="flex items-center gap-2">
-                <Badge
-                  variant="secondary"
-                  className="bg-yellow-100 text-yellow-800 border-yellow-300"
-                >
-                  {pendingChanges.size} changes
-                </Badge>
-                <Button
-                  onClick={saveAllPendingChanges}
-                  disabled={savingChanges}
-                  className="bg-green-600 hover:bg-green-700 text-white"
-                  size="sm"
-                >
-                  {savingChanges ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-4 w-4 mr-2" />
-                      Save All Changes
-                    </>
-                  )}
-                </Button>
-                <Button
-                  onClick={discardAllPendingChanges}
-                  variant="outline"
-                  size="sm"
-                >
-                  <X className="h-4 w-4 mr-2" />
-                  Discard
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="text-sm text-muted-foreground bg-gray-50 p-3 rounded-lg border mt-4">
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <span className="font-medium">
-                  Horizontal Merge Mode: Single records from multiple forms are
-                  merged into one row based on submission order
-                </span>
-              </div>
-              <div className="border-l border-gray-300 pl-4">
-                {React.createElement(editModeInfo.icon, {
-                  className: "h-4 w-4",
-                })}
-                <span className="font-medium">{editModeInfo.description}</span>
-                <span className="text-xs text-gray-500">
-                  - Showing unified data from all forms in this module
-                </span>
-              </div>
-            </div>
-          </div>
-          {editMode === "double-click" && (
-            <div className="mt-1 text-xs">
-              Double-click any available cell to start editing. Press Enter to
-              save, Escape to cancel.
-            </div>
-          )}
-          {editMode === "single-click" && (
-            <div className="mt-1 text-xs">
-              Click any available cell to start editing. Press Enter to save,
-              Escape to cancel.
-            </div>
-          )}
-          {editMode === "locked" && (
-            <div className="mt-1 text-xs">
-              Table is in read-only mode. Click the edit mode button to enable
-              editing.
-            </div>
-          )}
         </div>
       </CardHeader>
       <CardContent>
@@ -466,31 +378,7 @@ const RecordsDisplay: React.FC<RecordsDisplayProps> = ({
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="text-xs">
-                {paginatedRecords.length} of {totalRecords} records
-              </Badge>
-              {selectedFormFilter !== "all" && (
-                <Badge variant="secondary" className="text-xs">
-                  Filtered by{" "}
-                  {
-                    allModuleForms.find((f) => f.id === selectedFormFilter)
-                      ?.name
-                  }
-                </Badge>
-              )}
-              {selectedRecords.size > 0 && (
-                <Badge variant="secondary" className="text-xs">
-                  {selectedRecords.size} selected
-                </Badge>
-              )}
-              <Badge
-                variant="secondary"
-                className="text-xs bg-purple-100 text-purple-800"
-              >
-                Merged View
-              </Badge>
-            </div>
+            
           </div>
 
           {/* Pagination Controls */}

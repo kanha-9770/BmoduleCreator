@@ -223,8 +223,8 @@ export default function AttendancePage() {
           user.role === "Admin"
             ? data.records
             : (data.records || []).filter(
-                (record: AttendanceRecord) => record.id === user.id
-              );
+              (record: AttendanceRecord) => record.id === user.id
+            );
         setAttendanceData(userRecords);
         if (user.role === "Admin") {
           calculateDailyStats(userRecords);
@@ -411,7 +411,7 @@ export default function AttendancePage() {
           calculateDailyStats(
             attendanceData.map((r) =>
               r.id === record.id &&
-              r.timestampCheckIn === record.timestampCheckIn
+                r.timestampCheckIn === record.timestampCheckIn
                 ? { ...r, hrStatus: newHrStatus }
                 : r
             )
@@ -420,7 +420,7 @@ export default function AttendancePage() {
             calculateSelectedUserMonthlyStats(
               attendanceData.map((r) =>
                 r.id === record.id &&
-                r.timestampCheckIn === record.timestampCheckIn
+                  r.timestampCheckIn === record.timestampCheckIn
                   ? { ...r, hrStatus: newHrStatus }
                   : r
               ),
@@ -431,7 +431,7 @@ export default function AttendancePage() {
           calculateMonthlyStats(
             attendanceData.map((r) =>
               r.id === record.id &&
-              r.timestampCheckIn === record.timestampCheckIn
+                r.timestampCheckIn === record.timestampCheckIn
                 ? { ...r, hrStatus: newHrStatus }
                 : r
             )
@@ -494,41 +494,41 @@ export default function AttendancePage() {
     user.role === "Admin"
       ? searchUser
         ? attendanceData.filter(
-            (record) =>
-              record.id.toLowerCase().includes(searchUser.toLowerCase()) ||
-              record.name.toLowerCase().includes(searchUser.toLowerCase())
-          )
+          (record) =>
+            record.id.toLowerCase().includes(searchUser.toLowerCase()) ||
+            record.name.toLowerCase().includes(searchUser.toLowerCase())
+        )
         : attendanceData.filter((record) =>
-            Object.entries(filters).every(([key, value]) => {
-              if (!value) return true;
-              const recordValue =
-                key === "date"
-                  ? new Date(record.timestampCheckIn).toLocaleDateString(
-                      "en-GB",
-                      {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                      }
-                    )
-                  : key === "selfieCheckIn"
+          Object.entries(filters).every(([key, value]) => {
+            if (!value) return true;
+            const recordValue =
+              key === "date"
+                ? new Date(record.timestampCheckIn).toLocaleDateString(
+                  "en-GB",
+                  {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  }
+                )
+                : key === "selfieCheckIn"
                   ? record.selfieCheckIn
                     ? "Present"
                     : "Not Present"
                   : key === "selfieCheckOut"
-                  ? record.selfieCheckOut
-                    ? "Present"
-                    : "Not Present"
-                  : key === "addressCheckIn" || key === "addressCheckOut"
-                  ? record[key] || ""
-                  : key === "name"
-                  ? record.name === value
-                  : (record as any)[key];
-              return key === "name"
-                ? recordValue
-                : recordValue?.toString() === value;
-            })
-          )
+                    ? record.selfieCheckOut
+                      ? "Present"
+                      : "Not Present"
+                    : key === "addressCheckIn" || key === "addressCheckOut"
+                      ? record[key] || ""
+                      : key === "name"
+                        ? record.name === value
+                        : (record as any)[key];
+            return key === "name"
+              ? recordValue
+              : recordValue?.toString() === value;
+          })
+        )
       : attendanceData.filter((record) => record.id === user.id);
 
   const getStatusColor = (status: string) => {
@@ -769,14 +769,14 @@ export default function AttendancePage() {
             prev.map((record) =>
               record.id === user.id && record.timestampCheckIn.startsWith(today)
                 ? {
-                    ...record,
-                    checkOut: timeString,
-                    workHours: result.workHours || "",
-                    selfieCheckOut: result.imageUrl,
-                    addressCheckOut: employeeData.address,
-                    timestampCheckOut: timestamp,
-                    hrStatus: hrStatus,
-                  }
+                  ...record,
+                  checkOut: timeString,
+                  workHours: result.workHours || "",
+                  selfieCheckOut: result.imageUrl,
+                  addressCheckOut: employeeData.address,
+                  timestampCheckOut: timestamp,
+                  hrStatus: hrStatus,
+                }
                 : record
             )
           );
@@ -852,32 +852,28 @@ export default function AttendancePage() {
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <div
-                    className={`flex items-center gap-2 ${
-                      currentStep >= 1 ? "text-blue-600" : "text-gray-400"
-                    }`}
+                    className={`flex items-center gap-2 ${currentStep >= 1 ? "text-blue-600" : "text-gray-400"
+                      }`}
                   >
                     <div
-                      className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                        currentStep >= 1
+                      className={`w-8 h-8 rounded-full flex items-center justify-center ${currentStep >= 1
                           ? "bg-blue-600 text-white"
                           : "bg-gray-200"
-                      }`}
+                        }`}
                     >
                       1
                     </div>
                     <span className="text-sm font-medium">Take Selfie</span>
                   </div>
                   <div
-                    className={`flex items-center gap-2 ${
-                      currentStep >= 2 ? "text-blue-600" : "text-gray-400"
-                    }`}
+                    className={`flex items-center gap-2 ${currentStep >= 2 ? "text-blue-600" : "text-gray-400"
+                      }`}
                   >
                     <div
-                      className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                        currentStep >= 2
+                      className={`w-8 h-8 rounded-full flex items-center justify-center ${currentStep >= 2
                           ? "bg-blue-600 text-white"
                           : "bg-gray-200"
-                      }`}
+                        }`}
                     >
                       2
                     </div>
@@ -1003,10 +999,9 @@ export default function AttendancePage() {
                         {isSubmitting ? (
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                         ) : (
-                          `Submit ${
-                            currentAction === "check-in"
-                              ? "Check In"
-                              : "Check Out"
+                          `Submit ${currentAction === "check-in"
+                            ? "Check In"
+                            : "Check Out"
                           }`
                         )}
                       </Button>
@@ -1025,24 +1020,23 @@ export default function AttendancePage() {
           <CardHeader>
             <CardTitle>
               {searchUser && selectedUserMonthlyStats
-                ? `Monthly Attendance Report for ${
-                    users.find(
-                      (u) =>
-                        u.id.toLowerCase().includes(searchUser.toLowerCase()) ||
-                        u.name.toLowerCase().includes(searchUser.toLowerCase())
-                    )?.name || "Selected User"
-                  } - ${new Date().toLocaleString("default", {
+                ? `Monthly Attendance Report for ${users.find(
+                  (u) =>
+                    u.id.toLowerCase().includes(searchUser.toLowerCase()) ||
+                    u.name.toLowerCase().includes(searchUser.toLowerCase())
+                )?.name || "Selected User"
+                } - ${new Date().toLocaleString("default", {
+                  month: "long",
+                  year: "numeric",
+                })}`
+                : `Today's Attendance Report - ${new Date().toLocaleString(
+                  "default",
+                  {
+                    day: "2-digit",
                     month: "long",
                     year: "numeric",
-                  })}`
-                : `Today's Attendance Report - ${new Date().toLocaleString(
-                    "default",
-                    {
-                      day: "2-digit",
-                      month: "long",
-                      year: "numeric",
-                    }
-                  )}`}
+                  }
+                )}`}
             </CardTitle>
           </CardHeader>
           <CardContent>

@@ -12,7 +12,7 @@ interface Form {
   moduleId: string;
   isPublished: boolean;
   updatedAt: string;
-  sections: any[]; // Adjust as needed
+  sections: any[];
 }
 
 interface FormsContentProps {
@@ -55,31 +55,29 @@ const FormsContent: React.FC<FormsContentProps> = ({
           {forms.map((form, index) => (
             <tr
               key={form.id}
-              className={`border-b border-gray-300 hover:bg-gray-50 cursor-pointer ${
-                selectedForm?.id === form.id
-                  ? "bg-blue-50"
-                  : index % 2 === 0
+              className={`border-b border-gray-300 hover:bg-gray-50 cursor-pointer ${selectedForm?.id === form.id
+                ? "bg-blue-50"
+                : index % 2 === 0
                   ? "bg-white"
                   : "bg-gray-50"
-              }`}
+                }`}
               onClick={() => setSelectedForm(form)}
             >
               <td className="p-2 text-gray-700 border-r border-gray-300">
-                <Button
-                  variant="link"
+                <button
                   className="text-blue-500 hover:underline"
                   onClick={() => openFormDialog(form.id)}
                 >
                   {form.name}
-                </Button>
+                </button>
               </td>
               <td className="p-2 border-r border-gray-300">
-                <Badge
-                  variant={form.isPublished ? "default" : "secondary"}
+                <div
+
                   className="text-xs"
                 >
                   {form.isPublished ? "Published" : "Draft"}
-                </Badge>
+                </div>
               </td>
               <td className="p-2 text-gray-700 border-r border-gray-300">
                 {new Date(form.updatedAt).toLocaleDateString()}
@@ -101,15 +99,6 @@ const FormsContent: React.FC<FormsContentProps> = ({
                       className="text-xs border-gray-300 hover:bg-gray-100 bg-transparent"
                     >
                       Edit
-                    </Button>
-                  </NextLink>
-                  <NextLink href={`/preview/${form.id}`} target="_blank">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-xs border-gray-300 hover:bg-gray-100 bg-transparent"
-                    >
-                      Preview
                     </Button>
                   </NextLink>
                 </div>
@@ -142,31 +131,28 @@ const FormsContent: React.FC<FormsContentProps> = ({
           {forms.map((form, index) => (
             <tr
               key={form.id}
-              className={`border-b border-gray-300 hover:bg-gray-50 cursor-pointer ${
-                selectedForm?.id === form.id
-                  ? "bg-blue-50"
-                  : index % 2 === 0
+              className={`border-b border-gray-300 hover:bg-gray-50 cursor-pointer ${selectedForm?.id === form.id
+                ? "bg-blue-50"
+                : index % 2 === 0
                   ? "bg-white"
                   : "bg-gray-50"
-              }`}
+                }`}
               onClick={() => setSelectedForm(form)}
             >
               <td className="p-3 text-gray-700">
-                <Button
-                  variant="link"
+                <button
                   className="text-blue-500 hover:underline"
                   onClick={() => openFormDialog(form.id)}
                 >
                   {form.name}
-                </Button>
+                </button>
               </td>
               <td className="p-3">
-                <Badge
-                  variant={form.isPublished ? "default" : "secondary"}
+                <div
                   className="text-xs"
                 >
                   {form.isPublished ? "Published" : "Draft"}
-                </Badge>
+                </div>
               </td>
               <td className="p-3 text-gray-700">
                 {new Date(form.updatedAt).toLocaleDateString()}
@@ -190,15 +176,6 @@ const FormsContent: React.FC<FormsContentProps> = ({
                       Edit
                     </Button>
                   </NextLink>
-                  <NextLink href={`/preview/${form.id}`} target="_blank">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-xs border-gray-300 hover:bg-gray-100 bg-transparent"
-                    >
-                      Preview
-                    </Button>
-                  </NextLink>
                 </div>
               </td>
             </tr>
@@ -216,25 +193,23 @@ const FormsContent: React.FC<FormsContentProps> = ({
           className="hover:shadow-md transition-shadow duration-200 border border-gray-300 rounded-lg"
         >
           <CardHeader>
-            <CardTitle className="text-sm font-semibold text-gray-700">
-              <Button
-                variant="link"
+            <CardTitle className="text-sm font-semibold text-gray-700 ">
+              <button
                 className="text-blue-500 hover:underline"
                 onClick={() => openFormDialog(form.id)}
               >
                 {form.name}
-              </Button>
+              </button>
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-0">
+          <CardContent>
             <div className="space-y-2">
               <div className="flex items-center gap-2">
-                <Badge
-                  variant={form.isPublished ? "default" : "secondary"}
+                <div
                   className="text-xs"
                 >
                   {form.isPublished ? "Published" : "Draft"}
-                </Badge>
+                </div>
                 <span className="text-xs text-gray-500">
                   Updated {new Date(form.updatedAt).toLocaleDateString()}
                 </span>
@@ -257,15 +232,6 @@ const FormsContent: React.FC<FormsContentProps> = ({
                     Edit
                   </Button>
                 </NextLink>
-                <NextLink href={`/preview/${form.id}`} target="_blank">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-xs border-gray-300 hover:bg-gray-100 bg-transparent"
-                  >
-                    Preview
-                  </Button>
-                </NextLink>
               </div>
             </div>
           </CardContent>
@@ -286,21 +252,19 @@ const FormsContent: React.FC<FormsContentProps> = ({
               <FileText className="h-5 w-5 text-gray-400" />
               <div>
                 <h3 className="text-sm font-semibold text-gray-700">
-                  <Button
-                    variant="link"
+                  <button
                     className="text-blue-500 hover:underline"
                     onClick={() => openFormDialog(form.id)}
                   >
                     {form.name}
-                  </Button>
+                  </button>
                 </h3>
                 <div className="flex items-center gap-2">
-                  <Badge
-                    variant={form.isPublished ? "default" : "secondary"}
+                  <div
                     className="text-xs"
                   >
                     {form.isPublished ? "Published" : "Draft"}
-                  </Badge>
+                  </div>
                   <span className="text-xs text-gray-500">
                     Updated {new Date(form.updatedAt).toLocaleDateString()}
                   </span>
@@ -323,15 +287,6 @@ const FormsContent: React.FC<FormsContentProps> = ({
                   className="text-xs border-gray-300 hover:bg-gray-100 bg-transparent"
                 >
                   Edit
-                </Button>
-              </NextLink>
-              <NextLink href={`/preview/${form.id}`} target="_blank">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-xs border-gray-300 hover:bg-gray-100 bg-transparent"
-                >
-                  Preview 
                 </Button>
               </NextLink>
             </div>

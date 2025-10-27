@@ -381,9 +381,9 @@ export default function FormCanvas({
       const updatedSections = form.sections.map((section) =>
         section.id === sectionId
           ? {
-              ...section,
-              subforms: updateSubformRecursively(section.subforms),
-            }
+            ...section,
+            subforms: updateSubformRecursively(section.subforms),
+          }
           : section,
       )
 
@@ -474,9 +474,8 @@ export default function FormCanvas({
   return (
     <div
       ref={setNodeRef}
-      className={`p-4 min-h-full transition-all duration-200 ${
-        isOver ? "bg-blue-50 border-2 border-dashed border-blue-300" : ""
-      }`}
+      className={`p-4 min-h-full transition-all duration-200 ${isOver ? "bg-blue-50 border-2 border-dashed border-blue-300" : ""
+        }`}
     >
       <div className="max-w-4xl mx-auto space-y-4">
         <div className="text-center mb-4">

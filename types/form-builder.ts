@@ -5,6 +5,7 @@ export interface FieldOption {
 }
 
 export interface FormField {
+  value: any
   id: string
   sectionId?: string
   subformId?: string

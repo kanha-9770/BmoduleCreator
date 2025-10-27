@@ -1,18 +1,42 @@
 // pages/api/modules.ts
 import { type NextRequest, NextResponse } from "next/server";
+import { validateSession } from "@/lib/auth"; // Assuming this exists as in the original
 import { DatabaseService } from "@/lib/database-service";
+import { prisma } from "@/lib/prisma";
 
 export async function GET(request: NextRequest) {
   try {
     console.log("[API] /api/modules - Starting request to get modules");
 
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get("userId");
+    const token = request.cookies.get("auth-token")?.value;
+    if (!token) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
 
-    const modules = await DatabaseService.getModuleHierarchy(userId ?? undefined);
-    console.log(`[API] /api/modules - Retrieved ${modules.length} modules for userId: ${userId || 'unauthenticated'}`);
+    const session = await validateSession(token);
+    if (!session) {
+      return NextResponse.json({ error: "Invalid session" }, { status: 401 });
+    }
 
-    // Validate module structure
+    const userId = session.user.id;
+
+    // Fetch user's organizationId (as in original)
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { organizationId: true },
+    });
+
+    if (!user?.organizationId) {
+      return NextResponse.json(
+        { error: "User is not associated with an organization" },
+        { status: 403 }
+      );
+    }
+
+    const modules = await DatabaseService.getModuleHierarchy(userId);
+    console.log(`[API] /api/modules - Retrieved ${modules.length} modules for userId: ${userId}`);
+
+    // Validate module structure (kept as-is to not disturb)
     const validatedModules = modules.map((module: any) => ({
       id: module.id,
       name: module.name,
@@ -48,9 +72,35 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
 export async function POST(request: NextRequest) {
   try {
     console.log("[API] /api/modules - Starting request to create module");
+
+    const token = request.cookies.get("auth-token")?.value;
+    if (!token) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+
+    const session = await validateSession(token);
+    if (!session) {
+      return NextResponse.json({ error: "Invalid session" }, { status: 401 });
+    }
+
+    const userId = session.user.id;
+
+    // Fetch user's organizationId and validate
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { organizationId: true },
+    });
+
+    if (!user?.organizationId) {
+      return NextResponse.json(
+        { error: "User is not associated with an organization" },
+        { status: 403 }
+      );
+    }
 
     const body = await request.json();
     console.log("[API] /api/modules - Request body:", body);
@@ -62,12 +112,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Name is required" }, { status: 400 });
     }
 
-    // Optionally validate organizationId
-    if (!organizationId) {
-      console.log("[API] /api/modules - Missing required field: organizationId");
+    // Validate organizationId matches user's
+    if (!organizationId || organizationId !== user.organizationId) {
+      console.log("[API] /api/modules - Invalid organizationId");
       return NextResponse.json(
-        { success: false, error: "Organization ID is required" },
-        { status: 400 }
+        { success: false, error: "Invalid organization ID" },
+        { status: 403 }
       );
     }
 

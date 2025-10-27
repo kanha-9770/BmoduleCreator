@@ -8,7 +8,14 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { Grid3x3 as Grid3X3, Folder, FolderOpen, FileText, ChevronDown, ChevronRight } from "lucide-react";
+import {
+  Grid3x3 as Grid3X3,
+  Folder,
+  FolderOpen,
+  FileText,
+  ChevronDown,
+  ChevronRight,
+} from "lucide-react";
 
 interface Form {
   id: string;
@@ -32,7 +39,11 @@ interface Module {
 
 interface FormsSidebarProps {
   searchTerm: string;
-  onFormSelect: (formId: string, moduleId: string, submoduleId?: string) => void;
+  onFormSelect: (
+    formId: string,
+    moduleId: string,
+    submoduleId?: string
+  ) => void;
   selectedForm: string | null;
 }
 
@@ -43,27 +54,39 @@ export function FormsSidebar({
 }: FormsSidebarProps) {
   const [modules, setModules] = useState<Module[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
-  const [expandedSubmodules, setExpandedSubmodules] = useState<Set<string>>(new Set());
+  const [expandedModules, setExpandedModules] = useState<Set<string>>(
+    new Set()
+  );
+  const [expandedSubmodules, setExpandedSubmodules] = useState<Set<string>>(
+    new Set()
+  );
 
   useEffect(() => {
     const fetchModules = async () => {
       try {
         setLoading(true);
         console.log("[v0] FormsSidebar: Fetching modules with forms...");
-        
+
         const response = await fetch("/api/modules-permission");
         const result = await response.json();
-        
+
         if (result.success) {
           setModules(result.data);
           console.log("[v0] FormsSidebar: Modules loaded:", result.data);
-          
+
           // Log form counts for debugging
           result.data.forEach((module: any) => {
-            console.log(`[v0] FormsSidebar: Module ${module.name} has ${module.forms?.length || 0} forms`);
+            console.log(
+              `[v0] FormsSidebar: Module ${module.name} has ${
+                module.forms?.length || 0
+              } forms`
+            );
             module.children?.forEach((child: any) => {
-              console.log(`[v0] FormsSidebar: Submodule ${child.name} has ${child.forms?.length || 0} forms`);
+              console.log(
+                `[v0] FormsSidebar: Submodule ${child.name} has ${
+                  child.forms?.length || 0
+                } forms`
+              );
             });
           });
         }
@@ -82,24 +105,27 @@ export function FormsSidebar({
     if (selectedForm && modules.length > 0) {
       const newExpandedModules = new Set(expandedModules);
       const newExpandedSubmodules = new Set(expandedSubmodules);
-      
+
       for (const module of modules) {
         // Check if selected form is in this module
-        if (module.forms && module.forms.some(f => f.id === selectedForm)) {
+        if (module.forms && module.forms.some((f) => f.id === selectedForm)) {
           newExpandedModules.add(module.id);
         }
-        
+
         // Check if selected form is in any submodule
         if (module.children) {
           for (const submodule of module.children) {
-            if (submodule.forms && submodule.forms.some(f => f.id === selectedForm)) {
+            if (
+              submodule.forms &&
+              submodule.forms.some((f) => f.id === selectedForm)
+            ) {
               newExpandedModules.add(module.id);
               newExpandedSubmodules.add(submodule.id);
             }
           }
         }
       }
-      
+
       setExpandedModules(newExpandedModules);
       setExpandedSubmodules(newExpandedSubmodules);
     }
@@ -110,10 +136,10 @@ export function FormsSidebar({
     if (newExpanded.has(moduleId)) {
       newExpanded.delete(moduleId);
       // Also collapse all submodules of this module
-      const module = modules.find(m => m.id === moduleId);
+      const module = modules.find((m) => m.id === moduleId);
       if (module && module.children) {
         const newExpandedSubmodules = new Set(expandedSubmodules);
-        module.children.forEach(child => {
+        module.children.forEach((child) => {
           newExpandedSubmodules.delete(child.id);
         });
         setExpandedSubmodules(newExpandedSubmodules);
@@ -136,26 +162,31 @@ export function FormsSidebar({
 
   const filteredModules = modules.filter((module) => {
     if (!searchTerm) return true;
-    
+
     // Check if module name matches
     if (module.name.toLowerCase().includes(searchTerm.toLowerCase())) {
       return true;
     }
 
     // Check if any form in module matches
-    if (module.forms && module.forms.some(form => 
-      form.name.toLowerCase().includes(searchTerm.toLowerCase())
-    )) {
+    if (
+      module.forms &&
+      module.forms.some((form) =>
+        form.name.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    ) {
       return true;
     }
 
     // Check if any submodule or its forms match
     if (module.children) {
-      return module.children.some(child => 
-        child.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (child.forms && child.forms.some(form => 
-          form.name.toLowerCase().includes(searchTerm.toLowerCase())
-        ))
+      return module.children.some(
+        (child) =>
+          child.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (child.forms &&
+            child.forms.some((form) =>
+              form.name.toLowerCase().includes(searchTerm.toLowerCase())
+            ))
       );
     }
 
@@ -171,9 +202,10 @@ export function FormsSidebar({
   const getTotalFormCount = () => {
     return modules.reduce((total, module) => {
       const moduleForms = module.forms?.length || 0;
-      const submoduleForms = module.children?.reduce((subTotal, child) => {
-        return subTotal + (child.forms?.length || 0);
-      }, 0) || 0;
+      const submoduleForms =
+        module.children?.reduce((subTotal, child) => {
+          return subTotal + (child.forms?.length || 0);
+        }, 0) || 0;
       return total + moduleForms + submoduleForms;
     }, 0);
   };
@@ -258,8 +290,12 @@ export function FormsSidebar({
                     {module.forms && module.forms.length > 0 && (
                       <div className="space-y-1">
                         {module.forms
-                          .filter(form => !searchTerm || 
-                            form.name.toLowerCase().includes(searchTerm.toLowerCase())
+                          .filter(
+                            (form) =>
+                              !searchTerm ||
+                              form.name
+                                .toLowerCase()
+                                .includes(searchTerm.toLowerCase())
                           )
                           .map((form) => (
                             <div
@@ -282,86 +318,106 @@ export function FormsSidebar({
                                   </div>
                                 )}
                               </div>
-                              <span className="text-xs">{getFormTypeIcon(form)}</span>
+                              <span className="text-xs">
+                                {getFormTypeIcon(form)}
+                              </span>
                             </div>
                           ))}
                       </div>
                     )}
 
                     {/* Submodules */}
-                    {module.children && module.children.map((submodule) => (
-                      <div key={submodule.id} className="space-y-1">
-                        <Collapsible
-                          open={expandedSubmodules.has(submodule.id)}
-                          onOpenChange={() => toggleSubmodule(submodule.id)}
-                        >
-                          <CollapsibleTrigger asChild>
-                            <div className="flex items-center space-x-2 p-2 rounded-lg hover:bg-muted cursor-pointer w-full text-left">
-                              {expandedSubmodules.has(submodule.id) ? (
-                                <>
-                                  <ChevronDown className="h-3 w-3 text-muted-foreground" />
-                                  <FolderOpen className="h-3 w-3 text-purple-600" />
-                                </>
-                              ) : (
-                                <>
-                                  <ChevronRight className="h-3 w-3 text-muted-foreground" />
-                                  <Folder className="h-3 w-3 text-purple-600" />
-                                </>
-                              )}
-                              <div className="flex-1 min-w-0">
-                                <div className="font-medium text-sm truncate">
-                                  {submodule.name}
+                    {module.children &&
+                      module.children.map((submodule) => (
+                        <div key={submodule.id} className="space-y-1">
+                          <Collapsible
+                            open={expandedSubmodules.has(submodule.id)}
+                            onOpenChange={() => toggleSubmodule(submodule.id)}
+                          >
+                            <CollapsibleTrigger asChild>
+                              <div className="flex items-center space-x-2 p-2 rounded-lg hover:bg-muted cursor-pointer w-full text-left">
+                                {expandedSubmodules.has(submodule.id) ? (
+                                  <>
+                                    <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                                    <FolderOpen className="h-3 w-3 text-purple-600" />
+                                  </>
+                                ) : (
+                                  <>
+                                    <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                                    <Folder className="h-3 w-3 text-purple-600" />
+                                  </>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-medium text-sm truncate">
+                                    {submodule.name}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground truncate">
+                                    {submodule.description}
+                                  </div>
                                 </div>
-                                <div className="text-xs text-muted-foreground truncate">
-                                  {submodule.description}
-                                </div>
-                              </div>
-                              {submodule.forms && submodule.forms.length > 0 && (
-                                <Badge variant="outline" className="text-xs">
-                                  {submodule.forms.length}
-                                </Badge>
-                              )}
-                            </div>
-                          </CollapsibleTrigger>
-
-                          <CollapsibleContent className="ml-6 space-y-1">
-                            {/* Submodule forms */}
-                            {submodule.forms && submodule.forms.length > 0 && (
-                              <div className="space-y-1">
-                                {submodule.forms
-                                  .filter(form => !searchTerm || 
-                                    form.name.toLowerCase().includes(searchTerm.toLowerCase())
-                                  )
-                                  .map((form) => (
-                                    <div
-                                      key={form.id}
-                                      className={`flex items-center space-x-2 p-2 rounded-lg cursor-pointer transition-colors ${
-                                        selectedForm === form.id
-                                          ? "bg-primary/10 border border-primary/20"
-                                          : "hover:bg-muted"
-                                      }`}
-                                      onClick={() => onFormSelect(form.id, module.id, submodule.id)}
+                                {submodule.forms &&
+                                  submodule.forms.length > 0 && (
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs"
                                     >
-                                      <FileText className="h-4 w-4 text-green-600" />
-                                      <div className="flex-1 min-w-0">
-                                        <div className="font-medium text-sm truncate">
-                                          {form.name}
-                                        </div>
-                                        {form.description && (
-                                          <div className="text-xs text-muted-foreground truncate">
-                                            {form.description}
-                                          </div>
-                                        )}
-                                      </div>
-                                      <span className="text-xs">{getFormTypeIcon(form)}</span>
-                                    </div>
-                                  ))}
+                                      {submodule.forms.length}
+                                    </Badge>
+                                  )}
                               </div>
-                            )}
-                          </CollapsibleContent>
-                        </Collapsible>
-                      </div>
-                    ))}
+                            </CollapsibleTrigger>
+
+                            <CollapsibleContent className="ml-6 space-y-1">
+                              {/* Submodule forms */}
+                              {submodule.forms &&
+                                submodule.forms.length > 0 && (
+                                  <div className="space-y-1">
+                                    {submodule.forms
+                                      .filter(
+                                        (form) =>
+                                          !searchTerm ||
+                                          form.name
+                                            .toLowerCase()
+                                            .includes(searchTerm.toLowerCase())
+                                      )
+                                      .map((form) => (
+                                        <div
+                                          key={form.id}
+                                          className={`flex items-center space-x-2 p-2 rounded-lg cursor-pointer transition-colors ${
+                                            selectedForm === form.id
+                                              ? "bg-primary/10 border border-primary/20"
+                                              : "hover:bg-muted"
+                                          }`}
+                                          onClick={() =>
+                                            onFormSelect(
+                                              form.id,
+                                              module.id,
+                                              submodule.id
+                                            )
+                                          }
+                                        >
+                                          <FileText className="h-4 w-4 text-green-600" />
+                                          <div className="flex-1 min-w-0">
+                                            <div className="font-medium text-sm truncate">
+                                              {form.name}
+                                            </div>
+                                            {form.description && (
+                                              <div className="text-xs text-muted-foreground truncate">
+                                                {form.description}
+                                              </div>
+                                            )}
+                                          </div>
+                                          <span className="text-xs">
+                                            {getFormTypeIcon(form)}
+                                          </span>
+                                        </div>
+                                      ))}
+                                  </div>
+                                )}
+                            </CollapsibleContent>
+                          </Collapsible>
+                        </div>
+                      ))}
                   </CollapsibleContent>
                 </Collapsible>
               </div>

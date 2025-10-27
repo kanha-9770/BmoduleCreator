@@ -71,69 +71,6 @@ import {
 } from "@/components/ui/select";
 
 // Interfaces
-interface UserData {
-  id: string;
-  email: string;
-  username: string;
-  first_name: string;
-  last_name: string;
-  email_verified: boolean;
-  status: string;
-  createdAt: string;
-  mobile: string;
-  mobile_verified: boolean;
-  avatar: string;
-  department: string;
-  phone: string;
-  location: string;
-  joinDate: string;
-  organization: {
-    id: string;
-    name: string;
-  } | null;
-  unitAssignments: Array<{
-    unit: { id: string; name: string };
-    role: { id: string; name: string };
-    notes: string;
-  }>;
-  employee: {
-    employeeName: string;
-    gender: string;
-    department: string;
-    designation: string;
-    dob: string;
-    nativePlace: string;
-    country: string;
-    permanentAddress: string;
-    currentAddress: string;
-    personalContact: string;
-    alternateNo1: string;
-    alternateNo2: string;
-    emailAddress1: string;
-    emailAddress2: string;
-    aadharCardNo: string;
-    bankName: string;
-    bankAccountNo: string;
-    ifscCode: string;
-    status: string;
-    shiftType: string;
-    inTime: string;
-    outTime: string;
-    dateOfJoining: string;
-    dateOfLeaving: string;
-    incrementMonth: string;
-    yearsOfAgreement: number;
-    bonusAfterYears: number;
-    companyName: string;
-    totalSalary: number | null;
-    givenSalary: number | null;
-    bonusAmount: number | null;
-    nightAllowance: number | null;
-    overTime: number | null;
-    oneHourExtra: number | null;
-    companySimIssue: boolean;
-  } | null;
-}
 
 interface FormModule {
   id: string;
@@ -142,9 +79,6 @@ interface FormModule {
   parentId?: string;
   children?: FormModule[];
   forms?: Form[];
-  level: number;
-  sort_order: number;
-  module_type: string;
 }
 
 interface Form {
@@ -296,16 +230,45 @@ export default function HomePage() {
     "horizontal"
   );
   const [mergedRecords, setMergedRecords] = useState<EnhancedFormRecord[]>([]);
-  const [userData, setUserData] = useState<UserData | null>(null);
-  const [userLoading, setUserLoading] = useState(true);
-  const [userError, setUserError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [organizationId, setOrganizationId] = useState<string | null>(null);
 
   const openFormDialog = (formId: string) => {
     setSelectedFormForFilling(formId);
     setIsFormDialogOpen(true);
   };
+
+  // Fetch organization ID
+  useEffect(() => {
+    const fetchOrganizationId = async () => {
+      try {
+        const response = await fetch("/api/auth/me");
+        const data = await response.json();
+
+        if (data.success && data.user?.organization?.id) {
+          setOrganizationId(data.user.organization.id);
+        } else {
+          toast({
+            title: "Error",
+            description: "Failed to fetch organization ID.",
+            variant: "destructive",
+          });
+        }
+      } catch (error: any) {
+        console.error("Error fetching organization ID:", error);
+        toast({
+          title: "Error",
+          description: "An error occurred while fetching organization ID.",
+          variant: "destructive",
+        });
+      }
+    };
+
+    fetchOrganizationId();
+  }, []);
+
+  console.log("organization id :", organizationId);
 
   const closeFormDialog = () => {
     setIsFormDialogOpen(false);
@@ -410,125 +373,6 @@ export default function HomePage() {
     }
   };
 
-  // Fetch user data from /api/auth/me
-  const fetchUserData = async () => {
-    try {
-      setUserLoading(true);
-      const response = await fetch("/api/auth/me", {
-        method: "GET",
-        credentials: "include",
-      });
-      const data = await response.json();
-      console.log("User data:", data);
-      if (response.ok && data.success) {
-        setUserData(data.user);
-      } else {
-        throw new Error(data.error || "Failed to fetch user data");
-      }
-    } catch (error: any) {
-      setUserError(error.message);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to fetch user data.",
-        variant: "destructive",
-      });
-    } finally {
-      setUserLoading(false);
-    }
-  };
-
-  // Fetch permitted modules from /api/user/permitted-modules
-  const fetchModules = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch("/api/user/permitted-modules");
-      const data = await response.json();
-
-      if (response.ok && data.modules) {
-        console.log("Fetched modules:", data.modules);
-        // Map the module data to match FormModule interface
-        const mappedModules: FormModule[] = data.modules.map((module: any) => ({
-          id: module.module_id,
-          name: module.module_name,
-          description: module.description || "",
-          parentId: module.parent_id || undefined,
-          children: [], // Initialize children array
-          forms: module.forms || [], // Assuming forms are included in the response
-          level: module.level,
-          sort_order: module.sort_order,
-          module_type: module.module_type,
-        }));
-
-        // Build hierarchical module tree
-        const moduleMap = new Map<
-          string,
-          FormModule & { children: FormModule[] }
-        >();
-        mappedModules.forEach((module) => {
-          moduleMap.set(module.id, { ...module, children: [] });
-        });
-
-        const rootModules: FormModule[] = [];
-        mappedModules.forEach((module) => {
-          const moduleWithChildren = moduleMap.get(module.id)!;
-          if (module.parentId && moduleMap.has(module.parentId)) {
-            const parent = moduleMap.get(module.parentId)!;
-            parent.children.push(moduleWithChildren);
-          } else {
-            rootModules.push(moduleWithChildren);
-          }
-        });
-
-        // Sort modules by sort_order
-        const sortModules = (modules: FormModule[]) => {
-          modules.forEach((module) => {
-            if (module.children?.length) {
-              module.children.sort((a, b) => a.sort_order - b.sort_order);
-              sortModules(module.children);
-            }
-          });
-          return modules.sort((a, b) => a.sort_order - b.sort_order);
-        };
-
-        const sortedModuleTree = sortModules(rootModules);
-        setModules(sortedModuleTree);
-        setFilteredModules(sortedModuleTree);
-        buildParentOptions(sortedModuleTree);
-        if (sortedModuleTree.length > 0 && !selectedModule) {
-          setSelectedModule(sortedModuleTree[0]);
-        }
-      } else {
-        throw new Error(data.error || "Failed to fetch modules");
-      }
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to load modules.",
-        variant: "destructive",
-      });
-      console.error("Error fetching modules:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const buildParentOptions = (moduleList: FormModule[]) => {
-    const flattenModules = (
-      modules: FormModule[],
-      level = 0
-    ): ParentModuleOption[] => {
-      const options: ParentModuleOption[] = [];
-      modules.forEach((module) => {
-        options.push({ id: module.id, name: module.name, level: module.level });
-        if (module.children && module.children.length > 0) {
-          options.push(...flattenModules(module.children, level + 1));
-        }
-      });
-      return options;
-    };
-    setAvailableParents(flattenModules(moduleList));
-  };
-
   const processRecordData = (
     record: FormRecord,
     formFields: FormFieldWithSection[]
@@ -538,7 +382,7 @@ export default function HomePage() {
     const fieldById = new Map<string, FormFieldWithSection>();
     formFields.forEach((field) => {
       fieldById.set(field.id, field);
-      fieldById.set(field.originalId, field);
+      fieldById.set(field.originalId, field); // Also map by originalId for flexibility
     });
 
     if (record.recordData && typeof record.recordData === "object") {
@@ -1061,20 +905,20 @@ export default function HomePage() {
           hasFieldData && editMode === "double-click" && "hover:bg-green-50",
           hasChanged && "bg-yellow-100 text-yellow-800 font-medium",
           isBeingClicked &&
-            editMode === "double-click" &&
-            hasFieldData &&
-            "bg-green-100"
+          editMode === "double-click" &&
+          hasFieldData &&
+          "bg-green-100"
         )}
         onClick={
           hasFieldData
             ? (e) =>
-                handleCellClick(
-                  record.id,
-                  field.id,
-                  currentValue,
-                  field.type,
-                  e
-                )
+              handleCellClick(
+                record.id,
+                field.id,
+                currentValue,
+                field.type,
+                e
+              )
             : undefined
         }
         title={
@@ -1158,9 +1002,8 @@ export default function HomePage() {
             ...field,
             fieldId: `${formId}_${field.fieldId}`,
             fieldLabel: `${record.formName || formId} - ${field.fieldLabel}`,
-            sectionTitle: `${record.formName || formId} - ${
-              field.sectionTitle
-            }`,
+            sectionTitle: `${record.formName || formId} - ${field.sectionTitle
+              }`,
           });
         });
       });
@@ -1193,6 +1036,63 @@ export default function HomePage() {
     });
 
     return mergedResults;
+  };
+
+  const fetchModules = async () => {
+    if (!organizationId) return;
+
+    try {
+      setLoading(true);
+      const response = await fetch(
+        `/api/modules?organizationId=${organizationId}`
+      );
+      const data = await response.json();
+      console.log("i am api modules data", data);
+
+      if (data.success) {
+        console.log("Fetched modules:", data.data);
+        setModules(data.data);
+        setFilteredModules(data.data);
+        buildParentOptions(data.data);
+        if (data.data.length > 0 && !selectedModule) {
+          setSelectedModule(data.data[0]);
+        }
+      } else {
+        throw new Error(data.error || "Failed to fetch modules");
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to load modules. Please try again.",
+        variant: "destructive",
+      });
+      console.error("Error fetching modules:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (organizationId) {
+      fetchModules();
+    }
+  }, [organizationId]);
+
+  const buildParentOptions = (moduleList: FormModule[]) => {
+    const flattenModules = (
+      modules: FormModule[],
+      level = 0
+    ): ParentModuleOption[] => {
+      const options: ParentModuleOption[] = [];
+      modules.forEach((module) => {
+        options.push({ id: module.id, name: module.name, level });
+        if (module.children && module.children.length > 0) {
+          options.push(...flattenModules(module.children, level + 1));
+        }
+      });
+      return options;
+    };
+    setAvailableParents(flattenModules(moduleList));
   };
 
   const fetchAllModuleRecords = async () => {
@@ -1278,7 +1178,7 @@ export default function HomePage() {
         toast({
           title: "No Data",
           description: "No records found for the selected module.",
-          variant: "default",
+          variant: "default", // Changed from "warning" to "default"
         });
       }
     } catch (error: any) {
@@ -1304,23 +1204,12 @@ export default function HomePage() {
       });
       return;
     }
-
-    if (!userData?.organization?.id) {
-      toast({
-        title: "Validation Error",
-        description: "Organization ID is required to create a module.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     try {
       setIsSubmitting(true);
       const createData = {
         name: moduleData.name,
         description: moduleData.description,
         parentId: moduleData.parentId || undefined,
-        organizationId: userData.organization.id,
       };
       const response = await fetch("/api/modules", {
         method: "POST",
@@ -1440,9 +1329,8 @@ export default function HomePage() {
         await fetchModules();
         toast({
           title: "Success",
-          description: `Form ${
-            form.isPublished ? "unpublished" : "published"
-          } successfully!`,
+          description: `Form ${form.isPublished ? "unpublished" : "published"
+            } successfully!`,
         });
       } else {
         throw new Error(data.error || "Failed to publish form");
@@ -1487,7 +1375,6 @@ export default function HomePage() {
 
   useEffect(() => {
     fetchModules();
-    fetchUserData();
   }, []);
 
   useEffect(() => {
@@ -1504,6 +1391,42 @@ export default function HomePage() {
       setMergedRecords(formRecords);
     }
   }, [formRecords, mergeMode]);
+
+  useEffect(() => {
+    let updatedModules = [...modules];
+
+    if (searchQuery) {
+      const filterModules = (modules: FormModule[]): FormModule[] => {
+        return modules
+          .filter((module) =>
+            module.name.toLowerCase().includes(searchQuery.toLowerCase())
+          )
+          .map((module) => ({
+            ...module,
+            children: module.children ? filterModules(module.children) : [],
+          }))
+          .filter(
+            (module) =>
+              module.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+              module.children?.length > 0
+          );
+      };
+      updatedModules = filterModules(modules);
+    }
+
+    const sortModules = (modules: FormModule[]): FormModule[] => {
+      const sorted = [...modules].sort((a, b) => {
+        return sortOrder === "asc"
+          ? a.name.localeCompare(b.name)
+          : b.name.localeCompare(a.name);
+      });
+      return sorted.map((module) => ({
+        ...module,
+        children: module.children ? sortModules(module.children) : [],
+      }));
+    };
+    setFilteredModules(sortModules(updatedModules));
+  }, [modules, searchQuery, sortOrder]);
 
   useEffect(() => {
     let filtered = [...mergedRecords];
@@ -1576,18 +1499,10 @@ export default function HomePage() {
     };
   }, [clickTimeout]);
 
-  if (loading || userLoading) {
+  if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-gray-600" />
-      </div>
-    );
-  }
-
-  if (userError) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="text-red-600">{userError}</div>
       </div>
     );
   }

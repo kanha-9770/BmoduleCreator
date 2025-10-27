@@ -26,8 +26,6 @@ export default function Dashboard() {
               <Button>New Transaction</Button>
             </div>
           </div>
-
-        
         </div>
       </main>
     </div>

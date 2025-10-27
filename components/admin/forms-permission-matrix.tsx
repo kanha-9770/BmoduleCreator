@@ -19,8 +19,6 @@ import {
   Users,
   FileText,
   AlertCircle,
-  CheckSquare,
-  Square,
 } from "lucide-react";
 
 interface Form {
@@ -131,7 +129,9 @@ export function FormsPermissionMatrix({
     const fetchData = async () => {
       try {
         setLoading(true);
-        console.log("[MATRIX] Starting to fetch all data for forms permissions...");
+        console.log(
+          "[MATRIX] Starting to fetch all data for forms permissions..."
+        );
 
         // Fetch all data
         const [
@@ -142,12 +142,24 @@ export function FormsPermissionMatrix({
           rolePermissionsResponse,
           userPermissionsResponse,
         ] = await Promise.all([
-          fetch("/api/modules-permission").then(r => r.json()).catch(() => ({ success: false, data: [] })),
-          fetch("/api/role").then(r => r.json()).catch(() => ({ success: false, data: [] })),
-          fetch("/api/user").then(r => r.json()).catch(() => ({ success: false, data: [] })),
-          fetch("/api/permissions").then(r => r.json()).catch(() => ({ success: false, data: [] })),
-          fetch("/api/role-permissions").then(r => r.json()).catch(() => ({ success: false, data: [] })),
-          fetch("/api/user-permissions").then(r => r.json()).catch(() => ({ success: false, data: [] })),
+          fetch("/api/modules-permission")
+            .then((r) => r.json())
+            .catch(() => ({ success: false, data: [] })),
+          fetch("/api/role")
+            .then((r) => r.json())
+            .catch(() => ({ success: false, data: [] })),
+          fetch("/api/user")
+            .then((r) => r.json())
+            .catch(() => ({ success: false, data: [] })),
+          fetch("/api/permissions")
+            .then((r) => r.json())
+            .catch(() => ({ success: false, data: [] })),
+          fetch("/api/role-permissions")
+            .then((r) => r.json())
+            .catch(() => ({ success: false, data: [] })),
+          fetch("/api/user-permissions")
+            .then((r) => r.json())
+            .catch(() => ({ success: false, data: [] })),
         ]);
 
         console.log("[MATRIX] API responses:", {
@@ -163,23 +175,33 @@ export function FormsPermissionMatrix({
         setModules(modulesResponse.success ? modulesResponse.data : []);
         setRoles(rolesResponse.success ? rolesResponse.data : []);
         setUsers(usersResponse.success ? usersResponse.data : []);
-        setPermissions(permissionsResponse.success && permissionsResponse.data.length > 0 
-          ? permissionsResponse.data 
-          : standardFormPermissions);
-        setRolePermissions(rolePermissionsResponse.success ? rolePermissionsResponse.data : []);
-        setUserPermissions(userPermissionsResponse.success ? userPermissionsResponse.data : []);
-
+        setPermissions(
+          permissionsResponse.success && permissionsResponse.data.length > 0
+            ? permissionsResponse.data
+            : standardFormPermissions
+        );
+        setRolePermissions(
+          rolePermissionsResponse.success ? rolePermissionsResponse.data : []
+        );
+        setUserPermissions(
+          userPermissionsResponse.success ? userPermissionsResponse.data : []
+        );
+        console.log("[MATRIX] data", usersResponse);
         console.log("[MATRIX] Data loaded:", {
           modules: modulesResponse.success ? modulesResponse.data.length : 0,
           roles: rolesResponse.success ? rolesResponse.data.length : 0,
           users: usersResponse.success ? usersResponse.data.length : 0,
-          permissions: permissionsResponse.success && permissionsResponse.data.length > 0 
-            ? permissionsResponse.data.length 
-            : standardFormPermissions.length,
-          rolePermissions: rolePermissionsResponse.success ? rolePermissionsResponse.data.length : 0,
-          userPermissions: userPermissionsResponse.success ? userPermissionsResponse.data.length : 0,
+          permissions:
+            permissionsResponse.success && permissionsResponse.data.length > 0
+              ? permissionsResponse.data.length
+              : standardFormPermissions.length,
+          rolePermissions: rolePermissionsResponse.success
+            ? rolePermissionsResponse.data.length
+            : 0,
+          userPermissions: userPermissionsResponse.success
+            ? userPermissionsResponse.data.length
+            : 0,
         });
-
       } catch (error) {
         console.error("[MATRIX] Error fetching data:", error);
         setPermissions(standardFormPermissions);
@@ -201,23 +223,40 @@ export function FormsPermissionMatrix({
     setExpandedRoles(newExpanded);
   };
 
-  const hasRolePermission = (roleId: string, formId: string, permissionId: string): boolean => {
+  const hasRolePermission = (
+    roleId: string,
+    formId: string,
+    permissionId: string
+  ): boolean => {
     if (!roleId || !formId || !permissionId) return false;
 
     const key = `role-${roleId}-${formId}-${permissionId}`;
     if (changes.has(key)) {
       return changes.get(key)!;
     }
-    
+
     const hasPermission = rolePermissions.some(
-      (rp) => rp.roleId === roleId && rp.formId === formId && rp.permissionId === permissionId && rp.granted
+      (rp) =>
+        rp.roleId === roleId &&
+        rp.formId === formId &&
+        rp.permissionId === permissionId &&
+        rp.granted
     );
-    
-    console.log("[MATRIX] Role permission check:", { roleId, formId, permissionId, hasPermission });
+
+    console.log("[MATRIX] Role permission check:", {
+      roleId,
+      formId,
+      permissionId,
+      hasPermission,
+    });
     return hasPermission;
   };
 
-  const hasUserPermission = (userId: string, formId: string, permissionId: string): boolean => {
+  const hasUserPermission = (
+    userId: string,
+    formId: string,
+    permissionId: string
+  ): boolean => {
     if (!userId || !formId || !permissionId) return false;
 
     const key = `user-${userId}-${formId}-${permissionId}`;
@@ -227,7 +266,11 @@ export function FormsPermissionMatrix({
 
     // Check direct user permission
     const userPermission = userPermissions.find(
-      (up) => up.userId === userId && up.formId === formId && up.permissionId === permissionId && up.isActive
+      (up) =>
+        up.userId === userId &&
+        up.formId === formId &&
+        up.permissionId === permissionId &&
+        up.isActive
     );
 
     if (userPermission) {
@@ -236,23 +279,44 @@ export function FormsPermissionMatrix({
 
     // Check inherited from role
     const user = users.find((u) => u.id === userId);
-    if (!user || !user.unitAssignments || user.unitAssignments.length === 0) return false;
+    if (!user || !user.unitAssignments || user.unitAssignments.length === 0)
+      return false;
 
     const userRoleId = user.unitAssignments[0].roleId;
     return hasRolePermission(userRoleId, formId, permissionId);
   };
 
-  const toggleRolePermission = (roleId: string, formId: string, permissionId: string) => {
+  const toggleRolePermission = (
+    roleId: string,
+    formId: string,
+    permissionId: string
+  ) => {
     const key = `role-${roleId}-${formId}-${permissionId}`;
     const currentValue = hasRolePermission(roleId, formId, permissionId);
-    console.log("[MATRIX] Toggling role permission:", { roleId, formId, permissionId, currentValue, newValue: !currentValue });
+    console.log("[MATRIX] Toggling role permission:", {
+      roleId,
+      formId,
+      permissionId,
+      currentValue,
+      newValue: !currentValue,
+    });
     setChanges((prev) => new Map(prev.set(key, !currentValue)));
   };
 
-  const toggleUserPermission = (userId: string, formId: string, permissionId: string) => {
+  const toggleUserPermission = (
+    userId: string,
+    formId: string,
+    permissionId: string
+  ) => {
     const key = `user-${userId}-${formId}-${permissionId}`;
     const currentValue = hasUserPermission(userId, formId, permissionId);
-    console.log("[MATRIX] Toggling user permission:", { userId, formId, permissionId, currentValue, newValue: !currentValue });
+    console.log("[MATRIX] Toggling user permission:", {
+      userId,
+      formId,
+      permissionId,
+      currentValue,
+      newValue: !currentValue,
+    });
     setChanges((prev) => new Map(prev.set(key, !currentValue)));
   };
 
@@ -285,10 +349,8 @@ export function FormsPermissionMatrix({
           const userId = parts[1];
           const formId = parts[2];
           const permissionId = parts[3];
-
           // Get the module ID from the form details
           const moduleId = formDetails?.module.id || null;
-
           userUpdates.push({
             userId,
             moduleId,
@@ -301,11 +363,11 @@ export function FormsPermissionMatrix({
         }
       });
 
-      console.log("[MATRIX] Saving changes:", { 
-        roleUpdates: roleUpdates.length, 
+      console.log("[MATRIX] Saving changes:", {
+        roleUpdates: roleUpdates.length,
         userUpdates: userUpdates.length,
         roleUpdatesData: roleUpdates,
-        userUpdatesData: userUpdates
+        userUpdatesData: userUpdates,
       });
 
       const promises = [];
@@ -330,22 +392,22 @@ export function FormsPermissionMatrix({
       }
 
       const responses = await Promise.all(promises);
-      
+
       // Check if all responses were successful
       for (const response of responses) {
         if (!response.ok) {
           const errorData = await response.json();
           console.error("[MATRIX] API Error:", errorData);
-          throw new Error(`API Error: ${errorData.error || 'Unknown error'}`);
+          throw new Error(`API Error: ${errorData.error || "Unknown error"}`);
         } else {
           const successData = await response.json();
           console.log("[MATRIX] API Success:", successData);
         }
       }
-      
+
       setChanges(new Map());
       console.log("[MATRIX] Changes saved successfully");
-      
+
       // Refresh the data to show updated permissions
       window.location.reload();
     } catch (error) {
@@ -358,34 +420,37 @@ export function FormsPermissionMatrix({
 
   const getUsersForRole = (roleId: string): User[] => {
     return users.filter((user) => {
-      return user.unitAssignments && user.unitAssignments.some(
-        (assignment) => assignment.roleId === roleId
+      return (
+        user.unitAssignments &&
+        user.unitAssignments.some((assignment) => assignment.roleId === roleId)
       );
     });
   };
 
   const getSelectedFormDetails = () => {
     if (!selectedForm) return null;
-    
+
     for (const module of modules) {
-      const moduleForm = module.forms?.find(f => f.id === selectedForm);
+      const moduleForm = module.forms?.find((f) => f.id === selectedForm);
       if (moduleForm) {
         return {
           form: moduleForm,
           module: module,
           submodule: null,
-          path: `${module.name} > ${moduleForm.name}`
+          path: `${module.name} > ${moduleForm.name}`,
         };
       }
 
       for (const submodule of module.children || []) {
-        const submoduleForm = submodule.forms?.find(f => f.id === selectedForm);
+        const submoduleForm = submodule.forms?.find(
+          (f) => f.id === selectedForm
+        );
         if (submoduleForm) {
           return {
             form: submoduleForm,
             module: module,
             submodule: submodule,
-            path: `${module.name} > ${submodule.name} > ${submoduleForm.name}`
+            path: `${module.name} > ${submodule.name} > ${submoduleForm.name}`,
           };
         }
       }
@@ -394,10 +459,12 @@ export function FormsPermissionMatrix({
   };
 
   const formDetails = getSelectedFormDetails();
+  // Modified to exclude roles with name "Admin" (case-insensitive)
   const filteredRoles = roles.filter(
     (role) =>
-      role.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      role.description?.toLowerCase().includes(searchTerm.toLowerCase())
+      role.name.toLowerCase() !== "admin" &&
+      (role.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        role.description?.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   console.log("[MATRIX] Current state:", {
@@ -406,7 +473,7 @@ export function FormsPermissionMatrix({
     permissions: permissions.length,
     roles: filteredRoles.length,
     changes: changes.size,
-    loading
+    loading,
   });
 
   if (loading) {
@@ -428,7 +495,8 @@ export function FormsPermissionMatrix({
             Please select a form from the sidebar to manage its permissions.
           </p>
           <div className="mt-4 text-sm text-gray-500">
-            Available: {modules.length} modules, {roles.length} roles, {permissions.length} permissions
+            Available: {modules.length} modules, {filteredRoles.length} roles,{" "}
+            {permissions.length} permissions
           </div>
         </CardContent>
       </Card>
@@ -590,7 +658,12 @@ export function FormsPermissionMatrix({
                                   {role.description}
                                 </div>
                                 <div className="flex items-center space-x-2 mt-1">
-                                  <Badge variant={role.isActive ? "default" : "secondary"} className="text-xs">
+                                  <Badge
+                                    variant={
+                                      role.isActive ? "default" : "secondary"
+                                    }
+                                    className="text-xs"
+                                  >
                                     {role.isActive ? "Active" : "Inactive"}
                                   </Badge>
                                   <div className="flex items-center text-xs text-gray-600">
@@ -612,8 +685,18 @@ export function FormsPermissionMatrix({
                               className="min-w-[120px] p-4 border-r border-gray-200 flex items-center justify-center bg-gray-25 hover:bg-blue-50"
                             >
                               <Checkbox
-                                checked={hasRolePermission(role.id, selectedForm, permission.id)}
-                                onCheckedChange={() => toggleRolePermission(role.id, selectedForm, permission.id)}
+                                checked={hasRolePermission(
+                                  role.id,
+                                  selectedForm,
+                                  permission.id
+                                )}
+                                onCheckedChange={() =>
+                                  toggleRolePermission(
+                                    role.id,
+                                    selectedForm,
+                                    permission.id
+                                  )
+                                }
                                 className="h-5 w-5"
                               />
                             </div>
@@ -624,7 +707,10 @@ export function FormsPermissionMatrix({
 
                     <CollapsibleContent>
                       {getUsersForRole(role.id).map((user) => (
-                        <div key={user.id} className="flex border-b bg-blue-25 hover:bg-blue-50">
+                        <div
+                          key={user.id}
+                          className="flex border-b bg-blue-25 hover:bg-blue-50"
+                        >
                           <div className="w-64 p-3 border-r pl-8">
                             <div className="text-sm font-medium text-gray-900">
                               ↳ {user.first_name} {user.last_name}
@@ -647,8 +733,18 @@ export function FormsPermissionMatrix({
                                   className="min-w-[120px] p-3 border-r border-gray-200 flex items-center justify-center bg-blue-25 hover:bg-blue-100"
                                 >
                                   <Checkbox
-                                    checked={hasUserPermission(user.id, selectedForm, permission.id)}
-                                    onCheckedChange={() => toggleUserPermission(user.id, selectedForm, permission.id)}
+                                    checked={hasUserPermission(
+                                      user.id,
+                                      selectedForm,
+                                      permission.id
+                                    )}
+                                    onCheckedChange={() =>
+                                      toggleUserPermission(
+                                        user.id,
+                                        selectedForm,
+                                        permission.id
+                                      )
+                                    }
                                     className="h-5 w-5"
                                   />
                                 </div>
@@ -676,11 +772,12 @@ export function FormsPermissionMatrix({
       {/* Help Text */}
       <div className="text-sm text-muted-foreground space-y-1">
         <p>
-          <strong>Form-Based Permissions:</strong> Grant permissions at the form level. 
-          Form access automatically makes parent modules visible.
+          <strong>Form-Based Permissions:</strong> Grant permissions at the form
+          level. Form access automatically makes parent modules visible.
         </p>
         <p>
-          <strong>Permission Types:</strong> {permissions.map((p, i) => (
+          <strong>Permission Types:</strong>{" "}
+          {permissions.map((p, i) => (
             <span key={p.id}>
               {p.name} ({p.category}){i < permissions.length - 1 ? ", " : ""}
             </span>

@@ -367,7 +367,6 @@ export function DynamicSidebar() {
               />
             </button>
           </div>
-
           {/* Navigation */}
           <div
             className={cn(

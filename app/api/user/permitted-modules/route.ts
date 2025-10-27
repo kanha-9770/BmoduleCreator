@@ -121,7 +121,9 @@ export async function GET(request: NextRequest) {
         return acc;
       }, [] as any[]);
 
-      const childModuleIds = uniqueModules.map((m: { module_id: any }) => m.module_id);
+      const childModuleIds = uniqueModules.map(
+        (m: { module_id: any }) => m.module_id
+      );
 
       // 🔹 Fetch parent hierarchy for allowed modules within the organization
       const parentModules = await prisma.$queryRaw`

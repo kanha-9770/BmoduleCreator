@@ -1,101 +1,246 @@
-import { DatabaseTransforms } from "./DatabaseTransforms"
-import { DatabaseRecords } from "./DatabaseRecords"
-import { DatabaseModules } from "./DatabaseModules"
-import { DatabaseRoles } from "./DatabaseRoles"
-import { AuthMiddleware, UserPermission, RolePermission } from "./auth-middleware"
-import { prisma } from "./prisma"
+import { DatabaseTransforms } from "./DatabaseTransforms";
+import { DatabaseRecords } from "./DatabaseRecords";
+import { DatabaseModules } from "./DatabaseModules";
+import { DatabaseRoles } from "./DatabaseRoles";
+import {
+  AuthMiddleware,
+  UserPermission,
+  RolePermission,
+} from "./auth-middleware";
+import { prisma } from "./prisma";
 
 export class DatabaseService {
   static getFieldById(subformId: any) {
-    throw new Error("Method not implemented.")
+    throw new Error("Method not implemented.");
   }
   static deleteSubformWithCleanup(subformId: string) {
-    throw new Error("Method not implemented.")
+    throw new Error("Method not implemented.");
   }
   // Data transformation methods
-  static transformModule = DatabaseTransforms.transformModule
-  static transformForm = DatabaseTransforms.transformForm
-  static transformSection = DatabaseTransforms.transformSection
-  static transformField = DatabaseTransforms.transformField
-  static transformRecord = DatabaseTransforms.transformRecord
-  static transformSubform = DatabaseTransforms.transformSubform
-  static calculateRecordCount = DatabaseTransforms.calculateRecordCount
-  static transformRecords = DatabaseTransforms.transformRecords
-  static transformModuleHierarchy = DatabaseTransforms.transformModuleHierarchy
-  static flattenModuleHierarchy = DatabaseTransforms.flattenModuleHierarchy
-  static getFormRecordTable = DatabaseTransforms.getFormRecordTable
+  static transformModule = DatabaseTransforms.transformModule;
+  static transformForm = DatabaseTransforms.transformForm;
+  static transformSection = DatabaseTransforms.transformSection;
+  static transformField = DatabaseTransforms.transformField;
+  static transformRecord = DatabaseTransforms.transformRecord;
+  static transformSubform = DatabaseTransforms.transformSubform;
+  static calculateRecordCount = DatabaseTransforms.calculateRecordCount;
+  static transformRecords = DatabaseTransforms.transformRecords;
+  static transformModuleHierarchy = DatabaseTransforms.transformModuleHierarchy;
+  static flattenModuleHierarchy = DatabaseTransforms.flattenModuleHierarchy;
+  static getFormRecordTable = DatabaseTransforms.getFormRecordTable;
 
   // Module operations with permission filtering
-  static createModule = DatabaseModules.createModule
-  static getModule = DatabaseModules.getModule
-  static updateModule = DatabaseModules.updateModule
-  static moveModule = DatabaseModules.moveModule
-  static deleteModule = DatabaseModules.deleteModule
+  static createModule = DatabaseModules.createModule;
+  static getModule = DatabaseModules.getModule;
+  static updateModule = DatabaseModules.updateModule;
+  static moveModule = DatabaseModules.moveModule;
+  static deleteModule = DatabaseModules.deleteModule;
 
-  // Enhanced module hierarchy with permission filtering - UPDATED LOGIC
-  static async getModuleHierarchy(userId?: string, organizationId?: string): Promise<any[]> {
+  // In DatabaseService class (add/modify these methods)
+
+  // New method: Get direct accessible module IDs (for permission checks on content)
+  static async getDirectAccessibleModuleIds(userId: string): Promise<string[]> {
     try {
-      console.log(`[DatabaseService] Getting module hierarchy for userId: ${userId || 'unauthenticated'}`);
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { organizationId: true },
+      });
 
-      if (!userId) {
-        console.log("[DatabaseService] No user ID provided, returning all modules for unauthenticated access");
-        return await DatabaseModules.getModuleHierarchy();
+      if (!user?.organizationId) {
+        return [];
       }
 
-      // Step 1: Get modules via role permissions (equivalent to first part of UNION)
-      const modulesViaRoles = await prisma.$queryRaw`
-        SELECT DISTINCT m.id, m.name, m.description, m.icon, m.color, m.settings, 
-               m.parent_id, m.module_type, m.level, m.path, m.is_active, 
-               m.sort_order, m.created_at, m.updated_at
+      const organizationId = user.organizationId;
+
+      // Get role names
+      const roles = await prisma.$queryRaw<{ role_name: string }[]>`
+      SELECT r.name AS role_name
+      FROM user_unit_assignments uua
+      JOIN roles r ON r.id = uua.role_id
+      WHERE uua.user_id = ${userId}
+    `;
+
+      const isAdmin = roles.some((r) => r.role_name === "ADMIN");
+
+      let directIds: string[] = [];
+
+      if (isAdmin) {
+        // ADMIN gets ALL active modules
+        const allModules = await prisma.$queryRaw<{ id: string }[]>`
+        SELECT id
+        FROM form_modules
+        WHERE is_active = TRUE
+        AND organization_id = ${organizationId}
+      `;
+        directIds = allModules.map((m) => m.id);
+      } else {
+        // Role-based modules
+        const roleBased = await prisma.$queryRaw<{ id: string }[]>`
+        SELECT DISTINCT fm.id
         FROM users u
         JOIN user_unit_assignments uua ON uua.user_id = u.id
         JOIN roles r ON r.id = uua.role_id
         JOIN role_permissions rp ON rp.role_id = r.id AND rp.granted = TRUE
-        JOIN form_modules m ON m.id = rp.module_id AND m.is_active = TRUE
+        JOIN form_modules fm ON fm.id = rp.module_id AND fm.is_active = TRUE
         WHERE u.id = ${userId}
-      ` as any[];
+        AND fm.organization_id = ${organizationId}
+      `;
 
-      console.log(`[DatabaseService] Found ${modulesViaRoles.length} modules via role permissions`);
-
-      // Step 2: Get modules via direct user permissions (equivalent to second part of UNION)
-      const modulesViaUserPermissions = await prisma.$queryRaw`
-        SELECT DISTINCT m.id, m.name, m.description, m.icon, m.color, m.settings,
-               m.parent_id, m.module_type, m.level, m.path, m.is_active,
-               m.sort_order, m.created_at, m.updated_at
+        // User-based modules (matching original: no up.is_active filter)
+        const userBased = await prisma.$queryRaw<{ id: string }[]>`
+        SELECT DISTINCT fm.id
         FROM users u
-        JOIN user_permissions up ON up.user_id = u.id AND up.granted = TRUE AND up.is_active = TRUE
-        JOIN form_modules m ON m.id = up.module_id AND m.is_active = TRUE
+        JOIN user_permissions up ON up.user_id = u.id AND up.granted = TRUE
+        JOIN form_modules fm ON fm.id = up.module_id AND fm.is_active = TRUE
         WHERE u.id = ${userId}
-      ` as any[];
+        AND fm.organization_id = ${organizationId}
+      `;
 
-      console.log(`[DatabaseService] Found ${modulesViaUserPermissions.length} modules via direct user permissions`);
+        const allDirect = [
+          ...roleBased.map((m) => m.id),
+          ...userBased.map((m) => m.id),
+        ];
+        directIds = [...new Set(allDirect)];
+      }
 
-      // Step 3: Combine and deduplicate modules
-      const allUserModules = new Map();
-      
-      // Add modules from roles
-      modulesViaRoles.forEach(module => {
-        allUserModules.set(module.id, module);
-      });
+      return directIds;
+    } catch (error: any) {
+      console.error(
+        "[DatabaseService] Error getting direct accessible module IDs:",
+        error
+      );
+      return [];
+    }
+  }
 
-      // Add modules from direct permissions (will overwrite if exists, but that's fine)
-      modulesViaUserPermissions.forEach(module => {
-        allUserModules.set(module.id, module);
-      });
+  // Updated getModuleHierarchy (implements exact original logic + hierarchy build)
+  static async getModuleHierarchy(userId?: string): Promise<any[]> {
+    try {
+      console.log(
+        `[DatabaseService] Getting module hierarchy for userId: ${
+          userId || "unauthenticated"
+        }`
+      );
 
-      const uniqueModuleIds = Array.from(allUserModules.keys());
-      console.log(`[DatabaseService] Total unique accessible modules: ${uniqueModuleIds.length}`);
-
-      if (uniqueModuleIds.length === 0) {
-        console.log("[DatabaseService] No accessible modules found for user");
+      if (!userId) {
+        console.log("[DatabaseService] No user ID provided, returning empty");
         return [];
       }
 
-      // Step 4: Get complete module data with forms and build hierarchy
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { organizationId: true },
+      });
+
+      if (!user?.organizationId) {
+        console.log("[DatabaseService] User not associated with organization");
+        return [];
+      }
+
+      const organizationId = user.organizationId;
+
+      // Get role names
+      const roles = await prisma.$queryRaw<{ role_name: string }[]>`
+      SELECT r.name AS role_name
+      FROM user_unit_assignments uua
+      JOIN roles r ON r.id = uua.role_id
+      WHERE uua.user_id = ${userId}
+    `;
+
+      const isAdmin = roles.some((r) => r.role_name === "ADMIN");
+
+      let allVisibleIds: string[] = [];
+
+      if (isAdmin) {
+        // ADMIN gets ALL active modules
+        const allModules = await prisma.$queryRaw<{ id: string }[]>`
+        SELECT id
+        FROM form_modules
+        WHERE is_active = TRUE
+        AND organization_id = ${organizationId}
+        ORDER BY level ASC, sort_order ASC
+      `;
+        allVisibleIds = allModules.map((m) => m.id);
+      } else {
+        // Role-based
+        const roleBased = await prisma.$queryRaw<{ id: string }[]>`
+        SELECT DISTINCT fm.id
+        FROM users u
+        JOIN user_unit_assignments uua ON uua.user_id = u.id
+        JOIN roles r ON r.id = uua.role_id
+        JOIN role_permissions rp ON rp.role_id = r.id AND rp.granted = TRUE
+        JOIN form_modules fm ON fm.id = rp.module_id AND fm.is_active = TRUE
+        WHERE u.id = ${userId}
+        AND fm.organization_id = ${organizationId}
+      `;
+
+        // User-based (matching original)
+        const userBased = await prisma.$queryRaw<{ id: string }[]>`
+        SELECT DISTINCT fm.id
+        FROM users u
+        JOIN user_permissions up ON up.user_id = u.id AND up.granted = TRUE
+        JOIN form_modules fm ON fm.id = up.module_id AND fm.is_active = TRUE
+        WHERE u.id = ${userId}
+        AND fm.organization_id = ${organizationId}
+      `;
+
+        const directIdsSet = new Set([
+          ...roleBased.map((m) => m.id),
+          ...userBased.map((m) => m.id),
+        ]);
+        const directIds = Array.from(directIdsSet);
+
+        console.log(
+          `[DatabaseService] Found ${directIds.length} direct modules via permissions`
+        );
+
+        if (directIds.length === 0) {
+          return [];
+        }
+
+        // Fetch parent hierarchy using recursive CTE (exact as original, but select id only)
+        const parentRaw = await prisma.$queryRaw<{ id: string }[]>`
+        WITH RECURSIVE parent_hierarchy AS (
+          SELECT DISTINCT fm.id
+          FROM form_modules fm
+          WHERE fm.id IN (
+            SELECT DISTINCT parent_id 
+            FROM form_modules 
+            WHERE id = ANY(${directIds}::text[]) 
+            AND parent_id IS NOT NULL
+            AND organization_id = ${organizationId}
+          )
+          AND fm.is_active = TRUE
+          AND fm.organization_id = ${organizationId}
+          
+          UNION
+          
+          SELECT DISTINCT fm.id
+          FROM form_modules fm
+          INNER JOIN parent_hierarchy ph ON fm.id = ph.parent_id
+          WHERE fm.is_active = TRUE
+          AND fm.organization_id = ${organizationId}
+        )
+        SELECT id FROM parent_hierarchy
+      `;
+
+        const parentIds = parentRaw.map((p) => p.id);
+        allVisibleIds = [...new Set([...directIds, ...parentIds])];
+
+        console.log(
+          `[DatabaseService] Added parents, total visible modules: ${allVisibleIds.length}`
+        );
+      }
+
+      if (allVisibleIds.length === 0) {
+        return [];
+      }
+
+      // Fetch complete module data (kept deep includes as-is)
       const completeModules = await prisma.formModule.findMany({
         where: {
-          id: { in: uniqueModuleIds },
-          isActive: true
+          id: { in: allVisibleIds },
+          isActive: true,
         },
         include: {
           forms: {
@@ -154,7 +299,7 @@ export class DatabaseService {
           children: {
             where: {
               isActive: true,
-              id: { in: uniqueModuleIds } // Only include children user has access to
+              id: { in: allVisibleIds },
             },
             include: {
               forms: {
@@ -195,32 +340,30 @@ export class DatabaseService {
                 },
               },
             },
-            orderBy: [{ level: "asc" }, { sortOrder: "asc" }, { name: "asc" }]
-          }
+            orderBy: [{ level: "asc" }, { sortOrder: "asc" }, { name: "asc" }],
+          },
         },
-        orderBy: [{ level: "asc" }, { sortOrder: "asc" }, { name: "asc" }]
+        orderBy: [{ level: "asc" }, { sortOrder: "asc" }, { name: "asc" }],
       });
 
-      console.log(`[DatabaseService] Retrieved complete data for ${completeModules.length} modules`);
-
-      // Step 5: Build proper hierarchy
+      // Build hierarchy (updated to handle parents properly)
       const moduleMap = new Map<string, any>();
       const rootModules: any[] = [];
+      const visibleModuleIds = new Set(allVisibleIds);
 
-      // First pass: create map and identify root modules (only those user has access to)
+      // First pass
       completeModules.forEach((module) => {
         const transformedModule = { ...module, children: [] };
         moduleMap.set(module.id, transformedModule);
 
-        if (!module.parentId || !uniqueModuleIds.includes(module.parentId)) {
-          // Include as root if no parent or parent is not accessible
+        if (!module.parentId || !visibleModuleIds.has(module.parentId)) {
           rootModules.push(transformedModule);
         }
       });
 
-      // Second pass: build parent-child relationships (only for accessible modules)
+      // Second pass: link children to parents (no extra unique check, since all visible)
       completeModules.forEach((module) => {
-        if (module.parentId && moduleMap.has(module.parentId) && uniqueModuleIds.includes(module.parentId)) {
+        if (module.parentId && moduleMap.has(module.parentId)) {
           const parent = moduleMap.get(module.parentId);
           const child = moduleMap.get(module.id);
           if (parent && child) {
@@ -229,17 +372,23 @@ export class DatabaseService {
         }
       });
 
-      // Step 6: Transform to proper format with hierarchy levels
+      // Transform
       const result = rootModules.map((module) =>
         DatabaseTransforms.transformModuleHierarchy(module, 0)
       );
 
-      console.log(`[DatabaseService] Built hierarchy with ${result.length} root modules`);
-      
-      // Log detailed hierarchy info
+      console.log(
+        `[DatabaseService] Built hierarchy with ${result.length} root modules`
+      );
+
+      // Log hierarchy (kept)
       result.forEach((rootModule, index) => {
         const childCount = this.countChildrenRecursive(rootModule);
-        console.log(`[DatabaseService] Root module ${index + 1}: "${rootModule.name}" with ${childCount} total descendants`);
+        console.log(
+          `[DatabaseService] Root module ${index + 1}: "${
+            rootModule.name
+          }" with ${childCount} total descendants`
+        );
       });
 
       return result;
@@ -248,6 +397,87 @@ export class DatabaseService {
       return [];
     }
   }
+
+  // Updated getForms (use direct IDs for content access)
+  static async getForms(moduleId?: string, userId?: string): Promise<any[]> {
+    try {
+      const forms = await DatabaseModules.getForms(moduleId);
+
+      if (!userId) {
+        console.log(
+          "[DatabaseService] No user ID provided for forms, returning all"
+        );
+        return forms;
+      }
+
+      const directIds = await this.getDirectAccessibleModuleIds(userId);
+      const accessibleModuleIds = new Set(directIds);
+
+      const accessibleForms = forms.filter((form) =>
+        accessibleModuleIds.has(form.moduleId)
+      );
+
+      console.log(
+        `[DatabaseService] Filtered ${forms.length} forms down to ${accessibleForms.length} accessible forms`
+      );
+      return accessibleForms;
+    } catch (error: any) {
+      console.error("[DatabaseService] Error getting forms:", error);
+      return [];
+    }
+  }
+
+  // Updated getForm (use direct IDs)
+  static async getForm(id: string, userId?: string): Promise<any | null> {
+    try {
+      const form = await DatabaseModules.getForm(id);
+
+      if (!form) return null;
+
+      if (!userId) {
+        console.log(
+          "[DatabaseService] No user ID provided for form access, allowing access"
+        );
+        return form;
+      }
+
+      const directIds = await this.getDirectAccessibleModuleIds(userId);
+      if (!directIds.includes(form.moduleId)) {
+        console.log(
+          `[DatabaseService] User denied access to form ${form.name} - module not directly accessible`
+        );
+        return null;
+      }
+
+      return form;
+    } catch (error: any) {
+      console.error("[DatabaseService] Error getting form:", error);
+      return null;
+    }
+  }
+
+  // Updated validateUserAccess (use direct IDs)
+  static async validateUserAccess(
+    userId: string,
+    resourceType: "module" | "form",
+    resourceId: string,
+    action: string = "view"
+  ): Promise<boolean> {
+    try {
+      if (resourceType === "module") {
+        const directIds = await this.getDirectAccessibleModuleIds(userId);
+        return directIds.includes(resourceId);
+      } else {
+        const form = await this.getForm(resourceId, userId);
+        return form !== null;
+      }
+    } catch (error: any) {
+      console.error("[DatabaseService] Error validating user access:", error);
+      return false;
+    }
+  }
+
+  // Other methods remain unchanged (e.g., getModules, getUserContext uses getModuleHierarchy for visible nav, getForms for direct content)
 
   // Helper method to count children recursively
   private static countChildrenRecursive(module: any): number {
@@ -264,37 +494,39 @@ export class DatabaseService {
   // Enhanced modules list with permission filtering
   static async getModules(userId?: string): Promise<any[]> {
     try {
-      const hierarchyModules = await this.getModuleHierarchy(userId)
-      return DatabaseTransforms.flattenModuleHierarchy(hierarchyModules)
+      const hierarchyModules = await this.getModuleHierarchy(userId);
+      return DatabaseTransforms.flattenModuleHierarchy(hierarchyModules);
     } catch (error: any) {
-      console.error("[DatabaseService] Error getting modules:", error)
-      return []
+      console.error("[DatabaseService] Error getting modules:", error);
+      return [];
     }
   }
 
   // Form operations with permission checks
-  static createForm = DatabaseModules.createForm
-  static deleteForm = DatabaseModules.deleteForm
-  static publishForm = DatabaseModules.publishForm
-  static unpublishForm = DatabaseModules.unpublishForm
+  static createForm = DatabaseModules.createForm;
+  static deleteForm = DatabaseModules.deleteForm;
+  static publishForm = DatabaseModules.publishForm;
+  static unpublishForm = DatabaseModules.unpublishForm;
 
   // Enhanced form operations with permission filtering
   static async getForms(moduleId?: string, userId?: string): Promise<any[]> {
     try {
-      const forms = await DatabaseModules.getForms(moduleId)
-      
+      const forms = await DatabaseModules.getForms(moduleId);
+
       if (!userId) {
-        console.log("[DatabaseService] No user ID provided for forms, returning all")
-        return forms
+        console.log(
+          "[DatabaseService] No user ID provided for forms, returning all"
+        );
+        return forms;
       }
 
       // Get user's accessible modules to check form permissions
       const accessibleModules = await this.getModuleHierarchy(userId);
       const accessibleModuleIds = new Set<string>();
-      
+
       // Flatten the hierarchy to get all accessible module IDs
       const collectModuleIds = (modules: any[]) => {
-        modules.forEach(module => {
+        modules.forEach((module) => {
           accessibleModuleIds.add(module.id);
           if (module.children && module.children.length > 0) {
             collectModuleIds(module.children);
@@ -304,35 +536,39 @@ export class DatabaseService {
       collectModuleIds(accessibleModules);
 
       // Filter forms based on accessible modules
-      const accessibleForms = forms.filter(form => 
+      const accessibleForms = forms.filter((form) =>
         accessibleModuleIds.has(form.moduleId)
       );
 
-      console.log(`[DatabaseService] Filtered ${forms.length} forms down to ${accessibleForms.length} accessible forms`);
+      console.log(
+        `[DatabaseService] Filtered ${forms.length} forms down to ${accessibleForms.length} accessible forms`
+      );
       return accessibleForms;
     } catch (error: any) {
-      console.error("[DatabaseService] Error getting forms:", error)
-      return []
+      console.error("[DatabaseService] Error getting forms:", error);
+      return [];
     }
   }
 
   static async getForm(id: string, userId?: string): Promise<any | null> {
     try {
-      const form = await DatabaseModules.getForm(id)
+      const form = await DatabaseModules.getForm(id);
 
-      if (!form) return null
+      if (!form) return null;
 
       if (!userId) {
-        console.log("[DatabaseService] No user ID provided for form access, allowing access")
-        return form
+        console.log(
+          "[DatabaseService] No user ID provided for form access, allowing access"
+        );
+        return form;
       }
 
       // Check if user has access to the form's module
       const accessibleModules = await this.getModuleHierarchy(userId);
       const accessibleModuleIds = new Set<string>();
-      
+
       const collectModuleIds = (modules: any[]) => {
-        modules.forEach(module => {
+        modules.forEach((module) => {
           accessibleModuleIds.add(module.id);
           if (module.children && module.children.length > 0) {
             collectModuleIds(module.children);
@@ -342,155 +578,169 @@ export class DatabaseService {
       collectModuleIds(accessibleModules);
 
       if (!accessibleModuleIds.has(form.moduleId)) {
-        console.log(`[DatabaseService] User denied access to form ${form.name} - module not accessible`)
-        return null
+        console.log(
+          `[DatabaseService] User denied access to form ${form.name} - module not accessible`
+        );
+        return null;
       }
 
-      return form
+      return form;
     } catch (error: any) {
-      console.error("[DatabaseService] Error getting form:", error)
-      return null
+      console.error("[DatabaseService] Error getting form:", error);
+      return null;
     }
   }
 
-  static async updateForm(id: string, data: any, userId?: string): Promise<any> {
+  static async updateForm(
+    id: string,
+    data: any,
+    userId?: string
+  ): Promise<any> {
     // Check permissions before update
     if (userId) {
-      const form = await this.getForm(id, userId)
+      const form = await this.getForm(id, userId);
       if (!form) {
-        throw new Error("Insufficient permissions to update this form or form not found")
+        throw new Error(
+          "Insufficient permissions to update this form or form not found"
+        );
       }
     }
 
-    return DatabaseModules.updateForm(id, data)
+    return DatabaseModules.updateForm(id, data);
   }
 
   // Helper methods for getting user permissions (kept for compatibility)
-  private static async getUserPermissionsForFiltering(userId: string): Promise<UserPermission[]> {
-    return await prisma.userPermission.findMany({
+  private static async getUserPermissionsForFiltering(
+    userId: string
+  ): Promise<UserPermission[]> {
+    return (await prisma.userPermission.findMany({
       where: { userId, isActive: true },
       include: {
-        permission: { 
-          select: { 
-            name: true, 
-            category: true 
-          } 
+        permission: {
+          select: {
+            name: true,
+            category: true,
+          },
         },
-        module: { 
-          select: { 
-            name: true, 
-            path: true 
-          } 
+        module: {
+          select: {
+            name: true,
+            path: true,
+          },
         },
       },
-    }) as UserPermission[];
+    })) as UserPermission[];
   }
 
-  private static async getRolePermissionsForUser(userId: string): Promise<RolePermission[]> {
+  private static async getRolePermissionsForUser(
+    userId: string
+  ): Promise<RolePermission[]> {
     const userAssignments = await prisma.userUnitAssignment.findMany({
       where: { userId },
       select: { roleId: true },
     });
-    
-    const roleIds = userAssignments.map(assignment => assignment.roleId);
+
+    const roleIds = userAssignments.map((assignment) => assignment.roleId);
 
     if (roleIds.length === 0) return [];
 
-    return await prisma.rolePermission.findMany({
+    return (await prisma.rolePermission.findMany({
       where: { roleId: { in: roleIds } },
       include: {
-        permission: { 
-          select: { 
-            name: true, 
-            category: true 
-          } 
+        permission: {
+          select: {
+            name: true,
+            category: true,
+          },
         },
-        module: { 
-          select: { 
-            name: true, 
-            path: true 
-          } 
+        module: {
+          select: {
+            name: true,
+            path: true,
+          },
         },
       },
-    }) as RolePermission[];
+    })) as RolePermission[];
   }
 
   // Section operations
-  static createSection = DatabaseModules.createSection
-  static getSections = DatabaseModules.getSections
-  static updateSection = DatabaseModules.updateSection
-  static deleteSection = DatabaseModules.deleteSection
-  static deleteSectionWithCleanup = DatabaseModules.deleteSectionWithCleanup
-  
+  static createSection = DatabaseModules.createSection;
+  static getSections = DatabaseModules.getSections;
+  static updateSection = DatabaseModules.updateSection;
+  static deleteSection = DatabaseModules.deleteSection;
+  static deleteSectionWithCleanup = DatabaseModules.deleteSectionWithCleanup;
+
   // Field operations
-  static createField = DatabaseModules.createField
-  static getFields = DatabaseModules.getFields
-  static updateField = DatabaseModules.updateField
-  static deleteField = DatabaseModules.deleteField
+  static createField = DatabaseModules.createField;
+  static getFields = DatabaseModules.getFields;
+  static updateField = DatabaseModules.updateField;
+  static deleteField = DatabaseModules.deleteField;
 
   // Field types
-  static getFieldTypes = DatabaseModules.getFieldTypes
-  static upsertFieldType = DatabaseModules.upsertFieldType
-  static seedFieldTypes = DatabaseModules.seedFieldTypes
+  static getFieldTypes = DatabaseModules.getFieldTypes;
+  static upsertFieldType = DatabaseModules.upsertFieldType;
+  static seedFieldTypes = DatabaseModules.seedFieldTypes;
 
   // User authentication methods
-  static getUserRecords = DatabaseRecords.getUserRecords
-  static updateUserLastLogin = DatabaseRecords.updateUserLastLogin
-  static createUser = DatabaseRecords.createUser
-  static getUserById = DatabaseRecords.getUserById
-  static updateUserProfile = DatabaseRecords.updateUserProfile
+  static getUserRecords = DatabaseRecords.getUserRecords;
+  static updateUserLastLogin = DatabaseRecords.updateUserLastLogin;
+  static createUser = DatabaseRecords.createUser;
+  static getUserById = DatabaseRecords.getUserById;
+  static updateUserProfile = DatabaseRecords.updateUserProfile;
 
   // Form record operations
-  static createFormRecord = DatabaseRecords.createFormRecord
-  static getFormRecords = DatabaseRecords.getFormRecords
-  static getFormSubmissionCount = DatabaseRecords.getFormSubmissionCount
-  static getFormRecord = DatabaseRecords.getFormRecord
-  static updateFormRecord = DatabaseRecords.updateFormRecord
-  static deleteFormRecord = DatabaseRecords.deleteFormRecord
+  static createFormRecord = DatabaseRecords.createFormRecord;
+  static getFormRecords = DatabaseRecords.getFormRecords;
+  static getFormSubmissionCount = DatabaseRecords.getFormSubmissionCount;
+  static getFormRecord = DatabaseRecords.getFormRecord;
+  static updateFormRecord = DatabaseRecords.updateFormRecord;
+  static deleteFormRecord = DatabaseRecords.deleteFormRecord;
 
   // Analytics
-  static trackFormEvent = DatabaseRecords.trackFormEvent
-  static getFormAnalytics = DatabaseRecords.getFormAnalytics
+  static trackFormEvent = DatabaseRecords.trackFormEvent;
+  static getFormAnalytics = DatabaseRecords.getFormAnalytics;
 
   // Lookup and relationship methods
-  static getLookupSources = DatabaseRecords.getLookupSources
-  static getLinkedRecords = DatabaseRecords.getLinkedRecords
+  static getLookupSources = DatabaseRecords.getLookupSources;
+  static getLinkedRecords = DatabaseRecords.getLinkedRecords;
 
   // RBAC operations
-  static createRole = DatabaseRoles.createRole
-  static getRoles = DatabaseRoles.getRoles
-  static getRole = DatabaseRoles.getRole
-  static updateRole = DatabaseRoles.updateRole
-  static deleteRole = DatabaseRoles.deleteRole
-  static createPermission = DatabaseRoles.createPermission
-  static getPermissions = DatabaseRoles.getPermissions
-  static getPermission = DatabaseRoles.getPermission
-  static updatePermission = DatabaseRoles.updatePermission
-  static deletePermission = DatabaseRoles.deletePermission
-  static assignRoleToUser = DatabaseRoles.assignRoleToUser
-  static getUserPermissions = DatabaseRoles.getUserPermissions
-  static getUserPermissionsWithResources = DatabaseRoles.getUserPermissionsWithResources
-  static checkUserPermission = DatabaseRoles.checkUserPermission
-  static grantUserPermission = DatabaseRoles.grantUserPermission
-  static revokeUserPermission = DatabaseRoles.revokeUserPermission
-  static updateUserPermission = DatabaseRoles.updateUserPermission
-  static updateUserPermissionsBatch = DatabaseRoles.updateUserPermissionsBatch
-  static createResourcePermissions = DatabaseRoles.createResourcePermissions
-  static deleteResourcePermissions = DatabaseRoles.deleteResourcePermissions
-  static seedDefaultRoles = DatabaseRoles.seedDefaultRoles
-  static getEmployeesWithPermissions = DatabaseRoles.getEmployeesWithPermissions
-  static getModulesWithSubmodules = DatabaseRoles.getModulesWithSubmodules
-  static updateEmployeePermission = DatabaseRoles.updateEmployeePermission
+  static createRole = DatabaseRoles.createRole;
+  static getRoles = DatabaseRoles.getRoles;
+  static getRole = DatabaseRoles.getRole;
+  static updateRole = DatabaseRoles.updateRole;
+  static deleteRole = DatabaseRoles.deleteRole;
+  static createPermission = DatabaseRoles.createPermission;
+  static getPermissions = DatabaseRoles.getPermissions;
+  static getPermission = DatabaseRoles.getPermission;
+  static updatePermission = DatabaseRoles.updatePermission;
+  static deletePermission = DatabaseRoles.deletePermission;
+  static assignRoleToUser = DatabaseRoles.assignRoleToUser;
+  static getUserPermissions = DatabaseRoles.getUserPermissions;
+  static getUserPermissionsWithResources =
+    DatabaseRoles.getUserPermissionsWithResources;
+  static checkUserPermission = DatabaseRoles.checkUserPermission;
+  static grantUserPermission = DatabaseRoles.grantUserPermission;
+  static revokeUserPermission = DatabaseRoles.revokeUserPermission;
+  static updateUserPermission = DatabaseRoles.updateUserPermission;
+  static updateUserPermissionsBatch = DatabaseRoles.updateUserPermissionsBatch;
+  static createResourcePermissions = DatabaseRoles.createResourcePermissions;
+  static deleteResourcePermissions = DatabaseRoles.deleteResourcePermissions;
+  static seedDefaultRoles = DatabaseRoles.seedDefaultRoles;
+  static getEmployeesWithPermissions =
+    DatabaseRoles.getEmployeesWithPermissions;
+  static getModulesWithSubmodules = DatabaseRoles.getModulesWithSubmodules;
+  static updateEmployeePermission = DatabaseRoles.updateEmployeePermission;
 
   // Enhanced user context methods
   static async getUserContext(userId: string): Promise<{
-    user: any
-    permissions: any[]
-    accessibleModules: any[]
-    accessibleForms: any[]
+    user: any;
+    permissions: any[];
+    accessibleModules: any[];
+    accessibleForms: any[];
   } | null> {
     try {
-      console.log(`[DatabaseService] Getting user context for: ${userId}`)
+      console.log(`[DatabaseService] Getting user context for: ${userId}`);
 
       // Get user record
       const userRecord = await prisma.user.findUnique({
@@ -499,14 +749,14 @@ export class DatabaseService {
           unitAssignments: {
             include: {
               role: true,
-              unit: true
-            }
-          }
-        }
-      })
+              unit: true,
+            },
+          },
+        },
+      });
       if (!userRecord) {
-        console.log(`[DatabaseService] User not found: ${userId}`)
-        return null
+        console.log(`[DatabaseService] User not found: ${userId}`);
+        return null;
       }
 
       // Get user permissions and role permissions
@@ -522,36 +772,39 @@ export class DatabaseService {
       return {
         user: {
           id: userRecord.id,
-          email: userRecord.email || 'Unknown',
-          name: `${userRecord.first_name || ''} ${userRecord.last_name || ''}`.trim() || 'Unknown User',
-          department: userRecord.department || 'Unassigned',
-          status: userRecord.status || 'Active'
+          email: userRecord.email || "Unknown",
+          name:
+            `${userRecord.first_name || ""} ${
+              userRecord.last_name || ""
+            }`.trim() || "Unknown User",
+          department: userRecord.department || "Unassigned",
+          status: userRecord.status || "Active",
         },
         permissions: [...userPermissions, ...rolePermissions],
         accessibleModules,
-        accessibleForms
-      }
+        accessibleForms,
+      };
     } catch (error: any) {
-      console.error("[DatabaseService] Error getting user context:", error)
-      return null
+      console.error("[DatabaseService] Error getting user context:", error);
+      return null;
     }
   }
 
   // Permission validation helpers
   static async validateUserAccess(
     userId: string,
-    resourceType: 'module' | 'form',
+    resourceType: "module" | "form",
     resourceId: string,
-    action: string = 'view'
+    action: string = "view"
   ): Promise<boolean> {
     try {
-      if (resourceType === 'module') {
+      if (resourceType === "module") {
         // Check if user has access to this module
         const accessibleModules = await this.getModuleHierarchy(userId);
         const accessibleModuleIds = new Set<string>();
-        
+
         const collectModuleIds = (modules: any[]) => {
-          modules.forEach(module => {
+          modules.forEach((module) => {
             accessibleModuleIds.add(module.id);
             if (module.children && module.children.length > 0) {
               collectModuleIds(module.children);
@@ -567,8 +820,8 @@ export class DatabaseService {
         return form !== null;
       }
     } catch (error: any) {
-      console.error("[DatabaseService] Error validating user access:", error)
-      return false
+      console.error("[DatabaseService] Error validating user access:", error);
+      return false;
     }
   }
 }

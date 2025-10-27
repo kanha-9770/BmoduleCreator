@@ -32,6 +32,7 @@ import { useToast } from "@/hooks/use-toast";
 import { CheckCircle, AlertCircle, Loader2, Send, Eye, Calendar, Star, Layers, ChevronDown, ChevronRight } from 'lucide-react';
 import type { Form, FormField, Subform } from "@/types/form-builder";
 import { LookupField } from "@/components/lookup-field";
+import CameraCapture from "@/components/camera-capture";
 
 // Interface for the field entries in fullOption.data
 interface LookupFieldData {
@@ -247,7 +248,8 @@ export default function PublicFormPage() {
   const validateField = (field: FormField, value: any): string | null => {
     const validation = field.validation || {};
 
-    if (validation.required && (!value || value === "")) {
+    // ← UPDATED: Added || value === null for camera fields
+    if (validation.required && (!value || value === "" || value === null)) {
       return `${field.label} is required`;
     }
 
@@ -786,6 +788,16 @@ export default function PublicFormPage() {
             multiple={field.properties?.multiple || false}
             className={`${fieldProps.className} ${isInSubform ? "border-purple-200 focus:border-purple-400" : ""
               }`}
+          />
+        );
+
+      // ← NEW CASE: Camera Field
+      case "camera":
+        return (
+          <CameraCapture
+            onCapture={(imageUrl: string) => handleFieldChange(field.id, imageUrl)}
+            capturedImage={value || null}
+            onClear={() => handleFieldChange(field.id, null)}
           />
         );
 

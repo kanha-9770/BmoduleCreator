@@ -13,9 +13,11 @@ export async function GET(
       where: { id: unitId },
       select: { id: true, organizationId: true },
     })
+
     if (!unit) {
       return NextResponse.json({ error: "Unit not found" }, { status: 404 })
     }
+
     await authorizeOrgAdmin(request, unit.organizationId)
 
     const full = await prisma.organizationUnit.findUnique({
@@ -26,13 +28,14 @@ export async function GET(
         unitRoles: { include: { role: true } },
         userAssignments: { include: { user: true, role: true } },
       },
-    });
+    })
 
-    if (!unit) {
+    if (!full) {
       return NextResponse.json({ error: "Unit not found" }, { status: 404 })
     }
 
-    return NextResponse.json(unit)
+    // ✅ Return the full data instead of the basic one
+    return NextResponse.json(full)
   } catch (error) {
     console.error("Error fetching unit:", error)
     return NextResponse.json({ error: "Failed to fetch unit" }, { status: 500 })
@@ -47,10 +50,10 @@ export async function PUT(
     const unitId = params.id
     const { name, description, assignedRoles, assignedUsers } = await request.json()
 
-    // Start a transaction to update everything atomically
+    // ✅ Use a longer timeout and simpler transaction logic
     const result = await prisma.$transaction(async (tx) => {
-      // Update basic unit info
-      const updatedUnit = await tx.organizationUnit.update({
+      // 1️⃣ Update the main unit
+      await tx.organizationUnit.update({
         where: { id: unitId },
         data: {
           name,
@@ -58,70 +61,46 @@ export async function PUT(
         },
       })
 
-      // Handle role assignments
+      // 2️⃣ Update roles (if provided)
       if (assignedRoles !== undefined) {
-        // Delete existing role assignments
-        await tx.unitRoleAssignment.deleteMany({
-          where: { unitId },
-        })
+        await tx.unitRoleAssignment.deleteMany({ where: { unitId } })
 
-        // Create new role assignments
         if (assignedRoles.length > 0) {
-          await Promise.all(
-            assignedRoles.map((roleId: string) =>
-              tx.unitRoleAssignment.create({
-                data: {
-                  unitId,
-                  roleId,
-                },
-              }),
-            ),
-          )
+          const roleData = assignedRoles.map((roleId: string) => ({
+            unitId,
+            roleId,
+          }))
+          await tx.unitRoleAssignment.createMany({ data: roleData })
         }
       }
 
-      // Handle user assignments
+      // 3️⃣ Update user assignments (if provided)
       if (assignedUsers !== undefined) {
-        // Delete existing user assignments
-        await tx.userUnitAssignment.deleteMany({
-          where: { unitId },
-        })
+        await tx.userUnitAssignment.deleteMany({ where: { unitId } })
 
-        // Create new user assignments
         if (assignedUsers.length > 0) {
-          await Promise.all(
-            assignedUsers.map((assignment: { userId: string; roleId: string }) =>
-              tx.userUnitAssignment.create({
-                data: {
-                  userId: assignment.userId,
-                  unitId,
-                  roleId: assignment.roleId,
-                },
-              }),
-            ),
-          )
+          const userData = assignedUsers.map((a: { userId: string; roleId: string }) => ({
+            userId: a.userId,
+            unitId,
+            roleId: a.roleId,
+          }))
+          await tx.userUnitAssignment.createMany({ data: userData })
         }
       }
 
-      // Return the updated unit with all relationships
-      return await tx.organizationUnit.findUnique({
+      // 4️⃣ Return the updated record
+      return tx.organizationUnit.findUnique({
         where: { id: unitId },
         include: {
-          unitRoles: {
-            include: {
-              role: true,
-            },
-          },
-          userAssignments: {
-            include: {
-              user: true,
-              role: true,
-            },
-          },
+          unitRoles: { include: { role: true } },
+          userAssignments: { include: { user: true, role: true } },
           children: true,
           parent: true,
         },
       })
+    }, {
+      timeout: 15000, // ✅ allow up to 15s safely
+      maxWait: 5000,
     })
 
     return NextResponse.json(result)
@@ -138,25 +117,22 @@ export async function DELETE(
   try {
     const unitId = params.id
 
-    // Delete the unit and all its children recursively
-    const deleteUnitRecursively = async (id: string) => {
-      // Find all children
+    // ✅ Use iterative deletion instead of deep recursion to avoid stack overflows
+    const queue = [unitId]
+
+    while (queue.length > 0) {
+      const currentId = queue.pop()!
       const children = await prisma.organizationUnit.findMany({
-        where: { parentId: id },
+        where: { parentId: currentId },
+        select: { id: true },
       })
 
-      // Delete all children first
-      for (const child of children) {
-        await deleteUnitRecursively(child.id);
-      }
+      queue.push(...children.map(c => c.id))
 
-      // Delete the unit itself (this will cascade delete assignments)
       await prisma.organizationUnit.delete({
-        where: { id },
+        where: { id: currentId },
       })
     }
-
-    await deleteUnitRecursively(unitId)
 
     return NextResponse.json({ success: true })
   } catch (error) {
