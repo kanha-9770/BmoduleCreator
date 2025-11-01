@@ -76,23 +76,23 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-4">
-      <div className="w-full max-w-md space-y-8">
+      <div className="w-full max-w-md space-y-4">
         <div className="text-center">
-          <div className="mx-auto h-12 w-12 flex items-center justify-center bg-blue-600 rounded-full mb-4">
+          <div className="mx-auto h-10 w-10 flex items-center justify-center bg-blue-600 rounded-full mb-4">
             <Mail className="h-6 w-6 text-white" />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900">Create Account</h1>
-          <p className="mt-2 text-gray-600">Fill in your details to create your account</p>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Create Account</h1>
+          <p className="text-gray-600 text-sm">Fill in your details to create your account</p>
         </div>
 
         <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-semibold">Register</CardTitle>
-            <CardDescription>Create your account and verify your email address</CardDescription>
+            <CardTitle className="text-xl font-semibold">Register</CardTitle>
+            <CardDescription className="text-sm">Create your account and verify your email address</CardDescription>
           </CardHeader>
           <CardContent>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-2">
                 <FormField
                   control={form.control}
                   name="name"
@@ -106,7 +106,7 @@ export default function RegisterPage() {
                             {...field}
                             type="text"
                             placeholder="Enter your full name"
-                            className="pl-10 h-12 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                            className="pl-10 h-10 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
                             disabled={isLoading}
                           />
                         </div>
@@ -129,7 +129,7 @@ export default function RegisterPage() {
                             {...field}
                             type="email"
                             placeholder="Enter your email address"
-                            className="pl-10 h-12 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                            className="pl-10 h-10 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
                             disabled={isLoading}
                           />
                         </div>
@@ -152,7 +152,7 @@ export default function RegisterPage() {
                             {...field}
                             type={showPassword ? "text" : "password"}
                             placeholder="Create a password"
-                            className="pl-10 pr-10 h-12 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                            className="pl-10 pr-10 h-10 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
                             disabled={isLoading}
                           />
                           <button
@@ -182,7 +182,7 @@ export default function RegisterPage() {
                             {...field}
                             type={showConfirmPassword ? "text" : "password"}
                             placeholder="Confirm your password"
-                            className="pl-10 pr-10 h-12 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                            className="pl-10 pr-10 h-10 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
                             disabled={isLoading}
                           />
                           <button
@@ -201,7 +201,7 @@ export default function RegisterPage() {
 
                 <Button
                   type="submit"
-                  className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-medium transition-all duration-200 hover:scale-[1.02]"
+                  className="w-full h-10 bg-blue-600 hover:bg-blue-700 text-white font-medium transition-all duration-200 hover:scale-[1.02]"
                   disabled={isLoading}
                 >
                   {isLoading ? (
@@ -219,7 +219,7 @@ export default function RegisterPage() {
               </form>
             </Form>
 
-            <div className="mt-6 text-center">
+            <div className="mt-4 text-center">
               <p className="text-sm text-gray-600">
                 Already have an account?{" "}
                 <Link href="/login" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">

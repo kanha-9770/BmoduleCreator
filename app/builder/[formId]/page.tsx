@@ -17,6 +17,7 @@ import { createPortal } from "react-dom"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
 import FormCanvas from "@/components/form-canvas"
+import ResizableSidebar from "@/components/resizable-sidebar";
 import FieldPalette, { PaletteItemDragOverlay, type fieldTypes } from "@/components/field-palette"
 import PublishFormDialog from "@/components/publish-form-dialog"
 import LookupConfigurationDialog from "@/components/lookup-configuration-dialog"
@@ -404,9 +405,8 @@ export default function FormBuilderPage() {
 
         toast({
           title: "Success",
-          description: `${fieldType.charAt(0).toUpperCase() + fieldType.slice(1)} field added to ${
-            subformId ? `subform ${getSubformPath(subformId)}` : "section"
-          } successfully`,
+          description: `${fieldType.charAt(0).toUpperCase() + fieldType.slice(1)} field added to ${subformId ? `subform ${getSubformPath(subformId)}` : "section"
+            } successfully`,
         })
       } else {
         throw new Error(result.error || "Failed to create field")
@@ -527,9 +527,8 @@ export default function FormBuilderPage() {
 
         toast({
           title: "Success",
-          description: `Subform ${nextPath} created successfully${
-            parentSubformId ? ` under ${getSubformPath(parentSubformId)}` : ""
-          }`,
+          description: `Subform ${nextPath} created successfully${parentSubformId ? ` under ${getSubformPath(parentSubformId)}` : ""
+            }`,
         })
       } else {
         throw new Error(result.error || "Failed to create subform")
@@ -704,9 +703,8 @@ export default function FormBuilderPage() {
 
       toast({
         title: "Success",
-        description: `${createdFields.length} lookup field${createdFields.length !== 1 ? "s" : ""} created in ${
-          pendingLookupSubformId ? `subform ${getSubformPath(pendingLookupSubformId)}` : "section"
-        } successfully`,
+        description: `${createdFields.length} lookup field${createdFields.length !== 1 ? "s" : ""} created in ${pendingLookupSubformId ? `subform ${getSubformPath(pendingLookupSubformId)}` : "section"
+          } successfully`,
       })
 
       setPendingLookupSectionId(null)
@@ -788,11 +786,13 @@ export default function FormBuilderPage() {
       onDragEnd={handleDragEnd}
     >
       <div className="flex h-screen bg-gray-50 font-sans">
-        <aside className="w-72 flex-shrink-0 border-r bg-white">
-          <FieldPalette />
+        <aside className="w-max flex-shrink-0 border-r bg-white">
+          <ResizableSidebar defaultWidth={288} collapsedWidth={100} >
+            <FieldPalette />
+          </ResizableSidebar>
         </aside>
         <div className="flex flex-1 flex-col">
-          <header className="flex h-16 flex-shrink-0 items-center justify-between border-b bg-white px-6">
+          <header className="flex h-10.5 flex-shrink-0 items-center justify-between border-b bg-white px-4">
             <div className="flex items-center gap-4">
               <Link href={`/modules/${form.moduleId}`}>
                 <Button variant="ghost" size="icon" aria-label="Back to module">
@@ -804,13 +804,13 @@ export default function FormBuilderPage() {
                   <div className="flex items-center gap-2">
                     <h1 className="text-lg font-semibold">{form.name}</h1>
                     {form.isUserForm && (
-                      <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200">
+                      <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200 w-max h-6 px-4">
                         <Users className="w-3 h-3 mr-1" />
                         User Form
                       </Badge>
                     )}
                     {form.isEmployeeForm && (
-                      <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200">
+                      <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200 w-max h-6 px-4">
                         <UserCheck className="w-3 h-3 mr-1" />
                         Employee Form
                       </Badge>
@@ -820,20 +820,15 @@ export default function FormBuilderPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => setIsUserFormSettingsOpen(true)} className="text-xs">
+              <Button variant="outline" size="sm" onClick={() => setIsUserFormSettingsOpen(true)} className="text-xs h-8">
                 <Settings className="mr-2 h-3 w-3" />
                 Form Settings
               </Button>
-              <Link href={`/preview/${form.id}`} target="_blank">
-                <Button variant="outline">
-                  <Eye className="mr-2 h-4 w-4" /> Preview
-                </Button>
-              </Link>
-              <Button variant="outline" onClick={() => setIsPublishDialogOpen(true)}>
-                <Share2 className="mr-2 h-4 w-4" /> Publish
+              <Button variant="outline" onClick={() => setIsPublishDialogOpen(true)} className="text-xs h-8">
+                <Share2 className="mr-2 h-3 w-3" /> Publish
               </Button>
-              <Button onClick={saveForm} disabled={saving}>
-                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+              <Button onClick={saveForm} disabled={saving} className="text-xs h-8">
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-3 w-3" />}
                 {saving ? "Saving..." : "Save"}
               </Button>
             </div>

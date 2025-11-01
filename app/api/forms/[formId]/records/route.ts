@@ -1,3 +1,4 @@
+// app/api/forms/[formId]/records/route.ts
 import { type NextRequest, NextResponse } from "next/server"
 import { DatabaseService } from "@/lib/database-service"
 
@@ -51,9 +52,15 @@ export async function GET(request: NextRequest, { params }: { params: { formId: 
 
     console.log(`Found ${records.length} records out of ${totalCount} total`)
 
+    // ADD recordId TO EACH RECORD (the only change)
+    const recordsWithId = records.map((rec) => ({
+      ...rec,
+      recordId: rec.id, // Explicitly expose the primary key as `recordId`
+    }))
+
     return NextResponse.json({
       success: true,
-      records: records,
+      records: recordsWithId, // Now includes `recordId`
       total: totalCount,
       page,
       limit,

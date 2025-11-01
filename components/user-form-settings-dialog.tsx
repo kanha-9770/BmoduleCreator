@@ -79,28 +79,25 @@ export default function UserFormSettingsDialog({
             <Users className="h-5 w-5" />
             Form Settings
           </DialogTitle>
-          {/* <DialogDescription>
-            Configure whether this form is designated as a user form or employee form. These forms have dedicated storage and special handling.
-          </DialogDescription> */}
         </DialogHeader>
 
-        <div className="space-y-6 py-4">
+        <div className="space-y-4">
           {/* Current Status */}
-          <div className="space-y-3">
+          <div className="flex items-center space-x-4">
             <Label className="text-sm font-medium">Current Status</Label>
             <div className="flex items-center gap-2">
               {form.isUserForm ? (
-                <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200">
+                <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200 h-5 w-full px-4">
                   <Users className="w-3 h-3 mr-1" />
                   User Form
                 </Badge>
               ) : form.isEmployeeForm ? (
-                <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200">
+                <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200 h-5 w-full px-4">
                   <UserCheck className="w-3 h-3 mr-1" />
                   Employee Form
                 </Badge>
               ) : (
-                <Badge variant="outline">
+                <Badge variant="outline" className="h-5 w-max px-4">
                   <Database className="w-3 h-3 mr-1" />
                   Regular Form
                 </Badge>
@@ -109,15 +106,15 @@ export default function UserFormSettingsDialog({
           </div>
 
           {/* Form Type Toggle */}
-          <div className="space-y-3">
+          <div className="space-y-2">
             <Label htmlFor="user-form-toggle" className="text-sm font-medium">
               Form Type
             </Label>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between p-4 border rounded-lg">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between p-2 border rounded-lg">
                 <div className="space-y-1">
-                  <div className="font-medium">User Form</div>
-                  <div className="text-sm text-muted-foreground">
+                  <div className="font-medium text-sm">User Form</div>
+                  <div className="text-xs text-muted-foreground">
                     Designate this form for user-specific data collection
                   </div>
                 </div>
@@ -129,10 +126,10 @@ export default function UserFormSettingsDialog({
                 />
               </div>
 
-              <div className="flex items-center justify-between p-4 border rounded-lg">
+              <div className="flex items-center justify-between p-2 border rounded-lg">
                 <div className="space-y-1">
-                  <div className="font-medium">Employee Form</div>
-                  <div className="text-sm text-muted-foreground">
+                  <div className="font-medium text-sm">Employee Form</div>
+                  <div className="text-xs text-muted-foreground">
                     Designate this form for employee-specific data collection
                   </div>
                 </div>

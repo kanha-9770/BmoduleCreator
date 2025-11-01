@@ -213,12 +213,12 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
+          <div className="flex justify-between items-center py-1.5">
             <div className="flex items-center space-x-3">
-              <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <Shield className="h-5 w-5 text-white" />
+              <div className="h-6 w-6 bg-blue-600 rounded-lg flex items-center justify-center">
+                <Shield className="h-4 w-4 text-white" />
               </div>
-              <h1 className="text-2xl font-bold text-gray-900">Profile</h1>
+              <h1 className="text-lg font-bold text-gray-900">Profile</h1>
             </div>
             <Button
               onClick={handleLogout}
@@ -243,27 +243,27 @@ export default function DashboardPage() {
       </div>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="space-y-8">
+      <div className="max-w-7xl mx-auto px-4 lg:px-8 py-4">
+        <div className="space-y-4">
           {/* Welcome Section */}
-          <div className="text-center space-y-4">
+          <div className="text-center space-y-2">
             <div className="flex justify-center">
-              <Avatar className="h-20 w-20 border-4 border-blue-100">
+              <Avatar className="h-14 w-14 border-4 border-blue-100">
                 <AvatarFallback className="bg-blue-600 text-white text-xl font-bold">
                   {getInitials(fullName)}
                 </AvatarFallback>
               </Avatar>
             </div>
             <div>
-              <h2 className="text-3xl font-bold text-gray-900">
+              <h2 className="text-2xl font-bold text-gray-900">
                 Welcome back!
               </h2>
-              <p className="text-lg text-gray-600 mt-2">{fullName}</p>
+              <p className="text-lg text-gray-600">{fullName}</p>
             </div>
           </div>
 
           {/* Account Information Cards */}
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
             {/* Account Status Card */}
             <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm">
               <CardHeader className="flex flex-row items-center space-y-0 pb-2">
@@ -761,20 +761,20 @@ export default function DashboardPage() {
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <User className="h-5 w-5 text-gray-600" />
-                <span>Quick Actions</span>
+                <span className="text-lg">Quick Actions</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                <Button variant="outline" className="h-12 justify-start">
+                <Button variant="outline" className="h-8 justify-start">
                   <User className="h-4 w-4 mr-2" />
                   Update Profile
                 </Button>
-                <Button variant="outline" className="h-12 justify-start">
+                <Button variant="outline" className="h-8 justify-start">
                   <Shield className="h-4 w-4 mr-2" />
                   Security Settings
                 </Button>
-                <Button variant="outline" className="h-12 justify-start">
+                <Button variant="outline" className="h-8 justify-start">
                   <Mail className="h-4 w-4 mr-2" />
                   Email Preferences
                 </Button>
@@ -785,7 +785,7 @@ export default function DashboardPage() {
           {/* Recent Activity */}
           <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm">
             <CardHeader>
-              <CardTitle>Recent Activity</CardTitle>
+              <CardTitle className="text-lg">Recent Activity</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">

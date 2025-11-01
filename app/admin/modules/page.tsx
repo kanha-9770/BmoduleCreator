@@ -1,6 +1,7 @@
-"use client";
+"use client"
 
-import React, { useEffect, useState, useRef } from "react";
+import type React from "react"
+import { useEffect, useState, useRef } from "react"
 import {
   Dialog,
   DialogContent,
@@ -8,14 +9,13 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useToast } from "@/hooks/use-toast";
+} from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useToast } from "@/hooks/use-toast"
 import {
   Loader2,
   Plus,
@@ -27,7 +27,6 @@ import {
   Trash2,
   FolderPlus,
   Settings,
-  Copy,
   Mail,
   Hash,
   Type,
@@ -37,368 +36,329 @@ import {
   CheckSquare,
   Radio,
   ChevronDown,
-  Save,
-  X,
   Lock,
   Edit3,
   MousePointer2,
-  ArrowUp,
-  ArrowDown,
-  ArrowUpDown,
-  MoreHorizontal,
-  Eye,
-  BarChart3,
-  CheckCircle,
-  XCircle,
-  Clock,
-  Search,
-  Filter,
   FileText,
-} from "lucide-react";
-import NextLink from "next/link";
-import { cn } from "@/lib/utils";
-import { PublicFormDialog } from "@/components/public-form-dialog";
-import ModuleSidebar from "@/components/modules/moduleSidebar";
-import FormsContent from "@/components/modules/formsContent";
-import RecordsDisplay from "@/components/modules/recordsDisplay";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+} from "lucide-react"
+import NextLink from "next/link"
+import { PublicFormDialog } from "@/components/public-form-dialog"
+import ModuleSidebar from "@/components/modules/moduleSidebar"
+import FormsContent from "@/components/modules/formsContent"
+import RecordsDisplay from "@/components/modules/recordsDisplay"
 
 // Interfaces
 
 interface FormModule {
-  id: string;
-  name: string;
-  description?: string;
-  parentId?: string;
-  children?: FormModule[];
-  forms?: Form[];
+  id: string
+  name: string
+  description?: string
+  parentId?: string
+  children?: FormModule[]
+  forms?: Form[]
 }
 
 interface Form {
-  id: string;
-  name: string;
-  description?: string;
-  moduleId: string;
-  isPublished: boolean;
-  updatedAt: string;
-  sections: FormSection[];
+  id: string
+  name: string
+  description?: string
+  moduleId: string
+  isPublished: boolean
+  updatedAt: string
+  sections: FormSection[]
 }
 
 interface FormSection {
-  id: string;
-  title: string;
-  fields: FormField[];
+  id: string
+  title: string
+  fields: FormField[]
 }
 
 interface FormField {
-  id: string;
-  label: string;
-  type: string;
-  order: number;
-  placeholder?: string;
-  description?: string;
-  validation?: any;
-  options?: any[];
-  lookup?: any;
+  id: string
+  label: string
+  type: string
+  order: number
+  placeholder?: string
+  description?: string
+  validation?: any
+  options?: any[]
+  lookup?: any
 }
 
 interface FormRecord {
-  id: string;
-  formId: string;
-  formName?: string;
-  recordData: Record<string, any>;
-  submittedAt: string;
-  status: "pending" | "approved" | "rejected" | "submitted";
+  id: string
+  formId: string
+  formName?: string
+  recordData: Record<string, any>
+  submittedAt: string
+  status: "pending" | "approved" | "rejected" | "submitted"
 }
 
 interface ProcessedFieldData {
-  fieldId: string;
-  fieldLabel: string;
-  fieldType: string;
-  value: any;
-  displayValue: string;
-  icon: string;
-  order: number;
-  sectionId?: string;
-  sectionTitle?: string;
-  formId?: string;
+  recordId?: string
+  recordIdFromAPI?: string
+  lookup: any
+  options: any
+  fieldId: string
+  fieldLabel: string
+  fieldType: string
+  value: any
+  displayValue: string
+  icon: string
+  order: number
+  sectionId?: string
+  sectionTitle?: string
+  formId?: string
+  formName?: string
 }
 
 interface EnhancedFormRecord extends FormRecord {
-  processedData: ProcessedFieldData[];
+  processedData: ProcessedFieldData[]
+  originalRecordIds?: Map<string, string>
 }
 
 interface FormFieldWithSection extends FormField {
-  originalId: string;
-  sectionTitle: string;
-  sectionId: string;
-  formId: string;
-  formName: string;
+  originalId: string
+  sectionTitle: string
+  sectionId: string
+  formId: string
+  formName: string
 }
 
 interface EditingCell {
-  recordId: string;
-  fieldId: string;
-  value: any;
-  originalValue: any;
-  fieldType: string;
-  options?: any[];
+  recordId: string
+  fieldId: string
+  value: any
+  originalValue: any
+  fieldType: string
+  options?: any[]
 }
 
 interface PendingChange {
-  recordId: string;
-  fieldId: string;
-  value: any;
-  originalValue: any;
-  fieldType: string;
-  fieldLabel: string;
+  recordId: string
+  fieldId: string
+  originalFieldId: string
+  value: any
+  originalValue: any
+  fieldType: string
+  fieldLabel: string
 }
 
 interface ParentModuleOption {
-  id: string;
-  name: string;
-  level: number;
+  id: string
+  name: string
+  level: number
 }
 
 export default function HomePage() {
-  const { toast } = useToast();
-  const [modules, setModules] = useState<FormModule[]>([]);
-  const [filteredModules, setFilteredModules] = useState<FormModule[]>([]);
-  const [selectedModule, setSelectedModule] = useState<FormModule | null>(null);
-  const [selectedForm, setSelectedForm] = useState<Form | null>(null);
-  const [formRecords, setFormRecords] = useState<EnhancedFormRecord[]>([]);
-  const [allModuleForms, setAllModuleForms] = useState<Form[]>([]);
-  const [formFieldsWithSections, setFormFieldsWithSections] = useState<
-    FormFieldWithSection[]
-  >([]);
-  const [loading, setLoading] = useState(true);
-  const [recordsLoading, setRecordsLoading] = useState(false);
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isSubmoduleDialogOpen, setIsSubmoduleDialogOpen] = useState(false);
-  const [editingModule, setEditingModule] = useState<FormModule | null>(null);
-  const [parentModuleForSubmodule, setParentModuleForSubmodule] =
-    useState<FormModule | null>(null);
+  const { toast } = useToast()
+  const [modules, setModules] = useState<FormModule[]>([])
+  const [filteredModules, setFilteredModules] = useState<FormModule[]>([])
+  const [selectedModule, setSelectedModule] = useState<FormModule | null>(null)
+  const [selectedForm, setSelectedForm] = useState<Form | null>(null)
+  const [formRecords, setFormRecords] = useState<EnhancedFormRecord[]>([])
+  const [allModuleForms, setAllModuleForms] = useState<Form[]>([])
+  const [formFieldsWithSections, setFormFieldsWithSections] = useState<FormFieldWithSection[]>([])
+  const [loading, setLoading] = useState(true)
+  const [recordsLoading, setRecordsLoading] = useState(false)
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [isSubmoduleDialogOpen, setIsSubmoduleDialogOpen] = useState(false)
+  const [editingModule, setEditingModule] = useState<FormModule | null>(null)
+  const [parentModuleForSubmodule, setParentModuleForSubmodule] = useState<FormModule | null>(null)
   const [moduleData, setModuleData] = useState({
     name: "",
     description: "",
     parentId: "",
-  });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [availableParents, setAvailableParents] = useState<
-    ParentModuleOption[]
-  >([]);
-  const [viewMode, setViewMode] = useState<"excel" | "table" | "grid" | "list">(
-    "excel"
-  );
-  const [searchQuery, setSearchQuery] = useState("");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
-  const [recordSearchQuery, setRecordSearchQuery] = useState("");
-  const [filteredRecords, setFilteredRecords] = useState<EnhancedFormRecord[]>(
-    []
-  );
-  const [recordSortField, setRecordSortField] = useState<string>("");
-  const [recordSortOrder, setRecordSortOrder] = useState<"asc" | "desc">("asc");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [recordsPerPage, setRecordsPerPage] = useState(20);
-  const [selectedRecords, setSelectedRecords] = useState<Set<string>>(
-    new Set()
-  );
-  const [selectedFormFilter, setSelectedFormFilter] = useState<string>("all");
-  const [selectedFormForFilling, setSelectedFormForFilling] = useState<
-    string | null
-  >(null);
-  const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
-  const [editMode, setEditMode] = useState<
-    "locked" | "single-click" | "double-click"
-  >("double-click");
-  const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
-  const [pendingChanges, setPendingChanges] = useState<
-    Map<string, PendingChange>
-  >(new Map());
-  const [savingChanges, setSavingChanges] = useState(false);
-  const [clickTimeout, setClickTimeout] = useState<NodeJS.Timeout | null>(null);
-  const [clickCount, setClickCount] = useState<Map<string, number>>(new Map());
-  const [mergeMode, setMergeMode] = useState<"vertical" | "horizontal">(
-    "horizontal"
-  );
-  const [mergedRecords, setMergedRecords] = useState<EnhancedFormRecord[]>([]);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [organizationId, setOrganizationId] = useState<string | null>(null);
+  })
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [availableParents, setAvailableParents] = useState<ParentModuleOption[]>([])
+  const [viewMode, setViewMode] = useState<"excel" | "table" | "grid" | "list">("excel")
+  const [searchQuery, setSearchQuery] = useState("")
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
+  const [recordSearchQuery, setRecordSearchQuery] = useState("")
+  const [filteredRecords, setFilteredRecords] = useState<EnhancedFormRecord[]>([])
+  const [recordSortField, setRecordSortField] = useState<string>("")
+  const [recordSortOrder, setRecordSortOrder] = useState<"asc" | "desc">("asc")
+  const [currentPage, setCurrentPage] = useState(1)
+  const [recordsPerPage, setRecordsPerPage] = useState(20)
+  const [selectedRecords, setSelectedRecords] = useState<Set<string>>(new Set())
+  const [selectedFormFilter, setSelectedFormFilter] = useState<string>("all")
+  const [selectedFormForFilling, setSelectedFormForFilling] = useState<string | null>(null)
+  const [isFormDialogOpen, setIsFormDialogOpen] = useState(false)
+  const [editMode, setEditMode] = useState<"locked" | "single-click" | "double-click">("double-click")
+  const [editingCell, setEditingCell] = useState<EditingCell | null>(null)
+  const [pendingChanges, setPendingChanges] = useState<Map<string, PendingChange>>(new Map())
+  const [savingChanges, setSavingChanges] = useState(false)
+  const [clickTimeout, setClickTimeout] = useState<NodeJS.Timeout | null>(null)
+  const [clickCount, setClickCount] = useState<Map<string, number>>(new Map())
+  const [mergeMode, setMergeMode] = useState<"vertical" | "horizontal">("horizontal")
+  const [mergedRecords, setMergedRecords] = useState<EnhancedFormRecord[]>([])
+  const inputRef = useRef<HTMLInputElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [organizationId, setOrganizationId] = useState<string | null>(null)
 
   const openFormDialog = (formId: string) => {
-    setSelectedFormForFilling(formId);
-    setIsFormDialogOpen(true);
-  };
+    setSelectedFormForFilling(formId)
+    setIsFormDialogOpen(true)
+  }
 
   // Fetch organization ID
   useEffect(() => {
     const fetchOrganizationId = async () => {
       try {
-        const response = await fetch("/api/auth/me");
-        const data = await response.json();
+        const response = await fetch("/api/auth/me")
+        const data = await response.json()
 
         if (data.success && data.user?.organization?.id) {
-          setOrganizationId(data.user.organization.id);
+          setOrganizationId(data.user.organization.id)
         } else {
           toast({
             title: "Error",
             description: "Failed to fetch organization ID.",
             variant: "destructive",
-          });
+          })
         }
       } catch (error: any) {
-        console.error("Error fetching organization ID:", error);
+        console.error("Error fetching organization ID:", error)
         toast({
           title: "Error",
           description: "An error occurred while fetching organization ID.",
           variant: "destructive",
-        });
+        })
       }
-    };
+    }
 
-    fetchOrganizationId();
-  }, []);
+    fetchOrganizationId()
+  }, [])
 
-  console.log("organization id :", organizationId);
+  console.log("organization id :", organizationId)
 
   const closeFormDialog = () => {
-    setIsFormDialogOpen(false);
-    setSelectedFormForFilling(null);
-  };
+    setIsFormDialogOpen(false)
+    setSelectedFormForFilling(null)
+  }
 
   const getFieldIcon = (fieldType: string) => {
     switch (fieldType) {
       case "text":
-        return Type;
+        return Type
       case "email":
-        return Mail;
+        return Mail
       case "number":
-        return Hash;
+        return Hash
       case "date":
       case "datetime":
-        return CalendarDays;
+        return CalendarDays
       case "checkbox":
-        return CheckSquare;
+        return CheckSquare
       case "radio":
-        return Radio;
+        return Radio
       case "select":
-        return ChevronDown;
+        return ChevronDown
       case "file":
-        return Upload;
+        return Upload
       case "lookup":
-        return Link;
+        return Link
       case "textarea":
-        return FileText;
+        return FileText
       case "tel":
       case "phone":
-        return Hash;
+        return Hash
       case "url":
-        return Link;
+        return Link
       default:
-        return Type;
+        return Type
     }
-  };
+  }
 
   const formatFieldValue = (fieldType: string, value: any): string => {
-    if (value === null || value === undefined) return "";
-    if (value === "") return "";
+    if (value === null || value === undefined) return ""
+    if (value === "") return ""
     switch (fieldType) {
       case "date":
       case "datetime":
         if (value) {
           try {
-            const date = new Date(value);
-            return date.toLocaleDateString();
+            const date = new Date(value)
+            return date.toLocaleDateString()
           } catch {
-            return String(value);
+            return String(value)
           }
         }
-        return "";
+        return ""
       case "email":
       case "tel":
       case "phone":
       case "text":
       case "textarea":
       case "url":
-        return String(value);
+        return String(value)
       case "number":
         if (typeof value === "number") {
-          return value.toLocaleString();
+          return value.toLocaleString()
         }
         if (typeof value === "string" && !isNaN(Number(value))) {
-          return Number(value).toLocaleString();
+          return Number(value).toLocaleString()
         }
-        return String(value);
+        return String(value)
       case "checkbox":
       case "switch":
         if (typeof value === "boolean") {
-          return value ? "✓ Yes" : "✗ No";
+          return value ? "✓ Yes" : "✗ No"
         }
         if (typeof value === "string") {
-          return value.toLowerCase() === "true" || value === "1"
-            ? "✓ Yes"
-            : "✗ No";
+          return value.toLowerCase() === "true" || value === "1" ? "✓ Yes" : "✗ No"
         }
-        return value ? "✓ Yes" : "✗ No";
+        return value ? "✓ Yes" : "✗ No"
       case "lookup":
-        return String(value);
+        return String(value)
       case "file":
         if (typeof value === "object" && value !== null) {
-          if (value.name) return String(value.name);
+          if (value.name) return String(value.name)
           if (Array.isArray(value)) {
-            return `${value.length} file(s)`;
+            return `${value.length} file(s)`
           }
           if (value.files && Array.isArray(value.files)) {
-            return `${value.files.length} file(s)`;
+            return `${value.files.length} file(s)`
           }
         }
-        return String(value);
+        return String(value)
       case "radio":
       case "select":
-        return String(value);
+        return String(value)
       default:
         if (typeof value === "object" && value !== null) {
-          return JSON.stringify(value).substring(0, 50) + "...";
+          return JSON.stringify(value).substring(0, 50) + "..."
         }
-        return String(value);
+        return String(value)
     }
-  };
+  }
 
-  const processRecordData = (
-    record: FormRecord,
-    formFields: FormFieldWithSection[]
-  ): EnhancedFormRecord => {
-    console.log("Processing record:", record);
-    const processedData: ProcessedFieldData[] = [];
-    const fieldById = new Map<string, FormFieldWithSection>();
+  const processRecordData = (record: FormRecord, formFields: FormFieldWithSection[]): EnhancedFormRecord => {
+    console.log("Processing record:", record)
+    const processedData: ProcessedFieldData[] = []
+    const fieldById = new Map<string, FormFieldWithSection>()
     formFields.forEach((field) => {
-      fieldById.set(field.id, field);
-      fieldById.set(field.originalId, field); // Also map by originalId for flexibility
-    });
+      fieldById.set(field.id, field)
+      fieldById.set(field.originalId, field)
+    })
 
     if (record.recordData && typeof record.recordData === "object") {
       Object.entries(record.recordData).forEach(([fieldKey, fieldData]) => {
-        console.log(`Processing field ${fieldKey}:`, fieldData);
+        console.log(`Processing field ${fieldKey}:`, fieldData)
         if (typeof fieldData === "object" && fieldData !== null) {
-          const fieldInfo = fieldData as any;
+          const fieldInfo = fieldData as any
           const formField =
-            fieldById.get(fieldKey) ||
-            formFields.find((f) => f.originalId === fieldKey.split("_").pop());
+            fieldById.get(fieldKey) || formFields.find((f) => f.originalId === fieldKey.split("_").pop())
           if (formField) {
-            const displayValue = formatFieldValue(
-              fieldInfo.type || formField.type || "text",
-              fieldInfo.value
-            );
+            const displayValue = formatFieldValue(fieldInfo.type || formField.type || "text", fieldInfo.value)
             processedData.push({
+              recordId: record.id,
+              recordIdFromAPI: record.id,
+              lookup: formField.lookup || null,
+              options: formField.options || null,
               fieldId: fieldKey,
               fieldLabel: fieldInfo.label || formField.label || fieldKey,
               fieldType: fieldInfo.type || formField.type || "text",
@@ -409,97 +369,90 @@ export default function HomePage() {
               sectionId: formField.sectionId,
               sectionTitle: formField.sectionTitle,
               formId: record.formId,
-            });
+              formName: record.formName || formField.formName,
+            })
           } else {
-            console.warn(`No matching field found for ${fieldKey}`);
+            console.warn(`No matching field found for ${fieldKey}`)
           }
         } else {
-          console.warn(
-            `Unexpected field data format for ${fieldKey}:`,
-            fieldData
-          );
+          console.warn(`Unexpected field data format for ${fieldKey}:`, fieldData)
         }
-      });
+      })
     } else {
-      console.warn("recordData is not an object:", record.recordData);
+      console.warn("recordData is not an object:", record.recordData)
     }
 
-    processedData.sort((a, b) => a.order - b.order);
+    processedData.sort((a, b) => a.order - b.order)
 
     return {
       ...record,
       processedData,
-    };
-  };
+    }
+  }
 
   const handleCellClick = (
     recordId: string,
     fieldId: string,
     currentValue: any,
     fieldType: string,
-    event: React.MouseEvent
+    event: React.MouseEvent,
   ) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const cellKey = `${recordId}-${fieldId}`;
+    event.preventDefault()
+    event.stopPropagation()
+    const cellKey = `${recordId}-${fieldId}`
     if (fieldType === "file") {
       toast({
         title: "Cannot Edit",
         description: "File fields cannot be edited inline",
         variant: "destructive",
-      });
-      return;
+      })
+      return
     }
 
     if (editMode === "locked") {
-      return;
+      return
     }
 
     if (editMode === "single-click") {
-      startCellEdit(recordId, fieldId, currentValue, fieldType);
-      return;
+      startCellEdit(recordId, fieldId, currentValue, fieldType)
+      return
     }
 
     if (editMode === "double-click") {
-      const currentCount = clickCount.get(cellKey) || 0;
-      const newCount = currentCount + 1;
+      const currentCount = clickCount.get(cellKey) || 0
+      const newCount = currentCount + 1
       if (clickTimeout) {
-        clearTimeout(clickTimeout);
+        clearTimeout(clickTimeout)
       }
 
-      setClickCount((prev) => new Map(prev.set(cellKey, newCount)));
+      setClickCount((prev) => new Map(prev.set(cellKey, newCount)))
       if (newCount === 1) {
         const timeout = setTimeout(() => {
           setClickCount((prev) => {
-            const newMap = new Map(prev);
-            newMap.delete(cellKey);
-            return newMap;
-          });
-        }, 300);
-        setClickTimeout(timeout);
+            const newMap = new Map(prev)
+            newMap.delete(cellKey)
+            return newMap
+          })
+        }, 300)
+        setClickTimeout(timeout)
       } else if (newCount >= 2) {
         if (clickTimeout) {
-          clearTimeout(clickTimeout);
+          clearTimeout(clickTimeout)
         }
         setClickCount((prev) => {
-          const newMap = new Map(prev);
-          newMap.delete(cellKey);
-          return newMap;
-        });
-        startCellEdit(recordId, fieldId, currentValue, fieldType);
+          const newMap = new Map(prev)
+          newMap.delete(cellKey)
+          return newMap
+        })
+        startCellEdit(recordId, fieldId, currentValue, fieldType)
       }
     }
-  };
+  }
 
-  const startCellEdit = (
-    recordId: string,
-    fieldId: string,
-    currentValue: any,
-    fieldType: string
-  ) => {
-    const field = formFieldsWithSections.find((f) => f.id === fieldId);
+  const startCellEdit = (recordId: string, fieldId: string, currentValue: any, fieldType: string) => {
+    const field = formFieldsWithSections.find((f) => f.id === fieldId)
     if (!field) {
-      return;
+      return
     }
 
     setEditingCell({
@@ -509,52 +462,47 @@ export default function HomePage() {
       originalValue: currentValue,
       fieldType,
       options: field.options,
-    });
+    })
 
     setTimeout(() => {
       if (inputRef.current) {
-        inputRef.current.focus();
-        if (
-          fieldType === "text" ||
-          fieldType === "email" ||
-          fieldType === "url"
-        ) {
-          inputRef.current.select();
+        inputRef.current.focus()
+        if (fieldType === "text" || fieldType === "email" || fieldType === "url") {
+          inputRef.current.select()
         }
       } else if (textareaRef.current) {
-        textareaRef.current.focus();
-        textareaRef.current.select();
+        textareaRef.current.focus()
+        textareaRef.current.select()
       }
-    }, 100);
-  };
+    }, 100)
+  }
 
   const updateCellValue = (newValue: any) => {
-    if (!editingCell) return;
+    if (!editingCell) return
     setEditingCell({
       ...editingCell,
       value: newValue,
-    });
-  };
+    })
+  }
 
   const saveCellEdit = async () => {
-    if (!editingCell) return;
-    const changeKey = `${editingCell.recordId}-${editingCell.fieldId}`;
-    const field = formFieldsWithSections.find(
-      (f) => f.id === editingCell.fieldId
-    );
+    if (!editingCell) return
+    const changeKey = `${editingCell.recordId}-${editingCell.fieldId}`
+    const field = formFieldsWithSections.find((f) => f.id === editingCell.fieldId)
 
     setPendingChanges((prev) => {
-      const newChanges = new Map(prev);
+      const newChanges = new Map(prev)
       newChanges.set(changeKey, {
         recordId: editingCell.recordId,
         fieldId: editingCell.fieldId,
+        originalFieldId: field?.originalId || editingCell.fieldId,
         value: editingCell.value,
         originalValue: editingCell.originalValue,
         fieldType: editingCell.fieldType,
         fieldLabel: field?.label || editingCell.fieldId,
-      });
-      return newChanges;
-    });
+      })
+      return newChanges
+    })
 
     setFormRecords((prevRecords) => {
       return prevRecords.map((record) => {
@@ -564,380 +512,146 @@ export default function HomePage() {
               return {
                 ...field,
                 value: editingCell.value,
-                displayValue: formatFieldValue(
-                  editingCell.fieldType,
-                  editingCell.value
-                ),
-              };
+                displayValue: formatFieldValue(editingCell.fieldType, editingCell.value),
+              }
             }
-            return field;
-          });
+            return field
+          })
           return {
             ...record,
             processedData: updatedProcessedData,
-          };
+          }
         }
-        return record;
-      });
-    });
+        return record
+      })
+    })
 
-    setEditingCell(null);
+    setEditingCell(null)
     toast({
       title: "Change Staged",
       description: `Field "${field?.label}" has been modified. Click "Save All Changes" to persist.`,
-    });
-  };
+    })
+  }
 
   const cancelCellEdit = () => {
-    setEditingCell(null);
-  };
+    setEditingCell(null)
+  }
 
-  const saveAllPendingChanges = async () => {
-    if (pendingChanges.size === 0) return;
-    setSavingChanges(true);
+  const saveAllPendingChanges = async (changesToSave?: Map<string, PendingChange>) => {
+    const changes = changesToSave || pendingChanges
+    if (changes.size === 0) return
+    setSavingChanges(true)
     try {
-      const changesByRecord = new Map<string, PendingChange[]>();
-      pendingChanges.forEach((change) => {
+      const changesByRecord = new Map<string, PendingChange[]>()
+      changes.forEach((change) => {
         if (!changesByRecord.has(change.recordId)) {
-          changesByRecord.set(change.recordId, []);
+          changesByRecord.set(change.recordId, [])
         }
-        changesByRecord.get(change.recordId)!.push(change);
-      });
+        changesByRecord.get(change.recordId)!.push(change)
+      })
 
-      let savedCount = 0;
-      for (const [recordId, changes] of changesByRecord) {
-        const record = formRecords.find((r) => r.id === recordId);
-        if (!record) continue;
+      let savedCount = 0
+      for (const [recordId, recordChanges] of changesByRecord) {
+        const record = formRecords.find((r) => r.id === recordId)
+        if (!record) continue
 
-        const updatedRecordData = { ...record.recordData };
-        changes.forEach((change) => {
-          if (updatedRecordData[change.fieldId]) {
-            updatedRecordData[change.fieldId] = {
-              ...updatedRecordData[change.fieldId],
+        const updatedRecordData = { ...record.recordData }
+        recordChanges.forEach((change) => {
+          // Use originalFieldId for the actual field key in recordData
+          const fieldKey = change.originalFieldId
+          if (updatedRecordData[fieldKey]) {
+            updatedRecordData[fieldKey] = {
+              ...updatedRecordData[fieldKey],
               value: change.value,
-            };
+            }
           }
-        });
+        })
 
-        const response = await fetch(
-          `/api/forms/${record.formId}/records/${recordId}`,
-          {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              recordData: updatedRecordData,
-              submittedBy: "admin",
-              status: record.status || "submitted",
-            }),
-          }
-        );
-        const result = await response.json();
+        const response = await fetch(`/api/forms/${record.formId}/records/${recordId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            recordData: updatedRecordData,
+            submittedBy: "admin",
+            status: record.status || "submitted",
+          }),
+        })
+        const result = await response.json()
         if (!result.success) {
-          throw new Error(`Failed to save record ${recordId}: ${result.error}`);
+          throw new Error(`Failed to save record ${recordId}: ${result.error}`)
         }
-        savedCount += changes.length;
+        savedCount += recordChanges.length
       }
 
-      setPendingChanges(new Map());
-      await fetchAllModuleRecords();
+      setPendingChanges(new Map())
+      await fetchAllModuleRecords()
       toast({
         title: "Success",
         description: `Successfully saved ${savedCount} changes across ${changesByRecord.size} records`,
-      });
+      })
     } catch (error: any) {
-      console.error("Error saving changes:", error);
+      console.error("Error saving changes:", error)
       toast({
         title: "Error",
         description: error.message,
         variant: "destructive",
-      });
+      })
     } finally {
-      setSavingChanges(false);
+      setSavingChanges(false)
     }
-  };
+  }
 
   const discardAllPendingChanges = () => {
-    setPendingChanges(new Map());
-    setEditingCell(null);
+    setPendingChanges(new Map())
+    setEditingCell(null)
     if (selectedModule) {
-      fetchAllModuleRecords();
+      fetchAllModuleRecords()
     }
     toast({
       title: "Changes Discarded",
       description: "All unsaved changes have been discarded",
-    });
-  };
+    })
+  }
 
   const toggleEditMode = () => {
     if (editMode !== "locked" && (pendingChanges.size > 0 || editingCell)) {
-      const shouldSave = window.confirm(
-        "You have unsaved changes. Do you want to save them before changing edit mode?"
-      );
+      const shouldSave = window.confirm("You have unsaved changes. Do you want to save them before changing edit mode?")
       if (shouldSave) {
         saveAllPendingChanges().then(() => {
-          cycleEditMode();
-        });
+          cycleEditMode()
+        })
       } else {
-        discardAllPendingChanges();
-        cycleEditMode();
+        discardAllPendingChanges()
+        cycleEditMode()
       }
     } else {
-      cycleEditMode();
+      cycleEditMode()
     }
-  };
+  }
 
   const cycleEditMode = () => {
-    setEditingCell(null);
-    setPendingChanges(new Map());
-    setClickCount(new Map());
+    setEditingCell(null)
+    setPendingChanges(new Map())
+    setClickCount(new Map())
     if (editMode === "locked") {
-      setEditMode("double-click");
+      setEditMode("double-click")
     } else if (editMode === "double-click") {
-      setEditMode("single-click");
+      setEditMode("single-click")
     } else {
-      setEditMode("locked");
+      setEditMode("locked")
     }
-  };
+  }
 
-  const getCurrentFieldValue = (
-    recordId: string,
-    fieldId: string,
-    originalValue: any
-  ) => {
-    const changeKey = `${recordId}-${fieldId}`;
-    const pendingChange = pendingChanges.get(changeKey);
-    return pendingChange ? pendingChange.value : originalValue;
-  };
+  const getCurrentFieldValue = (recordId: string, fieldId: string, originalValue: any) => {
+    const changeKey = `${recordId}-${fieldId}`
+    const pendingChange = pendingChanges.get(changeKey)
+    return pendingChange ? pendingChange.value : originalValue
+  }
 
   const hasFieldChanged = (recordId: string, fieldId: string) => {
-    const changeKey = `${recordId}-${fieldId}`;
-    return pendingChanges.has(changeKey);
-  };
-
-  const renderEditableCell = (
-    record: EnhancedFormRecord,
-    field: FormFieldWithSection,
-    originalValue: string
-  ) => {
-    const isCurrentlyEditing =
-      editingCell?.recordId === record.id && editingCell?.fieldId === field.id;
-    const processedField = record.processedData.find(
-      (f) => f.fieldId === field.id
-    );
-    const currentValue = getCurrentFieldValue(
-      record.id,
-      field.id,
-      processedField?.value
-    );
-    const hasChanged = hasFieldChanged(record.id, field.id);
-    const cellKey = `${record.id}-${field.id}`;
-    const isBeingClicked = (clickCount.get(cellKey) || 0) > 0;
-
-    const hasFieldData = processedField !== undefined;
-
-    if (isCurrentlyEditing) {
-      switch (field.type) {
-        case "text":
-        case "email":
-        case "url":
-        case "tel":
-        case "phone":
-          return (
-            <Input
-              ref={inputRef}
-              value={editingCell.value || ""}
-              onChange={(e) => updateCellValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  saveCellEdit();
-                } else if (e.key === "Escape") {
-                  e.preventDefault();
-                  cancelCellEdit();
-                }
-              }}
-              onBlur={saveCellEdit}
-              className="h-6 text-[10px] sm:text-xs border-2 border-blue-500 focus:border-blue-600 bg-white shadow-lg rounded-none"
-              type={field.type === "phone" ? "tel" : field.type}
-              placeholder={field.placeholder}
-              autoFocus
-            />
-          );
-        case "number":
-          return (
-            <Input
-              ref={inputRef}
-              value={editingCell.value || ""}
-              onChange={(e) => updateCellValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  saveCellEdit();
-                } else if (e.key === "Escape") {
-                  e.preventDefault();
-                  cancelCellEdit();
-                }
-              }}
-              onBlur={saveCellEdit}
-              className="h-6 text-[10px] sm:text-xs border-2 border-blue-500 focus:border-blue-600 bg-white shadow-lg rounded-none"
-              type="number"
-              placeholder={field.placeholder}
-              autoFocus
-            />
-          );
-        case "textarea":
-          return (
-            <Textarea
-              ref={textareaRef}
-              value={editingCell.value || ""}
-              onChange={(e) => updateCellValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && e.ctrlKey) {
-                  e.preventDefault();
-                  saveCellEdit();
-                } else if (e.key === "Escape") {
-                  e.preventDefault();
-                  cancelCellEdit();
-                }
-              }}
-              onBlur={saveCellEdit}
-              className="min-h-[60px] text-xs border-2 border-blue-500 focus:border-blue-600 resize-none bg-white shadow-lg rounded-none"
-              rows={2}
-              placeholder={field.placeholder}
-              autoFocus
-            />
-          );
-        case "date":
-          return (
-            <Input
-              ref={inputRef}
-              value={editingCell.value || ""}
-              onChange={(e) => updateCellValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  saveCellEdit();
-                } else if (e.key === "Escape") {
-                  e.preventDefault();
-                  cancelCellEdit();
-                }
-              }}
-              onBlur={saveCellEdit}
-              className="h-6 text-[10px] sm:text-xs border-2 border-blue-500 focus:border-blue-600 bg-white shadow-lg rounded-none"
-              type="date"
-              autoFocus
-            />
-          );
-        case "checkbox":
-        case "switch":
-          return (
-            <div className="flex items-center justify-center h-7">
-              <Checkbox
-                checked={Boolean(editingCell.value)}
-                onCheckedChange={(checked) => {
-                  updateCellValue(checked);
-                  setTimeout(saveCellEdit, 100);
-                }}
-              />
-            </div>
-          );
-        case "select":
-          const options = Array.isArray(editingCell.options)
-            ? editingCell.options
-            : [];
-          return (
-            <Select
-              value={editingCell.value || ""}
-              onValueChange={(value) => {
-                updateCellValue(value);
-                setTimeout(saveCellEdit, 100);
-              }}
-            >
-              <SelectTrigger className="h-7 text-xs border-2 border-blue-500 focus:border-blue-600 bg-white shadow-lg rounded-none">
-                <SelectValue placeholder="Select..." />
-              </SelectTrigger>
-              <SelectContent>
-                {options.map((option: any) => (
-                  <SelectItem
-                    key={option.value || option.id}
-                    value={option.value || option.id}
-                  >
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          );
-        default:
-          return (
-            <Input
-              ref={inputRef}
-              value={editingCell.value || ""}
-              onChange={(e) => updateCellValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  saveCellEdit();
-                } else if (e.key === "Escape") {
-                  e.preventDefault();
-                  cancelCellEdit();
-                }
-              }}
-              onBlur={saveCellEdit}
-              className="h-6 text-[10px] sm:text-xs border-2 border-blue-500 focus:border-blue-600 bg-white shadow-lg rounded-none"
-              placeholder={field.placeholder}
-              autoFocus
-            />
-          );
-      }
-    }
-
-    return (
-      <div
-        className={cn(
-          "h-7 px-1 sm:px-2 flex items-center text-[10px] sm:text-xs font-normal border-r border-b border-gray-300",
-          hasFieldData
-            ? "bg-white cursor-cell"
-            : "bg-gray-50 cursor-not-allowed",
-          "select-none overflow-hidden whitespace-nowrap",
-          hasFieldData && editMode === "locked" && "cursor-default",
-          hasFieldData && editMode === "single-click" && "hover:bg-blue-50",
-          hasFieldData && editMode === "double-click" && "hover:bg-green-50",
-          hasChanged && "bg-yellow-100 text-yellow-800 font-medium",
-          isBeingClicked &&
-          editMode === "double-click" &&
-          hasFieldData &&
-          "bg-green-100"
-        )}
-        onClick={
-          hasFieldData
-            ? (e) =>
-              handleCellClick(
-                record.id,
-                field.id,
-                currentValue,
-                field.type,
-                e
-              )
-            : undefined
-        }
-        title={
-          hasFieldData
-            ? formatFieldValue(field.type, currentValue)
-            : `Field not available in ${record.formName}`
-        }
-      >
-        <span className="truncate">
-          {hasFieldData
-            ? formatFieldValue(field.type, currentValue) || ""
-            : "—"}
-        </span>
-        {hasChanged && (
-          <span className="ml-1 text-yellow-600 font-bold">*</span>
-        )}
-      </div>
-    );
-  };
+    const changeKey = `${recordId}-${fieldId}`
+    return pendingChanges.has(changeKey)
+  }
 
   const getEditModeInfo = () => {
     switch (editMode) {
@@ -947,75 +661,71 @@ export default function HomePage() {
           label: "🔒 LOCKED",
           description: "Read Only Mode",
           color: "text-red-600 bg-red-50 border-red-300 hover:bg-red-100",
-        };
+        }
       case "single-click":
         return {
           icon: MousePointer2,
           label: "👆 SINGLE CLICK",
           description: "Click any cell to edit",
           color: "text-blue-600 bg-blue-50 border-blue-300 hover:bg-blue-100",
-        };
+        }
       case "double-click":
         return {
           icon: Edit3,
           label: "👆👆 DOUBLE CLICK",
           description: "Double-click any cell to edit",
-          color:
-            "text-green-600 bg-green-50 border-green-300 hover:bg-green-100",
-        };
+          color: "text-green-600 bg-green-50 border-green-300 hover:bg-green-100",
+        }
     }
-  };
+  }
 
-  const mergeRecordsHorizontally = (
-    records: EnhancedFormRecord[]
-  ): EnhancedFormRecord[] => {
-    const recordsByForm = new Map<string, EnhancedFormRecord[]>();
+  const mergeRecordsHorizontally = (records: EnhancedFormRecord[]): EnhancedFormRecord[] => {
+    const recordsByForm = new Map<string, EnhancedFormRecord[]>()
     records.forEach((record) => {
-      const formId = record.formId;
+      const formId = record.formId
       if (!recordsByForm.has(formId)) {
-        recordsByForm.set(formId, []);
+        recordsByForm.set(formId, [])
       }
-      recordsByForm.get(formId)!.push(record);
-    });
+      recordsByForm.get(formId)!.push(record)
+    })
 
     const formsWithOneRecord = Array.from(recordsByForm.entries()).filter(
-      ([formId, formRecords]) => formRecords.length === 1
-    );
+      ([formId, formRecords]) => formRecords.length === 1,
+    )
 
     const formsWithMultipleRecords = Array.from(recordsByForm.entries()).filter(
-      ([formId, formRecords]) => formRecords.length > 1
-    );
+      ([formId, formRecords]) => formRecords.length > 1,
+    )
 
-    const mergedResults: EnhancedFormRecord[] = [];
+    const mergedResults: EnhancedFormRecord[] = []
 
     if (formsWithOneRecord.length > 1) {
-      const baseRecord = formsWithOneRecord[0][1][0];
-      const mergedProcessedData: ProcessedFieldData[] = [];
-      const mergedFormNames: string[] = [];
+      const baseRecord = formsWithOneRecord[0][1][0]
+      const mergedProcessedData: ProcessedFieldData[] = []
+      const mergedFormNames: string[] = []
 
       formsWithOneRecord.forEach(([formId, formRecords]) => {
-        const record = formRecords[0];
-        mergedFormNames.push(record.formName || formId);
+        const record = formRecords[0]
+        mergedFormNames.push(record.formName || formId)
 
         record.processedData.forEach((field) => {
           mergedProcessedData.push({
             ...field,
             fieldId: `${formId}_${field.fieldId}`,
             fieldLabel: `${record.formName || formId} - ${field.fieldLabel}`,
-            sectionTitle: `${record.formName || formId} - ${field.sectionTitle
-              }`,
-          });
-        });
-      });
+            sectionTitle: `${record.formName || formId} - ${field.sectionTitle}`,
+          })
+        })
+      })
 
       mergedProcessedData.sort((a, b) => {
-        const aFormName = a.sectionTitle?.split(" - ")[0] || "";
-        const bFormName = b.sectionTitle?.split(" - ")[0] || "";
+        const aFormName = a.sectionTitle?.split(" - ")[0] || ""
+        const bFormName = b.sectionTitle?.split(" - ")[0] || ""
         if (aFormName !== bFormName) {
-          return aFormName.localeCompare(bFormName);
+          return aFormName.localeCompare(bFormName)
         }
-        return a.order - b.order;
-      });
+        return a.order - b.order
+      })
 
       const mergedRecord: EnhancedFormRecord = {
         ...baseRecord,
@@ -1024,101 +734,96 @@ export default function HomePage() {
         formName: `Merged: ${mergedFormNames.join(" + ")}`,
         processedData: mergedProcessedData,
         recordData: {},
-      };
+      }
 
-      mergedResults.push(mergedRecord);
+      mergedResults.push(mergedRecord)
     } else if (formsWithOneRecord.length === 1) {
-      mergedResults.push(...formsWithOneRecord[0][1]);
+      mergedResults.push(...formsWithOneRecord[0][1])
     }
 
     formsWithMultipleRecords.forEach(([formId, formRecords]) => {
-      mergedResults.push(...formRecords);
-    });
+      mergedResults.push(...formRecords)
+    })
 
-    return mergedResults;
-  };
+    return mergedResults
+  }
 
   const fetchModules = async () => {
-    if (!organizationId) return;
+    if (!organizationId) return
 
     try {
-      setLoading(true);
-      const response = await fetch(
-        `/api/modules?organizationId=${organizationId}`
-      );
-      const data = await response.json();
-      console.log("i am api modules data", data);
+      setLoading(true)
+      const response = await fetch(`/api/modules?organizationId=${organizationId}`)
+      const data = await response.json()
+      console.log("i am api modules data", data)
 
       if (data.success) {
-        console.log("Fetched modules:", data.data);
-        setModules(data.data);
-        setFilteredModules(data.data);
-        buildParentOptions(data.data);
+        console.log("Fetched modules:", data.data)
+        setModules(data.data)
+        setFilteredModules(data.data)
+        buildParentOptions(data.data)
         if (data.data.length > 0 && !selectedModule) {
-          setSelectedModule(data.data[0]);
+          setSelectedModule(data.data[0])
         }
       } else {
-        throw new Error(data.error || "Failed to fetch modules");
+        throw new Error(data.error || "Failed to fetch modules")
       }
     } catch (error: any) {
       toast({
         title: "Error",
         description: "Failed to load modules. Please try again.",
         variant: "destructive",
-      });
-      console.error("Error fetching modules:", error);
+      })
+      console.error("Error fetching modules:", error)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   useEffect(() => {
     if (organizationId) {
-      fetchModules();
+      fetchModules()
     }
-  }, [organizationId]);
+  }, [organizationId])
 
   const buildParentOptions = (moduleList: FormModule[]) => {
-    const flattenModules = (
-      modules: FormModule[],
-      level = 0
-    ): ParentModuleOption[] => {
-      const options: ParentModuleOption[] = [];
+    const flattenModules = (modules: FormModule[], level = 0): ParentModuleOption[] => {
+      const options: ParentModuleOption[] = []
       modules.forEach((module) => {
-        options.push({ id: module.id, name: module.name, level });
+        options.push({ id: module.id, name: module.name, level })
         if (module.children && module.children.length > 0) {
-          options.push(...flattenModules(module.children, level + 1));
+          options.push(...flattenModules(module.children, level + 1))
         }
-      });
-      return options;
-    };
-    setAvailableParents(flattenModules(moduleList));
-  };
+      })
+      return options
+    }
+    setAvailableParents(flattenModules(moduleList))
+  }
 
   const fetchAllModuleRecords = async () => {
-    if (!selectedModule) return;
+    if (!selectedModule) return
 
     try {
-      setRecordsLoading(true);
-      const moduleForms = selectedModule.forms || [];
-      setAllModuleForms(moduleForms);
+      setRecordsLoading(true)
+      const moduleForms = selectedModule.forms || []
+      setAllModuleForms(moduleForms)
 
-      const allFieldsWithSections: FormFieldWithSection[] = [];
-      const allRecords: FormRecord[] = [];
+      const allFieldsWithSections: FormFieldWithSection[] = []
+      const allRecords: FormRecord[] = []
 
       for (const form of moduleForms) {
-        const formResponse = await fetch(`/api/forms/${form.id}`);
-        const formData = await formResponse.json();
+        const formResponse = await fetch(`/api/forms/${form.id}`)
+        const formData = await formResponse.json()
 
         if (formData.success && formData.data) {
-          const formDetail = formData.data;
+          const formDetail = formData.data
 
           if (formDetail.sections) {
-            let fieldOrder = 0;
+            let fieldOrder = 0
             formDetail.sections.forEach((section: any) => {
               if (section.fields) {
                 section.fields.forEach((field: any) => {
-                  const uniqueFieldId = `${form.id}_${field.id}`;
+                  const uniqueFieldId = `${form.id}_${field.id}`
                   allFieldsWithSections.push({
                     ...field,
                     id: uniqueFieldId,
@@ -1128,72 +833,66 @@ export default function HomePage() {
                     sectionId: section.id,
                     formId: form.id,
                     formName: form.name,
-                  });
-                });
+                  })
+                })
               }
-            });
+            })
           }
 
-          const recordsResponse = await fetch(`/api/forms/${form.id}/records`);
-          const recordsData = await recordsResponse.json();
+          const recordsResponse = await fetch(`/api/forms/${form.id}/records`)
+          const recordsData = await recordsResponse.json()
 
           if (recordsData.success && recordsData.records) {
-            const formRecords = (recordsData.records || []).map(
-              (record: FormRecord) => ({
-                ...record,
-                formName: form.name,
-              })
-            );
-            allRecords.push(...formRecords);
-            console.log(
-              `Fetched ${formRecords.length} records for form ${form.name}`
-            );
+            const formRecords = (recordsData.records || []).map((record: FormRecord) => ({
+              ...record,
+              formName: form.name,
+            }))
+            allRecords.push(...formRecords)
+            console.log(`Fetched ${formRecords.length} records for form ${form.name}`)
           } else {
-            console.warn(`No records found for form ${form.id}`);
+            console.warn(`No records found for form ${form.id}`)
           }
         } else {
-          console.warn(`Failed to fetch form details for ${form.id}`);
+          console.warn(`Failed to fetch form details for ${form.id}`)
         }
       }
 
-      const uniqueFieldsMap = new Map<string, FormFieldWithSection>();
+      const uniqueFieldsMap = new Map<string, FormFieldWithSection>()
       allFieldsWithSections.forEach((field) => {
-        const key = `${field.label}_${field.type}`;
+        const key = `${field.label}_${field.type}`
         if (!uniqueFieldsMap.has(key)) {
-          uniqueFieldsMap.set(key, field);
+          uniqueFieldsMap.set(key, field)
         }
-      });
+      })
 
-      const uniqueFields = Array.from(uniqueFieldsMap.values());
-      setFormFieldsWithSections(uniqueFields);
-      console.log("Processed fields:", uniqueFields);
+      const uniqueFields = Array.from(uniqueFieldsMap.values())
+      setFormFieldsWithSections(uniqueFields)
+      console.log("Processed fields:", uniqueFields)
 
-      const processedRecords = allRecords.map((record: FormRecord) =>
-        processRecordData(record, uniqueFields)
-      );
-      console.log("Processed records:", processedRecords);
-      setFormRecords(processedRecords);
+      const processedRecords = allRecords.map((record: FormRecord) => processRecordData(record, uniqueFields))
+      console.log("Processed records:", processedRecords)
+      setFormRecords(processedRecords)
 
       if (processedRecords.length === 0) {
         toast({
           title: "No Data",
           description: "No records found for the selected module.",
-          variant: "default", // Changed from "warning" to "default"
-        });
+          variant: "default",
+        })
       }
     } catch (error: any) {
-      console.error("Error fetching module records:", error);
-      setFormRecords([]);
-      setFormFieldsWithSections([]);
+      console.error("Error fetching module records:", error)
+      setFormRecords([])
+      setFormFieldsWithSections([])
       toast({
         title: "Error",
         description: "Failed to load records. Please try again.",
         variant: "destructive",
-      });
+      })
     } finally {
-      setRecordsLoading(false);
+      setRecordsLoading(false)
     }
-  };
+  }
 
   const handleCreateModule = async () => {
     if (!moduleData.name.trim()) {
@@ -1201,45 +900,46 @@ export default function HomePage() {
         title: "Validation Error",
         description: "Module name is required.",
         variant: "destructive",
-      });
-      return;
+      })
+      return
     }
     try {
-      setIsSubmitting(true);
+      setIsSubmitting(true)
       const createData = {
         name: moduleData.name,
         description: moduleData.description,
         parentId: moduleData.parentId || undefined,
-      };
+        organizationId,
+      }
       const response = await fetch("/api/modules", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(createData),
-      });
-      const data = await response.json();
+      })
+      const data = await response.json()
       if (data.success) {
-        await fetchModules();
-        setIsCreateDialogOpen(false);
-        setIsSubmoduleDialogOpen(false);
-        setModuleData({ name: "", description: "", parentId: "" });
-        setParentModuleForSubmodule(null);
+        await fetchModules()
+        setIsCreateDialogOpen(false)
+        setIsSubmoduleDialogOpen(false)
+        setModuleData({ name: "", description: "", parentId: "" })
+        setParentModuleForSubmodule(null)
         toast({
           title: "Success",
           description: "Module created successfully!",
-        });
+        })
       } else {
-        throw new Error(data.error || "Failed to create module");
+        throw new Error(data.error || "Failed to create module")
       }
     } catch (error: any) {
       toast({
         title: "Error",
         description: error.message || "Failed to create module.",
         variant: "destructive",
-      });
+      })
     } finally {
-      setIsSubmitting(false);
+      setIsSubmitting(false)
     }
-  };
+  }
 
   const handleEditModule = async () => {
     if (!editingModule || !moduleData.name.trim()) {
@@ -1247,75 +947,76 @@ export default function HomePage() {
         title: "Validation Error",
         description: "Module name is required.",
         variant: "destructive",
-      });
-      return;
+      })
+      return
     }
     try {
-      setIsSubmitting(true);
+      setIsSubmitting(true)
       const updateData = {
         name: moduleData.name,
         description: moduleData.description,
         parentId: moduleData.parentId || undefined,
-      };
+        organizationId,
+      }
       const response = await fetch(`/api/modules/${editingModule.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updateData),
-      });
-      const data = await response.json();
+      })
+      const data = await response.json()
       if (data.success) {
-        await fetchModules();
-        setIsEditDialogOpen(false);
-        setEditingModule(null);
-        setModuleData({ name: "", description: "", parentId: "" });
+        await fetchModules()
+        setIsEditDialogOpen(false)
+        setEditingModule(null)
+        setModuleData({ name: "", description: "", parentId: "" })
         toast({
           title: "Success",
           description: "Module updated successfully!",
-        });
+        })
       } else {
-        throw new Error(data.error || "Failed to update module");
+        throw new Error(data.error || "Failed to update module")
       }
     } catch (error: any) {
       toast({
         title: "Error",
         description: error.message || "Failed to update module.",
         variant: "destructive",
-      });
+      })
     } finally {
-      setIsSubmitting(false);
+      setIsSubmitting(false)
     }
-  };
+  }
 
   const handleDeleteModule = async (moduleId: string) => {
     if (!confirm("Are you sure you want to delete this module?")) {
-      return;
+      return
     }
     try {
       const response = await fetch(`/api/modules/${moduleId}`, {
         method: "DELETE",
-      });
-      const data = await response.json();
+      })
+      const data = await response.json()
       if (data.success) {
-        await fetchModules();
+        await fetchModules()
         if (selectedModule?.id === moduleId) {
-          setSelectedModule(null);
-          setSelectedForm(null);
+          setSelectedModule(null)
+          setSelectedForm(null)
         }
         toast({
           title: "Success",
           description: "Module deleted successfully!",
-        });
+        })
       } else {
-        throw new Error(data.error || "Failed to delete module");
+        throw new Error(data.error || "Failed to delete module")
       }
     } catch (error: any) {
       toast({
         title: "Error",
         description: error.message || "Failed to delete module.",
         variant: "destructive",
-      });
+      })
     }
-  };
+  }
 
   const handlePublishForm = async (form: Form) => {
     try {
@@ -1323,236 +1024,210 @@ export default function HomePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isPublished: !form.isPublished }),
-      });
-      const data = await response.json();
+      })
+      const data = await response.json()
       if (data.success) {
-        await fetchModules();
+        await fetchModules()
         toast({
           title: "Success",
-          description: `Form ${form.isPublished ? "unpublished" : "published"
-            } successfully!`,
-        });
+          description: `Form ${form.isPublished ? "unpublished" : "published"} successfully!`,
+        })
       } else {
-        throw new Error(data.error || "Failed to publish form");
+        throw new Error(data.error || "Failed to publish form")
       }
     } catch (error: any) {
       toast({
         title: "Error",
         description: error.message || "Failed to publish form.",
         variant: "destructive",
-      });
+      })
     }
-  };
+  }
 
   const copyFormLink = (formId: string) => {
-    const link = `${window.location.origin}/form/${formId}`;
-    navigator.clipboard.writeText(link);
+    const link = `${window.location.origin}/form/${formId}`
+    navigator.clipboard.writeText(link)
     toast({
       title: "Success",
       description: "Form link copied to clipboard!",
-    });
-  };
+    })
+  }
 
   const openEditDialog = (module: FormModule) => {
-    setEditingModule(module);
+    setEditingModule(module)
     setModuleData({
       name: module.name,
       description: module.description || "",
       parentId: module.parentId || "",
-    });
-    setIsEditDialogOpen(true);
-  };
+    })
+    setIsEditDialogOpen(true)
+  }
 
   const openSubmoduleDialog = (module: FormModule) => {
-    setParentModuleForSubmodule(module);
+    setParentModuleForSubmodule(module)
     setModuleData({
       name: "",
       description: "",
       parentId: module.id,
-    });
-    setIsSubmoduleDialogOpen(true);
-  };
+    })
+    setIsSubmoduleDialogOpen(true)
+  }
 
   useEffect(() => {
-    fetchModules();
-  }, []);
+    fetchModules()
+  }, [])
 
   useEffect(() => {
     if (selectedModule) {
-      fetchAllModuleRecords();
+      fetchAllModuleRecords()
     }
-  }, [selectedModule]);
+  }, [selectedModule])
 
   useEffect(() => {
     if (mergeMode === "horizontal") {
-      const merged = mergeRecordsHorizontally(formRecords);
-      setMergedRecords(merged);
+      const merged = mergeRecordsHorizontally(formRecords)
+      setMergedRecords(merged)
     } else {
-      setMergedRecords(formRecords);
+      setMergedRecords(formRecords)
     }
-  }, [formRecords, mergeMode]);
+  }, [formRecords, mergeMode])
 
   useEffect(() => {
-    let updatedModules = [...modules];
+    let updatedModules = [...modules]
 
     if (searchQuery) {
       const filterModules = (modules: FormModule[]): FormModule[] => {
         return modules
-          .filter((module) =>
-            module.name.toLowerCase().includes(searchQuery.toLowerCase())
-          )
+          .filter((module) => module.name.toLowerCase().includes(searchQuery.toLowerCase()))
           .map((module) => ({
             ...module,
             children: module.children ? filterModules(module.children) : [],
           }))
           .filter(
-            (module) =>
-              module.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-              module.children?.length > 0
-          );
-      };
-      updatedModules = filterModules(modules);
+            (module) => module.name.toLowerCase().includes(searchQuery.toLowerCase()) || module.children?.length > 0,
+          )
+      }
+      updatedModules = filterModules(modules)
     }
 
     const sortModules = (modules: FormModule[]): FormModule[] => {
       const sorted = [...modules].sort((a, b) => {
-        return sortOrder === "asc"
-          ? a.name.localeCompare(b.name)
-          : b.name.localeCompare(a.name);
-      });
+        return sortOrder === "asc" ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name)
+      })
       return sorted.map((module) => ({
         ...module,
         children: module.children ? sortModules(module.children) : [],
-      }));
-    };
-    setFilteredModules(sortModules(updatedModules));
-  }, [modules, searchQuery, sortOrder]);
+      }))
+    }
+    setFilteredModules(sortModules(updatedModules))
+  }, [modules, searchQuery, sortOrder])
 
   useEffect(() => {
-    let filtered = [...mergedRecords];
+    let filtered = [...mergedRecords]
 
     if (selectedFormFilter !== "all") {
-      filtered = filtered.filter(
-        (record) => record.formId === selectedFormFilter
-      );
+      filtered = filtered.filter((record) => record.formId === selectedFormFilter)
     }
 
     if (recordSearchQuery) {
       filtered = filtered.filter((record) => {
         return (
           record.processedData.some((field) =>
-            field.displayValue
-              .toLowerCase()
-              .includes(recordSearchQuery.toLowerCase())
+            field.displayValue.toLowerCase().includes(recordSearchQuery.toLowerCase()),
           ) ||
           record.id.toLowerCase().includes(recordSearchQuery.toLowerCase()) ||
-          (record.formName &&
-            record.formName
-              .toLowerCase()
-              .includes(recordSearchQuery.toLowerCase()))
-        );
-      });
+          (record.formName && record.formName.toLowerCase().includes(recordSearchQuery.toLowerCase()))
+        )
+      })
     }
 
     if (recordSortField) {
       filtered.sort((a, b) => {
-        let aValue = "";
-        let bValue = "";
+        let aValue = ""
+        let bValue = ""
         if (recordSortField === "submittedAt") {
-          aValue = a.submittedAt;
-          bValue = b.submittedAt;
+          aValue = a.submittedAt
+          bValue = b.submittedAt
         } else if (recordSortField === "status") {
-          aValue = a.status || "";
-          bValue = b.status || "";
+          aValue = a.status || ""
+          bValue = b.status || ""
         } else if (recordSortField === "formName") {
-          aValue = a.formName || "";
-          bValue = b.formName || "";
+          aValue = a.formName || ""
+          bValue = b.formName || ""
         } else {
-          const aField = a.processedData.find(
-            (f) => f.fieldId === recordSortField
-          );
-          const bField = b.processedData.find(
-            (f) => f.fieldId === recordSortField
-          );
-          aValue = aField?.displayValue || "";
-          bValue = bField?.displayValue || "";
+          const aField = a.processedData.find((f) => f.fieldId === recordSortField)
+          const bField = b.processedData.find((f) => f.fieldId === recordSortField)
+          aValue = aField?.displayValue || ""
+          bValue = bField?.displayValue || ""
         }
-        const comparison = aValue.localeCompare(bValue);
-        return recordSortOrder === "asc" ? comparison : -comparison;
-      });
+        const comparison = aValue.localeCompare(bValue)
+        return recordSortOrder === "asc" ? comparison : -comparison
+      })
     }
-    setFilteredRecords(filtered);
-    setCurrentPage(1);
-  }, [
-    mergedRecords,
-    recordSearchQuery,
-    recordSortField,
-    recordSortOrder,
-    selectedFormFilter,
-  ]);
+    setFilteredRecords(filtered)
+    setCurrentPage(1)
+  }, [mergedRecords, recordSearchQuery, recordSortField, recordSortOrder, selectedFormFilter])
 
   useEffect(() => {
     return () => {
       if (clickTimeout) {
-        clearTimeout(clickTimeout);
+        clearTimeout(clickTimeout)
       }
-    };
-  }, [clickTimeout]);
+    }
+  }, [clickTimeout])
 
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-gray-600" />
       </div>
-    );
+    )
   }
 
   return (
     <div className="h-screen bg-gray-100 flex flex-col">
       <div className="bg-white shadow-md border-b border-gray-200 flex-shrink-0">
-        <div className="container mx-auto px-4 py-4">
+        <div className="container mx-auto px-4 py-1">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-xl font-bold text-gray-800">ERP System</h1>
-              <p className="text-sm text-gray-600">
-                Manage your forms and modules
-              </p>
+              <h1 className="text-[1rem] font-bold text-gray-800">ERP System</h1>
+              <p className="text-xs text-gray-600">Manage your forms and modules</p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 ">
               <Tabs
                 value={viewMode}
                 onValueChange={(value) => setViewMode(value as any)}
-                className="bg-gray-50 rounded-lg p-1"
+                className="bg-gray-50 rounded-lg px-1 h-8 flex items-center"
               >
-                <TabsList className="bg-transparent">
+                <TabsList className="bg-transparent h-6">
                   <TabsTrigger
                     value="excel"
-                    className="flex items-center gap-1 text-xs data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-md"
+                    className="flex items-center gap-1 text-xs data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-md h-6"
                   >
-                    <FileSpreadsheet className="h-4 w-4" /> Excel
+                    <FileSpreadsheet className="h-3 w-3" /> Excel
                   </TabsTrigger>
                   <TabsTrigger
                     value="table"
-                    className="flex items-center gap-1 text-xs data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-md"
+                    className="flex items-center gap-1 text-xs data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-md h-6"
                   >
-                    <Table className="h-4 w-4" /> Table
+                    <Table className="h-3 w-3" /> Table
                   </TabsTrigger>
                   <TabsTrigger
                     value="grid"
-                    className="flex items-center gap-1 text-xs data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-md"
+                    className="flex items-center gap-1 text-xs data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-md h-6"
                   >
-                    <Grid className="h-4 w-4" /> Grid
+                    <Grid className="h-3 w-3" /> Grid
                   </TabsTrigger>
                   <TabsTrigger
                     value="list"
-                    className="flex items-center gap-1 text-xs data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-md"
+                    className="flex items-center gap-1 text-xs data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-md h-6"
                   >
-                    <List className="h-4 w-4" /> List
+                    <List className="h-3 w-3" /> List
                   </TabsTrigger>
                 </TabsList>
               </Tabs>
               <Button
-                className="bg-blue-600 hover:bg-blue-700 text-white"
+                className="bg-blue-600 hover:bg-blue-700 text-white h-8"
                 onClick={() => setIsCreateDialogOpen(true)}
               >
                 <Plus className="mr-2 h-4 w-4" /> New Module
@@ -1575,24 +1250,20 @@ export default function HomePage() {
           openEditDialog={openEditDialog}
         />
         <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="p-6 flex-1 overflow-y-auto">
+          <div className="py-3 px-6 flex-1 overflow-y-auto">
             {selectedModule ? (
-              <div className="space-y-6">
+              <div className="space-y-3">
                 <div className="flex justify-between items-center">
                   <div>
-                    <h2 className="text-xl font-bold text-gray-800">
-                      {selectedModule.name}
-                    </h2>
-                    <p className="text-sm text-gray-600">
-                      {selectedModule.description || "No description"}
-                    </p>
+                    <h2 className="text-lg font-bold text-gray-800 ">{selectedModule.name}</h2>
+                    <p className="text-xs text-gray-600">{selectedModule.description || "No description"}</p>
                   </div>
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => openSubmoduleDialog(selectedModule)}
-                      className="border-gray-300 text-gray-700 hover:bg-gray-100"
+                      className="border-gray-300 text-gray-700 hover:bg-gray-100 h-8"
                     >
                       <FolderPlus className="h-4 w-4 mr-2" /> Add Submodule
                     </Button>
@@ -1600,7 +1271,7 @@ export default function HomePage() {
                       variant="outline"
                       size="sm"
                       onClick={() => openEditDialog(selectedModule)}
-                      className="border-gray-300 text-gray-700 hover:bg-gray-100"
+                      className="border-gray-300 text-gray-700 hover:bg-gray-100 h-8"
                     >
                       <Edit className="h-4 w-4 mr-2" /> Edit
                     </Button>
@@ -1608,15 +1279,12 @@ export default function HomePage() {
                       variant="outline"
                       size="sm"
                       onClick={() => handleDeleteModule(selectedModule.id)}
-                      className="border-gray-300 text-gray-700 hover:bg-gray-100"
+                      className="border-gray-300 text-gray-700 hover:bg-gray-100 h-8"
                     >
                       <Trash2 className="h-4 w-4 mr-2" /> Delete
                     </Button>
                     <NextLink href={`/modules/${selectedModule.id}`}>
-                      <Button
-                        size="sm"
-                        className="bg-blue-600 hover:bg-blue-700 text-white"
-                      >
+                      <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white h-8">
                         <Settings className="h-4 w-4 mr-2" />
                         Manage
                       </Button>
@@ -1653,8 +1321,10 @@ export default function HomePage() {
                   setSelectedRecords={setSelectedRecords}
                   setRecordSortField={setRecordSortField}
                   setRecordSortOrder={setRecordSortOrder}
+                  setEditingCell={setEditingCell}
+                  setPendingChanges={setPendingChanges}
+                  setFormRecords={setFormRecords}
                   getFieldIcon={getFieldIcon}
-                  renderEditableCell={renderEditableCell}
                   getEditModeInfo={getEditModeInfo}
                   toggleEditMode={toggleEditMode}
                   saveAllPendingChanges={saveAllPendingChanges}
@@ -1675,7 +1345,7 @@ export default function HomePage() {
             <DialogTitle>Create Module</DialogTitle>
             <DialogDescription>Create a new module</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-2">
             <div>
               <Label htmlFor="name" className="text-gray-700">
                 Name
@@ -1683,11 +1353,9 @@ export default function HomePage() {
               <Input
                 id="name"
                 value={moduleData.name}
-                onChange={(e) =>
-                  setModuleData({ ...moduleData, name: e.target.value })
-                }
+                onChange={(e) => setModuleData({ ...moduleData, name: e.target.value })}
                 placeholder="Module name"
-                className="border-gray-300 focus:ring-blue-500"
+                className="border-gray-300 focus:ring-blue-500 h-8"
               />
             </div>
             <div>
@@ -1697,9 +1365,7 @@ export default function HomePage() {
               <Textarea
                 id="description"
                 value={moduleData.description}
-                onChange={(e) =>
-                  setModuleData({ ...moduleData, description: e.target.value })
-                }
+                onChange={(e) => setModuleData({ ...moduleData, description: e.target.value })}
                 placeholder="Module description"
                 rows={3}
                 className="border-gray-300 focus:ring-blue-500"
@@ -1712,10 +1378,8 @@ export default function HomePage() {
               <select
                 id="parentId"
                 value={moduleData.parentId}
-                onChange={(e) =>
-                  setModuleData({ ...moduleData, parentId: e.target.value })
-                }
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                onChange={(e) => setModuleData({ ...moduleData, parentId: e.target.value })}
+                className="w-full px-2 py-1 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 h-8 text-sm"
               >
                 <option value="">No Parent (Top-level)</option>
                 {availableParents.map((parent) => (
@@ -1739,9 +1403,7 @@ export default function HomePage() {
               disabled={isSubmitting}
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
-              {isSubmitting ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : null}
+              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Create
             </Button>
           </DialogFooter>
@@ -1753,7 +1415,7 @@ export default function HomePage() {
             <DialogTitle>Edit Module</DialogTitle>
             <DialogDescription>Update module details</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-2">
             <div>
               <Label htmlFor="edit-name" className="text-gray-700">
                 Name
@@ -1761,11 +1423,9 @@ export default function HomePage() {
               <Input
                 id="edit-name"
                 value={moduleData.name}
-                onChange={(e) =>
-                  setModuleData({ ...moduleData, name: e.target.value })
-                }
+                onChange={(e) => setModuleData({ ...moduleData, name: e.target.value })}
                 placeholder="Module name"
-                className="border-gray-300 focus:ring-blue-500"
+                className="border-gray-300 focus:ring-blue-500 h-8"
               />
             </div>
             <div>
@@ -1775,9 +1435,7 @@ export default function HomePage() {
               <Textarea
                 id="edit-description"
                 value={moduleData.description}
-                onChange={(e) =>
-                  setModuleData({ ...moduleData, description: e.target.value })
-                }
+                onChange={(e) => setModuleData({ ...moduleData, description: e.target.value })}
                 placeholder="Module description"
                 rows={3}
                 className="border-gray-300 focus:ring-blue-500"
@@ -1790,10 +1448,8 @@ export default function HomePage() {
               <select
                 id="edit-parentId"
                 value={moduleData.parentId}
-                onChange={(e) =>
-                  setModuleData({ ...moduleData, parentId: e.target.value })
-                }
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                onChange={(e) => setModuleData({ ...moduleData, parentId: e.target.value })}
+                className="w-full py-1 px-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 h-8 text-sm"
               >
                 <option value="">No Parent (Top-level)</option>
                 {availableParents
@@ -1819,26 +1475,19 @@ export default function HomePage() {
               disabled={isSubmitting}
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
-              {isSubmitting ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : null}
+              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Update
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <Dialog
-        open={isSubmoduleDialogOpen}
-        onOpenChange={setIsSubmoduleDialogOpen}
-      >
+      <Dialog open={isSubmoduleDialogOpen} onOpenChange={setIsSubmoduleDialogOpen}>
         <DialogContent className="bg-white rounded-lg">
           <DialogHeader>
             <DialogTitle>Create Submodule</DialogTitle>
-            <DialogDescription>
-              Add a new submodule under {parentModuleForSubmodule?.name}
-            </DialogDescription>
+            <DialogDescription>Add a new submodule under {parentModuleForSubmodule?.name}</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-2">
             <div>
               <Label htmlFor="submodule-name" className="text-gray-700">
                 Name
@@ -1846,11 +1495,9 @@ export default function HomePage() {
               <Input
                 id="submodule-name"
                 value={moduleData.name}
-                onChange={(e) =>
-                  setModuleData({ ...moduleData, name: e.target.value })
-                }
+                onChange={(e) => setModuleData({ ...moduleData, name: e.target.value })}
                 placeholder="Submodule name"
-                className="border-gray-300 focus:ring-blue-500"
+                className="border-gray-300 focus:ring-blue-500 h-8"
               />
             </div>
             <div>
@@ -1860,9 +1507,7 @@ export default function HomePage() {
               <Textarea
                 id="submodule-description"
                 value={moduleData.description}
-                onChange={(e) =>
-                  setModuleData({ ...moduleData, description: e.target.value })
-                }
+                onChange={(e) => setModuleData({ ...moduleData, description: e.target.value })}
                 placeholder="Submodule description"
                 rows={3}
                 className="border-gray-300 focus:ring-blue-500"
@@ -1873,8 +1518,8 @@ export default function HomePage() {
             <Button
               variant="outline"
               onClick={() => {
-                setIsSubmoduleDialogOpen(false);
-                setParentModuleForSubmodule(null);
+                setIsSubmoduleDialogOpen(false)
+                setParentModuleForSubmodule(null)
               }}
               className="border-gray-300 text-gray-700"
             >
@@ -1885,19 +1530,13 @@ export default function HomePage() {
               disabled={isSubmitting}
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
-              {isSubmitting ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : null}
+              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Create Submodule
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <PublicFormDialog
-        formId={selectedFormForFilling}
-        isOpen={isFormDialogOpen}
-        onClose={closeFormDialog}
-      />
+      <PublicFormDialog formId={selectedFormForFilling} isOpen={isFormDialogOpen} onClose={closeFormDialog} />
     </div>
-  );
+  )
 }

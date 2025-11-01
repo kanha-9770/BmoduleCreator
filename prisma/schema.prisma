@@ -251,8 +251,9 @@ model RolePermission {
   inheritedFrom String?     @map("inherited_from")
   createdAt     DateTime    @default(now()) @map("created_at")
   updatedAt     DateTime    @updatedAt @map("updated_at")
-
-  @@unique([roleId, permissionId, moduleId])
+formId     String? @map("form_id")
+  form       Form?   @relation(fields: [formId], references: [id], onDelete: Cascade)
+  @@unique([roleId, permissionId, moduleId,formId])
   @@index([roleId])
   @@index([permissionId])
   @@index([moduleId])
@@ -408,7 +409,8 @@ model Form {
   lookupSources     LookupSource[]
   createdAt         DateTime          @default(now()) @map("created_at")
   updatedAt         DateTime          @updatedAt @map("updated_at")
-
+rolePermissions  RolePermission[]
+  userPermissions  UserPermission[]
   @@index([moduleId])
   @@index([isPublished])
   @@index([isUserForm])
@@ -999,8 +1001,9 @@ model UserPermission {
   role          String?
   createdAt     DateTime    @default(now()) @map("created_at")
   updatedAt     DateTime    @updatedAt @map("updated_at")
-
-  @@unique([userId, permissionId, moduleId], name: "unique_user_permission")
+formId     String? @map("form_id")
+  form       Form?   @relation(fields: [formId], references: [id], onDelete: Cascade)
+  @@unique([userId, permissionId, moduleId,formId], name: "unique_user_permission")
   @@unique([userId, resourceType, resourceId], name: "unique_user_resource_permission")
   @@index([userId])
   @@index([permissionId])

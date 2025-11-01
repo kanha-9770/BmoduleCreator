@@ -465,9 +465,9 @@ export default function SectionComponent({
           : "hover:shadow-lg border-gray-200"
           }`}
       >
-        <CardHeader className="pb-3">
+        <CardHeader className="">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 flex-1 pr-4">
+            <div className="flex items-center gap-2 flex-1 pr-4 ">
               {!isEditingTitle && (
                 <div
                   {...attributes}
@@ -481,7 +481,7 @@ export default function SectionComponent({
                 </div>
               )}
               <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2">
                   {isEditingTitle ? (
                     <div className="flex items-center gap-2 flex-1">
                       <Input
@@ -521,14 +521,21 @@ export default function SectionComponent({
                     </div>
                   ) : (
                     <div className="flex items-center justify-between flex-1">
-                      <h3
-                        className="text-lg font-semibold cursor-pointer hover:text-blue-600 transition-colors duration-200 px-2 py-1 rounded hover:bg-blue-50 flex items-center gap-1"
-                        onClick={handleTitleClick}
-                        title="Click to edit title"
-                      >
-                        {section.title}
-                        <Edit3 className="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity" />
-                      </h3>
+                      <div>
+                        <h3
+                          className="text-lg font-semibold cursor-pointer hover:text-blue-600 transition-colors duration-200 px-2 py-1 rounded hover:bg-blue-50 flex items-center gap-1"
+                          onClick={handleTitleClick}
+                          title="Click to edit title"
+                        >
+                          {section.title}
+                          <Edit3 className="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity" />
+                        </h3>
+                        {section.description && !isEditingTitle && (
+                          <p className="text-sm text-gray-600 ml-2">
+                            {section.description}
+                          </p>
+                        )}
+                      </div>
                       <div className="flex items-center space-x-6">
                         <div className="flex flex-col items-center justify-center text-xs space-y-1">
                           <Badge variant="secondary">
@@ -552,11 +559,7 @@ export default function SectionComponent({
                     </div>
                   )}
                 </div>
-                {section.description && !isEditingTitle && (
-                  <p className="text-sm text-gray-600 ml-2">
-                    {section.description}
-                  </p>
-                )}
+
               </div>
             </div>
             {!isEditingTitle && (

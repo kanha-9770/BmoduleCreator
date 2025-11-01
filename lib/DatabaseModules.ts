@@ -23,7 +23,7 @@ export class DatabaseModules {
     if (!data.name || data.name.trim() === "") {
       throw new Error("Module name is required");
     }
-
+    console.log("This is organizationID dATA",data)
     if (!data.organizationId) {
       throw new Error("Organization ID is required");
     }

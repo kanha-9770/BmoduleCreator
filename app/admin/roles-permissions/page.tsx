@@ -11,7 +11,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
 import { UserRoleAssignments } from "@/components/admin/user-role-assignments";
 import { UserPermissionOverrides } from "@/components/admin/user-permission-overrides";
 import { FormsSidebar } from "@/components/admin/forms-sidebar";

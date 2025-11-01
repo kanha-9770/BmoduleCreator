@@ -6,10 +6,14 @@ import { Header } from "./header";
 export function ConditionalLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
-  // Render only children (wrapped in Providers) for the login page
-  if (pathname === "/login") {
+  // Define public/auth routes that should skip the full layout
+  const publicRoutes = ["/login", "/register", "/unautherized", "/reset-password"];
+
+  // Render only children (wrapped in Providers) for public routes
+  if (publicRoutes.includes(pathname)) {
     return <Providers>{children}</Providers>;
   }
+
   // Render full layout with sidebar and header for other pages
   return (
     <Providers>

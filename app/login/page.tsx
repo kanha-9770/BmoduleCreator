@@ -122,22 +122,22 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-4">
-      <div className="w-full max-w-md space-y-8">
+      <div className="w-full max-w-md space-y-4">
         <div className="text-center">
-          <div className="mx-auto h-12 w-12 flex items-center justify-center bg-blue-600 rounded-full mb-4">
+          <div className="mx-auto h-10 w-10 flex items-center justify-center bg-blue-600 rounded-full mb-4">
             <LogIn className="h-6 w-6 text-white" />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900">
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">
             Welcome Back
           </h1>
-          <p className="mt-2 text-gray-600">
+          <p className="text-gray-600 text-sm">
             Sign in to your account to continue
           </p>
         </div>
 
         <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-semibold">Sign In</CardTitle>
+            <CardTitle className="text-xl font-semibold">Sign In</CardTitle>
             <CardDescription>
               Enter your email and password to access your account
             </CardDescription>
@@ -146,7 +146,7 @@ export default function LoginPage() {
             <Form {...form}>
               <form
                 onSubmit={form.handleSubmit(onSubmit)}
-                className="space-y-6"
+                className="space-y-2"
               >
                 <FormField
                   control={form.control}
@@ -163,7 +163,7 @@ export default function LoginPage() {
                             {...field}
                             type="email"
                             placeholder="Enter your email address"
-                            className="pl-10 h-12 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                            className="pl-10 h-10 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
                             disabled={isLoading}
                           />
                         </div>
@@ -188,7 +188,7 @@ export default function LoginPage() {
                             {...field}
                             type={showPassword ? "text" : "password"}
                             placeholder="Enter your password"
-                            className="pl-10 pr-10 h-12 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                            className="pl-10 pr-10 h-10 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
                             disabled={isLoading}
                           />
                           <button
@@ -211,7 +211,7 @@ export default function LoginPage() {
 
                 <Button
                   type="submit"
-                  className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-medium transition-all duration-200 hover:scale-[1.02]"
+                  className="w-full h-10 bg-blue-600 hover:bg-blue-700 text-white font-medium transition-all duration-200 hover:scale-[1.02]"
                   disabled={isLoading}
                 >
                   {isLoading ? (

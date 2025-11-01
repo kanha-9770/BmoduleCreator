@@ -125,7 +125,7 @@ export default function PublishFormDialog({ form, open, onOpenChange, onFormPubl
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6">
+        <div className="space-y-2">
           {form.isPublished && form.formUrl && (
             <div className="space-y-2">
               <Label>Public URL</Label>
@@ -141,7 +141,7 @@ export default function PublishFormDialog({ form, open, onOpenChange, onFormPubl
             </div>
           )}
 
-          <div className="space-y-4">
+          <div className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <Label>Allow Anonymous Submissions</Label>

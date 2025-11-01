@@ -148,21 +148,15 @@ export function Header() {
   const avatarFallback = user?.name?.[0] || 'JD';
 
   return (
-    <header className="bg-white border-b border-gray-200 px-6 py-3">
+    <header className="bg-white border-b border-gray-200 px-6 py-1">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4 flex-1">
-          <div className="relative max-w-md flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-            <Input placeholder="Search orders, products, customers..." className="pl-10" />
+          <div className="relative max-w-md flex-1 h-8">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-8 w-3" />
+            <Input placeholder="Search orders, products, customers..." className="pl-10 h-8 outline-none " />
           </div>
         </div>
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" className="relative">
-            <Bell className="h-5 w-5" />
-            <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-              3
-            </span>
-          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-8 w-8 rounded-full" disabled={isLoading}>

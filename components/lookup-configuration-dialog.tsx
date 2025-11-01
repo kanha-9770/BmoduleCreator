@@ -290,7 +290,7 @@ export default function LookupConfigurationDialog({
   }
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Settings className="h-5 w-5" />
@@ -301,21 +301,21 @@ export default function LookupConfigurationDialog({
                 For Subform
               </Badge>
             )}
-            <Badge variant="secondary">Step {step === "source" ? "1" : step === "fields" ? "2" : "3"} of 3</Badge>
+            <Badge variant="secondary" className="h-5 w-24">Step {step === "source" ? "1" : step === "fields" ? "2" : "3"} of 3</Badge>
           </DialogTitle>
         </DialogHeader>
         <div className="flex-1 overflow-hidden">
           {/* Step 1: Source Selection */}
           {step === "source" && (
-            <div className="space-y-6">
+            <div className="space-y-4">
               <div>
-                <h3 className="text-lg font-semibold mb-2">Select Data Source</h3>
-                <p className="text-sm text-muted-foreground mb-4">
+                <h3 className="text-md font-semibold">Select Data Source</h3>
+                <p className="text-xs text-muted-foreground">
                   Choose the form, module, or built-in source for your lookup fields
                   {subformId && <span className="text-purple-600 font-medium"> (will be added to subform)</span>}
                 </p>
               </div>
-              <div className="space-y-4">
+              <div className="space-y-2">
                 <Label>Data Source</Label>
                 <Popover open={sourceOpen} onOpenChange={setSourceOpen}>
                   <PopoverTrigger asChild>
@@ -323,7 +323,7 @@ export default function LookupConfigurationDialog({
                       variant="outline"
                       role="combobox"
                       aria-expanded={sourceOpen}
-                      className="w-full justify-between h-auto p-4 bg-transparent"
+                      className="w-full justify-between h-auto py-3 px-4 bg-transparent"
                       disabled={loadingSources}
                     >
                       {selectedSource ? (
@@ -351,9 +351,9 @@ export default function LookupConfigurationDialog({
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-full p-0" align="start">
+                  <PopoverContent className="w-full p-0 h-60" align="start">
                     <Command>
-                      <CommandInput placeholder="Search data sources..." />
+                      <CommandInput className="p-0 h-8" placeholder="Search data sources..." />
                       <CommandList>
                         {loadingSources ? (
                           <CommandEmpty>
@@ -372,19 +372,13 @@ export default function LookupConfigurationDialog({
                                     key={source.id}
                                     value={source.id}
                                     onSelect={() => handleSourceSelect(source)}
-                                    className="p-3"
+                                    className=""
                                   >
-                                    <Check
-                                      className={cn(
-                                        "mr-2 h-4 w-4",
-                                        selectedSource?.id === source.id ? "opacity-100" : "opacity-0",
-                                      )}
-                                    />
                                     <div className="flex items-center gap-2 flex-1">
                                       <FileText className="h-4 w-4" />
                                       <div className="flex flex-col">
                                         <div className="flex items-center gap-2">
-                                          <span className="font-medium">{source.name}</span>
+                                          <span className="text-sm">{source.name}</span>
                                           {source.hasIdField && (
                                             <Badge variant="outline" className="text-xs">
                                               <Key className="h-3 w-3 mr-1" />
@@ -394,7 +388,7 @@ export default function LookupConfigurationDialog({
                                         </div>
                                         <span className="text-xs text-muted-foreground">{source.description}</span>
                                       </div>
-                                      <Badge variant="outline" className="ml-auto">
+                                      <Badge variant="outline" className="h-4 w-max px-2 ml-auto">
                                         {source.recordCount || 0} records
                                       </Badge>
                                     </div>
@@ -409,19 +403,13 @@ export default function LookupConfigurationDialog({
                                     key={source.id}
                                     value={source.id}
                                     onSelect={() => handleSourceSelect(source)}
-                                    className="p-3"
+                                    className=""
                                   >
-                                    <Check
-                                      className={cn(
-                                        "mr-2 h-4 w-4",
-                                        selectedSource?.id === source.id ? "opacity-100" : "opacity-0",
-                                      )}
-                                    />
                                     <div className="flex items-center gap-2 flex-1">
                                       <Database className="h-4 w-4" />
                                       <div className="flex flex-col">
                                         <div className="flex items-center gap-2">
-                                          <span className="font-medium">{source.name}</span>
+                                          <span className="">{source.name}</span>
                                           {source.hasIdField && (
                                             <Badge variant="outline" className="text-xs">
                                               <Key className="h-3 w-3 mr-1" />
@@ -431,7 +419,7 @@ export default function LookupConfigurationDialog({
                                         </div>
                                         <span className="text-xs text-muted-foreground">{source.description}</span>
                                       </div>
-                                      <Badge variant="outline" className="ml-auto">
+                                      <Badge variant="outline" className="ml-auto h-4 w-max px-2">
                                         {source.recordCount || 0} records
                                       </Badge>
                                     </div>
@@ -447,19 +435,13 @@ export default function LookupConfigurationDialog({
                                     key={source.id}
                                     value={source.id}
                                     onSelect={() => handleSourceSelect(source)}
-                                    className="p-3"
+                                    className=""
                                   >
-                                    <Check
-                                      className={cn(
-                                        "mr-2 h-4 w-4",
-                                        selectedSource?.id === source.id ? "opacity-100" : "opacity-0",
-                                      )}
-                                    />
                                     <div className="flex items-center gap-2 flex-1">
                                       <Zap className="h-4 w-4" />
                                       <div className="flex flex-col">
                                         <div className="flex items-center gap-2">
-                                          <span className="font-medium">{source.name}</span>
+                                          <span className="">{source.name}</span>
                                           {source.hasIdField && (
                                             <Badge variant="outline" className="text-xs">
                                               <Key className="h-3 w-3 mr-1" />
@@ -469,7 +451,7 @@ export default function LookupConfigurationDialog({
                                         </div>
                                         <span className="text-xs text-muted-foreground">{source.description}</span>
                                       </div>
-                                      <Badge variant="outline" className="ml-auto">
+                                      <Badge variant="outline" className="ml-auto h-4 w-max px-2">
                                         {source.recordCount || 0} items
                                       </Badge>
                                     </div>
@@ -485,35 +467,31 @@ export default function LookupConfigurationDialog({
               </div>
 
               {selectedSource && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
+                <div>
+                  <div className="mb-4">
+                    <div className="flex items-center gap-2 text-sm font-normal">
                       {getSourceIcon(selectedSource.type)}
                       {selectedSource.name}
-                      <Badge variant="secondary">{getSourceTypeLabel(selectedSource.type)}</Badge>
+                      <Badge variant="secondary" className="w-max h-4 px-2 font-normal">{getSourceTypeLabel(selectedSource.type)}</Badge>
                       {selectedSource.hasIdField && (
                         <Badge variant="outline">
-                          <Key className="h-3 w-3 mr-1" />
+                          <Key className="h-3 w-max px-2 mr-1" />
                           Update Support
                         </Badge>
                       )}
-                    </CardTitle>
-                    <CardDescription>
+                    </div>
+                    <div className="text-xs pt-1 text-muted-foreground">
                       {selectedSource.description}
                       {selectedSource.hasIdField && (
                         <div className="mt-2 text-sm text-blue-600">
                           ✨ This source supports record updates using the "{selectedSource.idFieldName}" field
                         </div>
                       )}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">
-                        {selectedSource.recordCount || 0} {selectedSource.type === "static" ? "items" : "records"}{" "}
-                        available
-                      </span>
-                      <Button onClick={() => setStep("fields")} disabled={loadingFields}>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-end">
+                      <Button onClick={() => setStep("fields")} disabled={loadingFields} className="h-8">
                         {loadingFields ? (
                           <>
                             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -524,29 +502,29 @@ export default function LookupConfigurationDialog({
                         )}
                       </Button>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               )}
             </div>
           )}
 
           {/* Step 2: Field Selection */}
           {step === "fields" && selectedSource && (
-            <div className="space-y-6">
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-semibold">Select Fields</h3>
-                  <p className="text-sm text-muted-foreground">
+                  <h3 className="text-md font-semibold">Select Fields</h3>
+                  <p className="text-xs text-muted-foreground">
                     Choose which fields from {selectedSource.name} to create lookup fields for
                     {subformId && <span className="text-purple-600 font-medium"> (will be added to subform)</span>}
                   </p>
                 </div>
-                <Button variant="outline" onClick={() => setStep("source")}>
+                <Button variant="outline" onClick={() => setStep("source")} className="h-8">
                   Back to Source
                 </Button>
               </div>
 
-              <ScrollArea className="h-96 border rounded-lg p-4">
+              <ScrollArea className="h-full max-h-48 border rounded-lg p-3">
                 {sourceFields.length === 0 && loadingFields ? (
                   <div className="flex items-center justify-center h-full">
                     <Loader2 className="h-6 w-6 animate-spin" />
@@ -557,11 +535,11 @@ export default function LookupConfigurationDialog({
                     No fields available for this source
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     {sourceFields.map((field) => {
                       const isSelected = selectedFields.some((f) => f.fieldName === field.name)
                       return (
-                        <div key={field.name} className="flex items-center space-x-3 p-3 border rounded-lg">
+                        <div key={field.name} className="flex items-center space-x-3 p-2 border rounded-lg">
                           <Checkbox
                             id={field.name}
                             checked={isSelected}
@@ -571,9 +549,9 @@ export default function LookupConfigurationDialog({
                             <Label htmlFor={field.name} className="font-medium cursor-pointer">
                               {field.label}
                             </Label>
-                            <p className="text-sm text-muted-foreground">{field.description}</p>
+                            <p className="text-xs text-muted-foreground">{field.description}</p>
                           </div>
-                          <Badge variant="outline">{field.type}</Badge>
+                          <p className="border rounded-md px-4 text-sm">{field.type}</p>
                         </div>
                       )
                     })}
@@ -582,94 +560,86 @@ export default function LookupConfigurationDialog({
               </ScrollArea>
 
               {selectedFields.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <CheckSquare className="h-4 w-4" />
+                <div>
+                  <div>
+                    <div className="flex items-center gap-2 text-sm p-4">
+                      <CheckSquare className="h-4 w-4 text-sm" />
                       Selected Fields ({selectedFields.length})
                       {subformId && (
-                        <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-300">
+                        <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-300 h-4 w-40">
                           <Layers className="h-3 w-3 mr-1" />
                           For Subform
                         </Badge>
                       )}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      {selectedFields.map((field) => (
-                        <Badge key={field.fieldName} variant="secondary">
-                          {field.label}
-                        </Badge>
-                      ))}
+                      <div className="flex flex-wrap gap-2">
+                        {selectedFields.map((field) => (
+                          <Badge key={field.fieldName} variant="secondary" className="h-4 w-max px-4">
+                            {field.label}
+                          </Badge>
+                        ))}
+                      </div>
                     </div>
-                    <Button onClick={() => setStep("configure")} className="w-full">
+                  </div>
+                  <div className="flex justify-end w-full">
+                    <Button onClick={() => setStep("configure")} className="w-max h-8">
                       Configure Selected Fields
                     </Button>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               )}
             </div>
           )}
 
           {/* Step 3: Field Configuration */}
           {step === "configure" && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold">Configure Lookup Fields</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Fine-tune the configuration for each lookup field
-                    {subformId && <span className="text-purple-600 font-medium"> (will be added to subform)</span>}
-                  </p>
-                </div>
-                <Button variant="outline" onClick={() => setStep("fields")}>
-                  Back to Fields
-                </Button>
-              </div>
-
-              <ScrollArea className="h-96">
-                <div className="space-y-4">
+            <div className="space-y-4">
+              <ScrollArea className="h-60">
+                <div className="space-y-2">
                   {selectedFields.map((field) => (
-                    <Card key={field.fieldName}>
-                      <CardHeader>
-                        <CardTitle className="text-base flex items-center gap-2">
-                          {field.label}
-                          {field.useIdField && (
-                            <Badge variant="outline" className="text-xs">
-                              <Key className="h-3 w-3 mr-1" />
-                              Update Mode
-                            </Badge>
-                          )}
-                          {subformId && (
-                            <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-300">
-                              <Layers className="h-3 w-3 mr-1" />
-                              Subform
-                            </Badge>
-                          )}
-                        </CardTitle>
-                        <CardDescription>Configure lookup behavior for this field</CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
+                    <div key={field.fieldName}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div>
+                          <div className="text-md flex items-center gap-2">
+                            {field.label}
+                            {field.useIdField && (
+                              <Badge variant="outline" className="text-xs h-4 w-max px-2">
+                                <Key className="h-3 w-3 mr-1" />
+                                Update Mode
+                              </Badge>
+                            )}
+                            {subformId && (
+                              <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-300">
+                                <Layers className="h-3 w-3 mr-1" />
+                                Subform
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground">Configure lookup behavior for this field</div>
+                        </div>
+                        <Button variant="outline" onClick={() => setStep("fields")} className="h-8 text-sm">
+                          Back to Fields
+                        </Button>
+                      </div>
+                      <div className="space-y-2">
                         <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
+                          <div className="space-y-1">
                             <Label>Display Field</Label>
                             <select
-                              className="w-full p-2 border rounded"
+                              className="w-full p-2 border rounded text-sm text-muted-foreground"
                               value={field.displayField}
                               onChange={(e) => updateSelectedField(field.fieldName, { displayField: e.target.value })}
                             >
                               {sourceFields.map((f) => (
-                                <option key={f.name} value={f.name}>
+                                <option key={f.name} value={f.name} >
                                   {f.label}
                                 </option>
                               ))}
                             </select>
                           </div>
-                          <div className="space-y-2">
+                          <div className="space-y-1">
                             <Label>Value Field</Label>
                             <select
-                              className="w-full p-2 border rounded"
+                              className="w-full p-2 border rounded text-sm text-muted-foreground"
                               value={field.valueField}
                               onChange={(e) => updateSelectedField(field.fieldName, { valueField: e.target.value })}
                             >
@@ -682,8 +652,8 @@ export default function LookupConfigurationDialog({
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-between">
-                          <Label>Allow Multiple Selection</Label>
+                        <div className="flex items-center justify-between pt-2">
+                          <Label className="font-normal">Allow Multiple Selection</Label>
                           <Checkbox
                             checked={field.multiple}
                             onCheckedChange={(checked) =>
@@ -693,7 +663,7 @@ export default function LookupConfigurationDialog({
                         </div>
 
                         <div className="flex items-center justify-between">
-                          <Label>Enable Search</Label>
+                          <Label className="font-normal">Enable Search</Label>
                           <Checkbox
                             checked={field.searchable}
                             onCheckedChange={(checked) =>
@@ -720,8 +690,8 @@ export default function LookupConfigurationDialog({
                             </div>
                           </div>
                         )}
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </div>
                   ))}
                 </div>
               </ScrollArea>
@@ -730,11 +700,11 @@ export default function LookupConfigurationDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} className="h-8">
             Cancel
           </Button>
           {step === "configure" && (
-            <Button onClick={handleConfirm} disabled={selectedFields.length === 0}>
+            <Button onClick={handleConfirm} disabled={selectedFields.length === 0} className="h-8">
               Create {selectedFields.length} Lookup Field{selectedFields.length !== 1 ? "s" : ""}
               {subformId ? " in Subform" : ""}
             </Button>

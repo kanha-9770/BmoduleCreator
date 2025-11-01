@@ -499,7 +499,7 @@ export default function ModulePage() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 shadow-sm">
-        <div className="container mx-auto px-6 py-6">
+        <div className="container mx-auto px-4 py-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <Link href="/">
@@ -511,20 +511,17 @@ export default function ModulePage() {
               <Separator orientation="vertical" className="h-6" />
               <div className="space-y-1">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                  <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
                     <Folder className="h-5 w-5 text-white" />
                   </div>
-                  <div>
-                    <h1 className="text-2xl font-bold text-gray-900">{module.name}</h1>
+                  <div className="flex items-center space-x-2">
+                    <h1 className="text-xl font-bold text-gray-900">{module.name}</h1>
                     <div className="flex items-center gap-2 text-sm text-gray-500">
                       {module.description && <span>{module.description}</span>}
                       {module.level > 0 && (
-                        <>
-                          <span>•</span>
-                          <Badge variant="outline" className="text-xs">
-                            Level {module.level}
-                          </Badge>
-                        </>
+                        <Badge variant="outline" className="text-xs h-5 w-full px-4">
+                          Level {module.level}
+                        </Badge>
                       )}
                     </div>
                   </div>
@@ -561,8 +558,8 @@ export default function ModulePage() {
       </div>
 
       {/* Main Content */}
-      <div className="container mx-auto px-6 py-8">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+      <div className="container mx-auto p-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:grid-cols-4">
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <BarChart3 className="h-4 w-4" />
@@ -585,7 +582,7 @@ export default function ModulePage() {
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-6">
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium text-blue-700">Total Forms</CardTitle>
@@ -638,17 +635,17 @@ export default function ModulePage() {
             </div>
 
             {/* Quick Actions & Recent Activity */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Quick Actions */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Zap className="h-5 w-5 text-yellow-500" />
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Zap className="h-4 w-4 text-yellow-500" />
                     Quick Actions
                   </CardTitle>
                   <CardDescription>Common tasks for this module</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-3">
+                <CardContent className="space-y-2">
                   <Button
                     className="w-full justify-start"
                     variant="outline"
@@ -675,17 +672,17 @@ export default function ModulePage() {
               {/* Recent Forms */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Clock className="h-5 w-5 text-blue-500" />
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Clock className="h-4 w-4 text-blue-500 " />
                     Recent Forms
                   </CardTitle>
                   <CardDescription>Latest forms in this module</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ScrollArea className="h-64">
-                    <div className="space-y-3">
+                  <ScrollArea className="h-48">
+                    <div className="space-y-2">
                       {module.forms.slice(0, 5).map((form) => (
-                        <div key={form.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div key={form.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
                               <FileText className="h-4 w-4 text-blue-600" />
@@ -699,7 +696,7 @@ export default function ModulePage() {
                           </div>
                           <div className="flex items-center gap-1">
                             {form.isPublished && (
-                              <Badge variant="default" className="text-xs">
+                              <Badge variant="default" className="text-xs h-4 w-full px-2">
                                 <Globe className="h-2 w-2 mr-1" />
                                 Live
                               </Badge>
@@ -720,7 +717,7 @@ export default function ModulePage() {
           </TabsContent>
 
           {/* Forms Tab */}
-          <TabsContent value="forms" className="space-y-6">
+          <TabsContent value="forms" className="space-y-4">
             {/* Filters and Controls */}
             <Card>
               <CardContent className="p-4">
@@ -732,7 +729,7 @@ export default function ModulePage() {
                         placeholder="Search forms..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-10"
+                        className="pl-10 h-8"
                       />
                     </div>
 
@@ -809,7 +806,7 @@ export default function ModulePage() {
 
             {/* Forms Display */}
             {filteredForms.length === 0 ? (
-              <Card className="text-center py-16">
+              <Card className="text-center">
                 <CardContent>
                   <div className="mx-auto w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-6">
                     <FileText className="h-12 w-12 text-gray-400" />
@@ -902,12 +899,12 @@ export default function ModulePage() {
                           </DropdownMenu>
                         </div>
                       </CardHeader>
-                      <CardContent className="space-y-4">
+                      <CardContent className="space-y-2">
                         {/* Status and Metrics */}
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             {form.isPublished ? (
-                              <Badge variant="default" className="bg-green-500">
+                              <Badge variant="default" className="bg-green-500 h-5 w-full px-4">
                                 <Globe className="mr-1 h-3 w-3" />
                                 Published
                               </Badge>
@@ -915,11 +912,6 @@ export default function ModulePage() {
                               <Badge variant="secondary">
                                 <Clock className="mr-1 h-3 w-3" />
                                 Draft
-                              </Badge>
-                            )}
-                            {analytics && (
-                              <Badge variant="outline" className="text-xs">
-                                {analytics.submissions} submissions
                               </Badge>
                             )}
                           </div>
@@ -1074,12 +1066,12 @@ export default function ModulePage() {
               {/* Performance Overview */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5 text-green-500" />
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <TrendingUp className="h-4 w-4 text-green-500" />
                     Performance Overview
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-2">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="text-center p-4 bg-blue-50 rounded-lg">
                       <p className="text-2xl font-bold text-blue-900">{moduleStats?.weekSubmissions || 0}</p>
@@ -1103,8 +1095,8 @@ export default function ModulePage() {
               {/* Top Performing Forms */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Award className="h-5 w-5 text-yellow-500" />
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Award className="h-4 w-4 text-yellow-500" />
                     Top Performing Forms
                   </CardTitle>
                 </CardHeader>
@@ -1145,15 +1137,15 @@ export default function ModulePage() {
           <TabsContent value="settings" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Settings className="h-5 w-5" />
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Settings className="h-4 w-4" />
                   Module Settings
                 </CardTitle>
                 <CardDescription>Configure your module preferences and permissions</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
+                  <div className="space-y-2">
                     <h4 className="font-medium">General Settings</h4>
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
@@ -1293,7 +1285,7 @@ export default function ModulePage() {
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="Enter form name"
-                className="mt-1"
+                className="mt-1 h-8"
               />
             </div>
             <div>
