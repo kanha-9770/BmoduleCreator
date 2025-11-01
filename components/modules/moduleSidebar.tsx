@@ -125,7 +125,9 @@ const ModuleSidebar: React.FC<ModuleSidebarProps> = ({
         className="border-b border-gray-200 last:border-b-0"
       >
         <AccordionTrigger
-          className={`py-2 pl-${4 + level * 2} pr-2 hover:bg-gray-100 rounded-lg transition-colors duration-200`}
+          className={`py-2 pl-${
+            4 + level * 2
+          } pr-2 hover:bg-gray-100 rounded-lg transition-colors duration-200`}
         >
           <div className="flex items-center text-left text-sm font-medium text-gray-700 h-4">
             <FileText className="h-4 w-4 text-gray-500 mr-1 min-w-max" />
@@ -214,10 +216,7 @@ const ModuleSidebar: React.FC<ModuleSidebarProps> = ({
         {/* Visual grip lines */}
         <div className="flex flex-col space-y-1 opacity-0 hover:opacity-100 transition-opacity">
           {[...Array(3)].map((_, i) => (
-            <div
-              key={i}
-              className="w-0.5 h-3 bg-gray-400 rounded-full"
-            />
+            <div key={i} className="w-0.5 h-3 bg-gray-400 rounded-full" />
           ))}
         </div>
       </div>
