@@ -150,7 +150,7 @@ model Organization {
   permissions       Permission[]
   dataSharingRules  DataSharingRule[]
   activities        Activity[]
-  formModules       FormModule[]       @relation("UserOrganization") // Add this line
+  formModules       FormModule[]       @relation("UserOrganization")
   createdAt         DateTime           @default(now()) @map("created_at")
   updatedAt         DateTime           @updatedAt @map("updated_at")
 
@@ -186,7 +186,7 @@ model OrganizationUnit {
 
 model Role {
   id                 String               @id @default(cuid())
-  name               String               
+  name               String
   description        String?
   organizationId     String               @map("organization_id")
   organization       Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -204,7 +204,7 @@ model Role {
   createdAt          DateTime             @default(now()) @map("created_at")
   updatedAt          DateTime             @updatedAt @map("updated_at")
 
-  @@unique([name, organizationId]) // Ensure unique role names per organization
+  @@unique([name, organizationId])
   @@index([organizationId])
   @@index([parentId])
   @@index([level])
@@ -246,14 +246,15 @@ model RolePermission {
   permission    Permission  @relation(fields: [permissionId], references: [id], onDelete: Cascade)
   moduleId      String?     @map("module_id")
   module        FormModule? @relation(fields: [moduleId], references: [id], onDelete: Cascade, name: "RolePermissionToFormModule")
+  formId        String?     @map("form_id")
+  form          Form?       @relation(fields: [formId], references: [id], onDelete: Cascade)
   granted       Boolean     @default(true)
   canDelegate   Boolean     @default(false) @map("can_delegate")
   inheritedFrom String?     @map("inherited_from")
   createdAt     DateTime    @default(now()) @map("created_at")
   updatedAt     DateTime    @updatedAt @map("updated_at")
-formId     String? @map("form_id")
-  form       Form?   @relation(fields: [formId], references: [id], onDelete: Cascade)
-  @@unique([roleId, permissionId, moduleId,formId])
+
+  @@unique([roleId, permissionId, moduleId, formId])
   @@index([roleId])
   @@index([permissionId])
   @@index([moduleId])
@@ -407,10 +408,11 @@ model Form {
   isEmployeeForm    Boolean?          @default(false) @map("isEmployeeForm")
   isUserForm        Boolean?          @default(false) @map("isUserForm")
   lookupSources     LookupSource[]
+  rolePermissions   RolePermission[]
+  userPermissions   UserPermission[]
   createdAt         DateTime          @default(now()) @map("created_at")
   updatedAt         DateTime          @updatedAt @map("updated_at")
-rolePermissions  RolePermission[]
-  userPermissions  UserPermission[]
+
   @@index([moduleId])
   @@index([isPublished])
   @@index([isUserForm])
@@ -520,15 +522,15 @@ model Subform {
 }
 
 model SubformRecord {
-  id        String    @id @default(cuid())
-  subformId String    @map("subform_id")
-  subform   Subform   @relation(fields: [subformId], references: [id], onDelete: Cascade)
-  data      Json      @default("{}")
+  id          String    @id @default(cuid())
+  subformId   String    @map("subform_id")
+  subform     Subform   @relation(fields: [subformId], references: [id], onDelete: Cascade)
+  data        Json      @default("{}")
   employee_id String?
-  amount    Decimal?
-  date      DateTime?
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
+  amount      Decimal?
+  date        DateTime?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
   @@index([subformId])
   @@index([employee_id])
@@ -985,6 +987,8 @@ model UserPermission {
   permission    Permission? @relation(fields: [permissionId], references: [id], onDelete: Cascade)
   moduleId      String?     @map("module_id")
   module        FormModule? @relation(fields: [moduleId], references: [id], onDelete: Cascade, name: "UserPermissionToFormModule")
+  formId        String?     @map("form_id")
+  form          Form?       @relation(fields: [formId], references: [id], onDelete: Cascade)
   resourceType  String?     @map("resource_type")
   resourceId    String?     @map("resource_id")
   granted       Boolean     @default(true)
@@ -1001,9 +1005,8 @@ model UserPermission {
   role          String?
   createdAt     DateTime    @default(now()) @map("created_at")
   updatedAt     DateTime    @updatedAt @map("updated_at")
-formId     String? @map("form_id")
-  form       Form?   @relation(fields: [formId], references: [id], onDelete: Cascade)
-  @@unique([userId, permissionId, moduleId,formId], name: "unique_user_permission")
+
+  @@unique([userId, permissionId, moduleId, formId], name: "unique_user_permission")
   @@unique([userId, resourceType, resourceId], name: "unique_user_resource_permission")
   @@index([userId])
   @@index([permissionId])
@@ -1071,20 +1074,34 @@ model Employee {
 }
 
 model Activity {
-  id             String      @id @default(cuid())
+  id             String        @id @default(cuid())
   type           String
   description    String?
   details        Json?
-  userId         String      @map("user_id")
-  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  organizationId String?     @map("organization_id")
+  userId         String        @map("user_id")
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String?       @map("organization_id")
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  ipAddress      String?     @map("ip_address")
-  createdAt      DateTime    @default(now()) @map("created_at")
+  ipAddress      String?       @map("ip_address")
+  createdAt      DateTime      @default(now()) @map("created_at")
 
   @@index([userId])
   @@index([organizationId])
   @@index([type])
   @@index([createdAt])
   @@map("activities")
+}
+
+model PayrollConfiguration {
+  id               String   @id @default(cuid())
+  attendanceFormId String   @map("attendance_form_id")
+  leaveFormId      String   @map("leave_form_id")
+  organizationId   String?  @map("organization_id")
+  isActive         Boolean  @default(true) @map("is_active")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId])
+  @@index([isActive])
+  @@map("payroll_configurations")
 }
