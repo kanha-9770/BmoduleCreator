@@ -1,117 +1,304 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { PrismaClient } from "@prisma/client"
+import { type NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { validateSession } from "@/lib/auth";
 
-const prisma = new PrismaClient()
-
-// Helper function to get records from the correct table based on form mapping
-async function getFormRecords(formId: string) {
-  // First get the table mapping for this form
-  const mapping = await prisma.formTableMapping.findUnique({
-    where: { formId },
-  })
-
-  if (!mapping) {
-    return []
-  }
-
-  const tableName = mapping.storageTable
-
-  // Map table names to Prisma model methods
-  const tableMap: Record<string, any> = {
-    form_records_1: prisma.formRecord1,
-    form_records_2: prisma.formRecord2,
-    form_records_3: prisma.formRecord3,
-    form_records_4: prisma.formRecord4,
-    form_records_5: prisma.formRecord5,
-    form_records_6: prisma.formRecord6,
-    form_records_7: prisma.formRecord7,
-    form_records_8: prisma.formRecord8,
-    form_records_9: prisma.formRecord9,
-    form_records_10: prisma.formRecord10,
-    form_records_11: prisma.formRecord11,
-    form_records_12: prisma.formRecord12,
-    form_records_13: prisma.formRecord13,
-    form_records_14: prisma.formRecord14,
-    form_records_15: prisma.formRecord15,
-  }
-
-  const model = tableMap[tableName]
-  if (!model) {
-    return []
-  }
-
-  const records = await model.findMany({
-    where: { formId },
-    orderBy: { date: "desc" },
-  })
-
-  return records
-}
-
-// GET - Fetch attendance and leave records based on configuration
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const month = searchParams.get("month")
-    const year = searchParams.get("year")
-    const employeeId = searchParams.get("employeeId")
+    const token = request.cookies.get("auth-token")?.value;
 
-    // Get active configuration
+    if (!token) {
+      return NextResponse.json(
+        { success: false, error: "Not authenticated" },
+        { status: 401 }
+      );
+    }
+
+    const session = await validateSession(token);
+
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: "Invalid session" },
+        { status: 401 }
+      );
+    }
+
+    const { searchParams } = new URL(request.url);
+    const month = Number.parseInt(searchParams.get("month") || "0");
+    const year = Number.parseInt(searchParams.get("year") || "0");
+
+    if (!month || !year) {
+      return NextResponse.json(
+        { success: false, error: "Month and year are required" },
+        { status: 400 }
+      );
+    }
+
     const config = await prisma.payrollConfiguration.findFirst({
       where: { isActive: true },
-    })
+      orderBy: { createdAt: "desc" },
+    });
 
     if (!config) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "Payroll configuration not found. Please configure attendance and leave forms first.",
+        { success: false, error: "No active payroll configuration found" },
+        { status: 404 }
+      );
+    }
+
+    const attendanceFormIds = (config.attendanceFormIds as string[]) || [];
+    const leaveFormIds = (config.leaveFormIds as string[]) || [];
+    const attendanceFieldMappings =
+      (config.attendanceFieldMappings as any) || {};
+    const leaveFieldMappings = (config.leaveFieldMappings as any) || {};
+
+    const allFormIds = [...new Set([...attendanceFormIds, ...leaveFormIds])];
+
+    if (allFormIds.length === 0) {
+      return NextResponse.json({
+        success: true,
+        data: {
+          attendance: [],
+          leave: [],
         },
-        { status: 404 },
-      )
+        config: {
+          attendanceFormIds: [],
+          leaveFormIds: [],
+          month,
+          year,
+        },
+      });
     }
 
-    // Fetch records from configured forms
-    const [attendanceRecords, leaveRecords] = await Promise.all([
-      getFormRecords(config.attendanceFormId),
-      getFormRecords(config.leaveFormId),
-    ])
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59);
 
-    // Filter by date if month/year provided
-    let filteredAttendance = attendanceRecords
-    let filteredLeave = leaveRecords
+    const forms = await prisma.form.findMany({
+      where: {
+        id: { in: allFormIds },
+      },
+      include: {
+        tableMapping: true,
+      },
+    });
 
-    if (month && year) {
-      const startDate = new Date(Number.parseInt(year), Number.parseInt(month) - 1, 1)
-      const endDate = new Date(Number.parseInt(year), Number.parseInt(month), 0)
+    const records: any[] = [];
 
-      filteredAttendance = attendanceRecords.filter((record: any) => {
-        const recordDate = new Date(record.date)
-        return recordDate >= startDate && recordDate <= endDate
-      })
+    for (const form of forms) {
+      const tableName = form.tableMapping?.storageTable;
 
-      filteredLeave = leaveRecords.filter((record: any) => {
-        const recordDate = new Date(record.date)
-        return recordDate >= startDate && recordDate <= endDate
-      })
+      if (!tableName) continue;
+
+      // Extract table number from storage_table (e.g., "form_records_1" -> 1)
+      const tableNumber = tableName.match(/\d+$/)?.[0];
+
+      if (!tableNumber) continue;
+
+      // Query the appropriate FormRecord table
+      const tablePrismaKey = `formRecord${tableNumber}` as keyof typeof prisma;
+
+      if (tablePrismaKey in prisma) {
+        const formRecords = await (prisma[tablePrismaKey] as any).findMany({
+          where: {
+            formId: form.id,
+            date: {
+              gte: startDate,
+              lte: endDate,
+            },
+          },
+        });
+
+        records.push(
+          ...formRecords.map((record: any) => ({
+            ...record,
+            formId: form.id,
+            data: record.recordData,
+          }))
+        );
+      }
     }
 
-    // Filter by employee if provided
-    if (employeeId) {
-      filteredAttendance = filteredAttendance.filter((record: any) => record.employee_id === employeeId)
-      filteredLeave = filteredLeave.filter((record: any) => record.employee_id === employeeId)
+    const transformedAttendance: any[] = [];
+    const transformedLeave: any[] = [];
+
+    for (const record of records) {
+      const data = record.data as any;
+
+      if (attendanceFormIds.includes(record.formId)) {
+        const mapping = attendanceFieldMappings[record.formId] || {};
+        transformedAttendance.push({
+          id: record.id,
+          formId: record.formId,
+          employee_id: data[mapping.employeeIdField],
+          date: data[mapping.dateField],
+          recordData: {
+            overtime: data[mapping.overtimeField],
+            checkIn: data[mapping.checkInField],
+            checkOut: data[mapping.checkOutField],
+          },
+          createdAt: record.createdAt,
+        });
+      }
+
+      if (leaveFormIds.includes(record.formId)) {
+        const mapping = leaveFieldMappings[record.formId] || {};
+        transformedLeave.push({
+          id: record.id,
+          formId: record.formId,
+          employee_id: data[mapping.employeeIdField],
+          date: data[mapping.dateField],
+          recordData: {
+            leaveType: data[mapping.typeField],
+            type: data[mapping.typeField],
+            duration: data[mapping.durationField],
+            days: data[mapping.durationField],
+            startDate: data[mapping.startDateField],
+            endDate: data[mapping.endDateField],
+          },
+          createdAt: record.createdAt,
+        });
+      }
     }
 
     return NextResponse.json({
       success: true,
       data: {
-        attendance: filteredAttendance,
-        leave: filteredLeave,
-        config,
+        attendance: transformedAttendance,
+        leave: transformedLeave,
       },
-    })
+      config: {
+        attendanceFormIds,
+        leaveFormIds,
+        month,
+        year,
+      },
+    });
   } catch (error) {
-    console.error("[v0] Error fetching payroll records:", error)
-    return NextResponse.json({ success: false, error: "Failed to fetch payroll records" }, { status: 500 })
+    console.error("[v0] Error fetching payroll records:", error);
+    return NextResponse.json(
+      { success: false, error: "Failed to fetch payroll records" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const token = request.cookies.get("auth-token")?.value;
+
+    if (!token) {
+      return NextResponse.json(
+        { success: false, error: "Not authenticated" },
+        { status: 401 }
+      );
+    }
+
+    const session = await validateSession(token);
+
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: "Invalid session" },
+        { status: 401 }
+      );
+    }
+
+    const isAdmin = session.user.unitAssignments?.some((ua) =>
+      ua.role.name.toLowerCase().includes("admin")
+    );
+
+    if (!isAdmin) {
+      return NextResponse.json(
+        { success: false, error: "Unauthorized - Admin access required" },
+        { status: 403 }
+      );
+    }
+
+    const body = await request.json();
+    const {
+      employeeId,
+      month,
+      year,
+      presentDays,
+      leaveDays,
+      grossSalary,
+      deductions,
+      status,
+    } = body;
+
+    if (!employeeId || !month || !year) {
+      return NextResponse.json(
+        { success: false, error: "Employee ID, month, and year are required" },
+        { status: 400 }
+      );
+    }
+
+    // Calculate net salary
+    const netSalary = (grossSalary || 0) - (deductions || 0);
+
+    // Check if record exists
+    const existingRecord = await prisma.payrollRecord.findUnique({
+      where: {
+        employeeId_month_year: {
+          employeeId,
+          month,
+          year,
+        },
+      },
+    });
+
+    let payrollRecord;
+
+    if (existingRecord) {
+      // Update existing record
+      payrollRecord = await prisma.payrollRecord.update({
+        where: {
+          employeeId_month_year: {
+            employeeId,
+            month,
+            year,
+          },
+        },
+        data: {
+          presentDays: presentDays ?? existingRecord.presentDays,
+          leaveDays: leaveDays ?? existingRecord.leaveDays,
+          grossSalary: grossSalary ?? existingRecord.grossSalary,
+          deductions: deductions ?? existingRecord.deductions,
+          netSalary,
+          status: status ?? existingRecord.status,
+          baseSalary: grossSalary ?? existingRecord.baseSalary,
+          processedBy: session.user.id,
+          processedAt: new Date(),
+        },
+      });
+    } else {
+      // Create new record
+      payrollRecord = await prisma.payrollRecord.create({
+        data: {
+          employeeId,
+          month,
+          year,
+          presentDays: presentDays || 0,
+          leaveDays: leaveDays || 0,
+          grossSalary: grossSalary || 0,
+          deductions: deductions || 0,
+          netSalary,
+          baseSalary: grossSalary || 0,
+          status: status || "pending",
+          processedBy: session.user.id,
+          processedAt: new Date(),
+        },
+      });
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: payrollRecord,
+      message: "Payroll record saved successfully",
+    });
+  } catch (error) {
+    console.error("[v0] Error saving payroll record:", error);
+    return NextResponse.json(
+      { success: false, error: "Failed to save payroll record" },
+      { status: 500 }
+    );
   }
 }

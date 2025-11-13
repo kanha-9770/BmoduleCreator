@@ -1,5 +1,4 @@
 "use client";
-
 import { useState, useRef, useEffect } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -43,7 +42,7 @@ export default function FieldComponent({
   const [previewValue, setPreviewValue] = useState<any>(field?.defaultValue || "");
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const { toast } = useToast();
-  const fileInputRef = useRef<HTMLInputElement>(null); // Changed from cameraInputRef to fileInputRef for general use
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const {
     attributes,
@@ -281,6 +280,16 @@ export default function FieldComponent({
             className={isInSubform ? "border-purple-200 focus:border-purple-400" : ""}
           />
         );
+      case "time":
+        return (
+          <Input
+            type="time"
+            value={previewValue}
+            onChange={(e) => setPreviewValue(e.target.value)}
+            disabled
+            className={isInSubform ? "border-purple-200 focus:border-purple-400" : ""}
+          />
+        );
       case "datetime":
         return (
           <Input
@@ -468,24 +477,19 @@ export default function FieldComponent({
   };
 
   const getCardStyles = () => {
-    if (isInSubform) {
-      return `group relative transition-all duration-200 border-l-4 border-l-purple-400 ${isDragging ? "shadow-2xl scale-105 rotate-1 border-purple-500 bg-purple-100" : "hover:shadow-md bg-purple-50/50"} ${!field.visible ? "opacity-50" : ""} ${field.readonly ? "bg-purple-100/50" : ""}`;
-    }
-    return `group relative transition-all duration-200 ${isDragging ? "shadow-2xl scale-105 rotate-1 border-blue-400 bg-blue-50" : "hover:shadow-md"} ${!field.visible ? "opacity-50" : ""} ${field.readonly ? "bg-gray-50" : ""}`;
+    return isInSubform
+      ? `group relative transition-all duration-200 border-l-4 border-l-purple-400 ${isDragging ? "shadow-2xl scale-105 rotate-1 border-purple-500 bg-purple-100" : "hover:shadow-md bg-purple-50/50"} ${!field.visible ? "opacity-50" : ""} ${field.readonly ? "bg-purple-100/50" : ""}`
+      : `group relative transition-all duration-200 ${isDragging ? "shadow-2xl scale-105 rotate-1 border-blue-400 bg-blue-50" : "hover:shadow-md"} ${!field.visible ? "opacity-50" : ""} ${field.readonly ? "bg-gray-50" : ""}`;
   };
 
   const getGripStyles = () => {
-    if (isInSubform) {
-      return `cursor-grab hover:cursor-grabbing p-1 rounded hover:bg-purple-200 text-purple-600 ${isDragging ? "bg-purple-500 text-white" : ""}`;
-    }
-    return `cursor-grab hover:cursor-grabbing p-1 rounded hover:bg-gray-100 text-gray-400 ${isDragging ? "bg-blue-500 text-white" : ""}`;
+    return isInSubform
+      ? `cursor-grab hover:cursor-grabbing p-1 rounded hover:bg-purple-200 text-purple-600 ${isDragging ? "bg-purple-500 text-white" : ""}`
+      : `cursor-grab hover:cursor-grabbing p-1 rounded hover:bg-gray-100 text-gray-400 ${isDragging ? "bg-blue-500 text-white" : ""}`;
   };
 
   const getActionButtonStyles = () => {
-    if (isInSubform) {
-      return "hover:bg-purple-200 text-purple-600";
-    }
-    return "";
+    return isInSubform ? "hover:bg-purple-200 text-purple-600" : "";
   };
 
   return (

@@ -1,143 +1,226 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { PayrollSummaryCard } from "@/components/payroll/payroll-summary-card"
-import { EmployeePayrollTable } from "@/components/payroll/employee-payroll-table"
-import { PayrollFilters, type PayrollFilterValues } from "@/components/payroll/payroll-filters"
-import { PayrollConfigDialog } from "@/components/payroll/payroll-config-dialog"
-import { PayrollConfigBanner } from "@/components/payroll/payroll-config-banner"
-import { DollarSign, Users, Calendar, TrendingUp, FileText, Calculator, Loader2, Settings } from "lucide-react"
-import { formatCurrency, getMonthName } from "@/lib/payroll-utils"
-import { toast } from "sonner"
+import { useState, useEffect } from "react";
+import { EditablePayrollTable } from "@/components/payroll/editable-payroll-table";
+import { PayrollMenu } from "@/components/payroll/payroll-menu";
+import { BulkOperationsBar } from "@/components/payroll/bulk-operations-bar";
+import { PayrollConfigBanner } from "@/components/payroll/payroll-config-banner";
+import { PayrollConfigDialog } from "@/components/payroll/payroll-config-dialog";
+import { AnalyticsDashboard } from "@/components/payroll/analytics-dashboard";
+import { CalculationEditor } from "@/components/payroll/calculation-editor";
+import { LeaveRulesManager } from "@/components/payroll/leave-rules-manager";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Loader2 } from "lucide-react";
+import { getMonthName, calculateLeaveDeductions } from "@/lib/payroll-utils";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Download, Calculator } from "lucide-react";
+import type { PayrollFilterValues } from "@/components/payroll/payroll-filters";
+import { PayrollFiltersPopover } from "@/components/payroll/payroll-filters-popover";
 
 interface EmployeePayroll {
-  id: string
-  employeeName: string
-  department: string
-  designation: string
-  presentDays: number
-  leaveDays: number
-  grossSalary: number
-  deductions: number
-  netSalary: number
-  status: "pending" | "processed" | "paid"
+  id: string;
+  employeeName: string;
+  department: string;
+  designation: string;
+  presentDays: number;
+  leaveDays: number;
+  grossSalary: number;
+  deductions: number;
+  netSalary: number;
+  status: "pending" | "processed" | "paid";
 }
 
 export default function PayrollPage() {
-  const [loading, setLoading] = useState(true)
-  const [processing, setProcessing] = useState(false)
-  const [configDialogOpen, setConfigDialogOpen] = useState(false)
-  const [hasConfig, setHasConfig] = useState(false)
-  const [config, setConfig] = useState<any>(null)
+  const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState(false);
+  const [configDialogOpen, setConfigDialogOpen] = useState(false);
+  const [hasConfig, setHasConfig] = useState(false);
+  const [config, setConfig] = useState<any>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [filters, setFilters] = useState<PayrollFilterValues>({
     month: new Date().getMonth() + 1,
     year: new Date().getFullYear(),
-  })
-  const [payrollData, setPayrollData] = useState<EmployeePayroll[]>([])
-  const [employees, setEmployees] = useState<any[]>([])
+  });
+  const [payrollData, setPayrollData] = useState<EmployeePayroll[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [leaveRules, setLeaveRules] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<string>("payroll");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
+  const [calculationsOpen, setCalculationsOpen] = useState(false);
+  const [leaveRulesOpen, setLeaveRulesOpen] = useState(false);
 
   useEffect(() => {
-    checkConfiguration()
-  }, [])
+    checkUserRole();
+    checkConfiguration();
+    fetchLeaveRules();
+  }, []);
 
   useEffect(() => {
     if (hasConfig) {
-      fetchPayrollData()
+      fetchPayrollData();
     }
-  }, [hasConfig, filters])
+  }, [hasConfig, filters]);
 
-  const checkConfiguration = async () => {
-    setLoading(true)
+  const checkUserRole = async () => {
     try {
-      const response = await fetch("/api/payroll/config")
-      const data = await response.json()
+      const response = await fetch("/api/auth/me");
+      const data = await response.json();
 
-      if (data.success && data.config) {
-        setHasConfig(true)
-        setConfig(data.config)
-      } else {
-        setHasConfig(false)
+      if (data.success) {
+        setCurrentUserId(data.user.id);
+        const hasAdminRole = data.user.unitAssignments?.some((ua: any) =>
+          ua.role.name.toLowerCase().includes("admin")
+        );
+        setIsAdmin(hasAdminRole || false);
       }
     } catch (error) {
-      console.error("[v0] Error checking config:", error)
-      setHasConfig(false)
-    } finally {
-      setLoading(false)
+      console.error("[v0] Error checking user role:", error);
     }
-  }
+  };
 
-  const fetchPayrollData = async () => {
-    setLoading(true)
+  const checkConfiguration = async () => {
+    setLoading(true);
     try {
-      // Fetch employees
-      const employeesResponse = await fetch("/api/employees")
-      const employeesData = await employeesResponse.json()
+      const response = await fetch("/api/payroll/config");
 
-      if (employeesData.success) {
-        setEmployees(employeesData.employees)
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      // Fetch attendance and leave records
-      const recordsResponse = await fetch(`/api/payroll/records?month=${filters.month}&year=${filters.year}`)
-      const recordsData = await recordsResponse.json()
+      const data = await response.json();
+
+      if (data.success && data.config) {
+        setHasConfig(true);
+        setConfig(data.config);
+      } else {
+        setHasConfig(false);
+      }
+    } catch (error) {
+      console.error("[v0] Error checking config:", error);
+      setHasConfig(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchLeaveRules = async () => {
+    try {
+      const response = await fetch("/api/payroll/leave-rules");
+
+      if (!response.ok) {
+        console.error(
+          "[v0] Leave rules endpoint returned error:",
+          response.status
+        );
+        return;
+      }
+
+      const data = await response.json();
+
+      if (data.success) {
+        const allRules = data.leaveTypes.flatMap(
+          (type: any) => type.leaveRules
+        );
+        setLeaveRules(allRules);
+      }
+    } catch (error) {
+      console.error("[v0] Error fetching leave rules:", error);
+      setLeaveRules([]);
+    }
+  };
+
+  const fetchPayrollData = async () => {
+    setLoading(true);
+    try {
+      const employeesResponse = await fetch("/api/employees");
+      if (!employeesResponse.ok) {
+        throw new Error("Failed to fetch employees");
+      }
+      const employeesData = await employeesResponse.json();
+
+      if (employeesData.success) {
+        setEmployees(employeesData.employees);
+        setIsAdmin(employeesData.isAdmin);
+      }
+
+      const recordsResponse = await fetch(
+        `/api/payroll/records?month=${filters.month}&year=${filters.year}`
+      );
+      if (!recordsResponse.ok) {
+        throw new Error("Failed to fetch payroll records");
+      }
+      const recordsData = await recordsResponse.json();
 
       if (recordsData.success) {
-        // Calculate payroll for each employee
         const calculatedPayroll = calculatePayrollForEmployees(
           employeesData.employees,
           recordsData.data.attendance,
-          recordsData.data.leave,
-        )
-        setPayrollData(calculatedPayroll)
+          recordsData.data.leave
+        );
+        setPayrollData(calculatedPayroll);
       }
     } catch (error) {
-      console.error("[v0] Error fetching payroll data:", error)
-      toast.error("Failed to load payroll data")
+      console.error("[v0] Error fetching payroll data:", error);
+      toast.error(
+        "Failed to load payroll data. Please check your configuration."
+      );
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
-  const calculatePayrollForEmployees = (employees: any[], attendance: any[], leave: any[]) => {
+  const calculatePayrollForEmployees = (
+    employees: any[],
+    attendance: any[],
+    leave: any[]
+  ) => {
     return employees.map((employee) => {
-      // Filter records for this employee
-      const empAttendance = attendance.filter((a: any) => a.employee_id === employee.id)
-      const empLeave = leave.filter((l: any) => l.employee_id === employee.id)
+      const empAttendance = attendance.filter(
+        (a: any) => a.employee_id === employee.id
+      );
+      const empLeave = leave.filter((l: any) => l.employee_id === employee.id);
 
-      // Calculate present days and leave days
-      const presentDays = empAttendance.length
-      const leaveDays = empLeave.length
+      const presentDays = empAttendance.length;
 
-      // Get base salary from employee record
-      const baseSalary = Number(employee.totalSalary || 0)
-      const workingDays = 26
+      const baseSalary = Number(employee.totalSalary || 0);
+      const workingDays = 26;
 
-      // Calculate gross salary
-      const perDaySalary = baseSalary / workingDays
-      const earnedSalary = perDaySalary * presentDays
+      const leaveCalculation = calculateLeaveDeductions(
+        empLeave,
+        leaveRules,
+        baseSalary,
+        workingDays
+      );
 
-      // Calculate overtime if available in attendance records
+      const perDaySalary = baseSalary / workingDays;
+      const earnedSalary = perDaySalary * presentDays;
+
       const totalOvertime = empAttendance.reduce((sum: number, record: any) => {
-        const overtime = record.recordData?.overtime || 0
-        return sum + Number(overtime)
-      }, 0)
+        const overtime = record.recordData?.overtime || 0;
+        return sum + Number(overtime);
+      }, 0);
 
-      const hourlyRate = baseSalary / (workingDays * 8)
-      const overtimePay = totalOvertime * hourlyRate * 1.5
+      const hourlyRate = baseSalary / (workingDays * 8);
+      const overtimePay = totalOvertime * hourlyRate * 1.5;
 
-      // Add allowances from employee record
       const allowances =
-        Number(employee.bonusAmount || 0) + Number(employee.nightAllowance || 0) + Number(employee.oneHourExtra || 0)
+        Number(employee.bonusAmount || 0) +
+        Number(employee.nightAllowance || 0) +
+        Number(employee.oneHourExtra || 0);
 
-      const grossSalary = earnedSalary + overtimePay + allowances
+      const grossSalary = earnedSalary + overtimePay + allowances;
 
-      // Calculate deductions (unpaid leaves)
-      const deductions = perDaySalary * leaveDays
+      const deductions = leaveCalculation.totalDeduction;
 
-      const netSalary = grossSalary - deductions
+      const netSalary = grossSalary - deductions;
 
       return {
         id: employee.id,
@@ -145,240 +228,497 @@ export default function PayrollPage() {
         department: employee.department || "N/A",
         designation: employee.designation || "N/A",
         presentDays,
-        leaveDays,
+        leaveDays: leaveCalculation.fullDays + leaveCalculation.halfDays * 0.5,
         grossSalary: Number(grossSalary.toFixed(2)),
         deductions: Number(deductions.toFixed(2)),
         netSalary: Number(netSalary.toFixed(2)),
         status: "pending" as const,
-      }
-    })
-  }
+      };
+    });
+  };
 
   const summaryStats = {
     totalPayroll: payrollData.reduce((sum, emp) => sum + emp.netSalary, 0),
     totalEmployees: payrollData.length,
     averageSalary:
-      payrollData.length > 0 ? payrollData.reduce((sum, emp) => sum + emp.netSalary, 0) / payrollData.length : 0,
+      payrollData.length > 0
+        ? payrollData.reduce((sum, emp) => sum + emp.netSalary, 0) /
+          payrollData.length
+        : 0,
     totalDeductions: payrollData.reduce((sum, emp) => sum + emp.deductions, 0),
-  }
+  };
 
   const handleFilterChange = (newFilters: PayrollFilterValues) => {
-    setFilters(newFilters)
-  }
+    setFilters(newFilters);
+  };
 
   const handleViewDetails = (id: string) => {
-    toast.info(`Viewing details for employee: ${id}`)
-  }
+    toast.info(`Viewing details for employee: ${id}`);
+  };
 
   const handleDownload = (id: string) => {
-    toast.success(`Downloading payslip for employee: ${id}`)
-  }
+    toast.success(`Downloading payslip for employee: ${id}`);
+  };
 
   const handleSendPayslip = (id: string) => {
-    toast.success(`Payslip sent to employee: ${id}`)
-  }
+    toast.success(`Payslip sent to employee: ${id}`);
+  };
+
+  const handleSavePayroll = async (
+    id: string,
+    data: Partial<EmployeePayroll>
+  ) => {
+    try {
+      const recordId = `${id}-${filters.month}-${filters.year}`;
+
+      const requestBody = {
+        ...data,
+        employeeId: id,
+        month: filters.month,
+        year: filters.year,
+      };
+
+      console.log("[v0] Saving payroll record:", recordId, requestBody);
+
+      const response = await fetch(`/api/payroll/records/${recordId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to save payroll data");
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Update local state with saved data
+        setPayrollData((prev) =>
+          prev.map((emp) =>
+            emp.id === id
+              ? {
+                  ...emp,
+                  ...data,
+                  netSalary:
+                    data.grossSalary !== undefined ||
+                    data.deductions !== undefined
+                      ? (data.grossSalary ?? emp.grossSalary) -
+                        (data.deductions ?? emp.deductions)
+                      : emp.netSalary,
+                }
+              : emp
+          )
+        );
+        toast.success("Payroll data saved successfully to database!");
+      } else {
+        throw new Error(result.error || "Failed to save");
+      }
+    } catch (error) {
+      console.error("[v0] Error saving payroll:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to save payroll data"
+      );
+      throw error;
+    }
+  };
+
+  const handleDeletePayroll = async (id: string) => {
+    try {
+      const recordId = `${id}-${filters.month}-${filters.year}`;
+
+      console.log("[v0] Deleting payroll record:", recordId);
+
+      const response = await fetch(`/api/payroll/records/${recordId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to delete payroll record");
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Remove from local state
+        setPayrollData((prev) => prev.filter((emp) => emp.id !== id));
+        toast.success("Payroll record deleted successfully from database!");
+      } else {
+        throw new Error(result.error || "Failed to delete");
+      }
+    } catch (error) {
+      console.error("[v0] Error deleting payroll:", error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to delete payroll record"
+      );
+      throw error;
+    }
+  };
 
   const handleExport = () => {
-    toast.success("Exporting payroll data...")
-  }
+    try {
+      const csvHeaders = [
+        "Employee Name",
+        "Department",
+        "Designation",
+        "Present Days",
+        "Leave Days",
+        "Gross Salary",
+        "Deductions",
+        "Net Salary",
+        "Status",
+      ];
+
+      const csvRows = payrollData.map((emp) => [
+        emp.employeeName,
+        emp.department,
+        emp.designation,
+        emp.presentDays,
+        emp.leaveDays,
+        emp.grossSalary,
+        emp.deductions,
+        emp.netSalary,
+        emp.status,
+      ]);
+
+      const csvContent = [csvHeaders, ...csvRows]
+        .map((row) => row.join(","))
+        .join("\n");
+
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+
+      link.setAttribute("href", url);
+      link.setAttribute(
+        "download",
+        `payroll_${filters.month}_${filters.year}.csv`
+      );
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast.success("Payroll data exported successfully!");
+    } catch (error) {
+      console.error("[v0] Error exporting payroll:", error);
+      toast.error("Failed to export payroll data");
+    }
+  };
 
   const handleProcessPayroll = async () => {
-    setProcessing(true)
+    setProcessing(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1500))
-      toast.success("Payroll processed successfully!")
-      fetchPayrollData()
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      toast.success("Payroll processed successfully!");
+      fetchPayrollData();
     } catch (error) {
-      toast.error("Failed to process payroll")
+      toast.error("Failed to process payroll");
     } finally {
-      setProcessing(false)
+      setProcessing(false);
     }
-  }
+  };
 
   const handleConfigSaved = () => {
-    checkConfiguration()
-    toast.success("Configuration saved! Loading payroll data...")
-  }
+    checkConfiguration();
+    toast.success("Configuration saved! Loading payroll data...");
+  };
+
+  const handleSaveFormulas = (formulas: any[]) => {
+    console.log("[v0] Saving custom formulas:", formulas);
+    toast.success("Calculation formulas saved!");
+  };
+
+  const handleBulkDelete = async () => {
+    if (
+      !confirm(
+        `Are you sure you want to delete ${selectedIds.length} payroll records?`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await Promise.all(selectedIds.map((id) => handleDeletePayroll(id)));
+      setSelectedIds([]);
+      toast.success(`Successfully deleted ${selectedIds.length} records`);
+    } catch (error) {
+      toast.error("Failed to delete some records");
+    }
+  };
+
+  const handleBulkExport = () => {
+    try {
+      const selectedData = payrollData.filter((emp) =>
+        selectedIds.includes(emp.id)
+      );
+      const csvHeaders = [
+        "Employee Name",
+        "Department",
+        "Designation",
+        "Present Days",
+        "Leave Days",
+        "Gross Salary",
+        "Deductions",
+        "Net Salary",
+        "Status",
+      ];
+
+      const csvRows = selectedData.map((emp) => [
+        emp.employeeName,
+        emp.department,
+        emp.designation,
+        emp.presentDays,
+        emp.leaveDays,
+        emp.grossSalary,
+        emp.deductions,
+        emp.netSalary,
+        emp.status,
+      ]);
+
+      const csvContent = [csvHeaders, ...csvRows]
+        .map((row) => row.join(","))
+        .join("\n");
+
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+
+      link.setAttribute("href", url);
+      link.setAttribute(
+        "download",
+        `payroll_selected_${filters.month}_${filters.year}.csv`
+      );
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast.success(`Exported ${selectedIds.length} records successfully!`);
+    } catch (error) {
+      console.error("[v0] Error exporting selected records:", error);
+      toast.error("Failed to export selected records");
+    }
+  };
 
   if (loading && !hasConfig) {
     return (
-      <div className="container mx-auto py-8 px-4">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
-    )
+    );
   }
 
   return (
-    <div className="container mx-auto py-8 px-4 space-y-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Payroll Management</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage employee payroll for {getMonthName(filters.month)} {filters.year}
-          </p>
-        </div>
-        <div className="flex gap-3">
-          <Button variant="outline" onClick={() => setConfigDialogOpen(true)}>
-            <Settings className="h-4 w-4 mr-2" />
-            Configure
-          </Button>
-          {hasConfig && (
-            <>
-              <Button variant="outline" onClick={handleProcessPayroll} disabled={processing}>
-                <Calculator className="h-4 w-4 mr-2" />
-                {processing ? "Processing..." : "Process Payroll"}
-              </Button>
-              <Button>
-                <FileText className="h-4 w-4 mr-2" />
-                Generate Reports
-              </Button>
-            </>
+    <div className="h-screen flex flex-col bg-white dark:bg-background">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#e0e0e0] bg-white">
+        <div className="flex items-center gap-3">
+          <PayrollFiltersPopover
+            filters={filters}
+            onFilterChange={handleFilterChange}
+          />
+
+          {/* Month/Year Display */}
+          <div className="text-sm font-medium text-[#202124]">
+            {getMonthName(filters.month)} {filters.year}
+          </div>
+
+          {!hasConfig && isAdmin && (
+            <span className="text-sm text-amber-600 font-medium">
+              ⚠ Configuration required
+            </span>
           )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* View Toggle */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 text-[#5f6368] hover:bg-[#f1f3f4]"
+          >
+            <svg
+              className="h-5 w-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 6h16M4 10h16M4 14h16M4 18h16"
+              />
+            </svg>
+          </Button>
+
+          {/* Export Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 text-sm font-medium border-[#dadce0] hover:bg-[#f1f3f4] bg-transparent"
+            onClick={handleExport}
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Export
+          </Button>
+
+          {/* Process Payroll Button (Admin only) */}
+          {isAdmin && (
+            <Button
+              size="sm"
+              className="h-9 text-sm font-medium bg-[#1a73e8] hover:bg-[#1557b0] text-white"
+              onClick={handleProcessPayroll}
+              disabled={processing}
+            >
+              {processing ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <Calculator className="h-4 w-4 mr-2" />
+                  Process Payroll
+                </>
+              )}
+            </Button>
+          )}
+
+          {/* Actions Dropdown */}
+          <PayrollMenu
+            isAdmin={isAdmin}
+            filters={filters}
+            onFilterChange={handleFilterChange}
+            onExport={handleExport}
+            onProcessPayroll={handleProcessPayroll}
+            onOpenAnalytics={() => setAnalyticsOpen(true)}
+            onOpenCalculations={() => setCalculationsOpen(true)}
+            onOpenLeaveRules={() => setLeaveRulesOpen(true)}
+            processing={processing}
+          />
         </div>
       </div>
 
-      {/* Configuration Banner */}
-      {!hasConfig && <PayrollConfigBanner onConfigure={() => setConfigDialogOpen(true)} />}
-
-      {/* Configuration Dialog */}
-      <PayrollConfigDialog
-        open={configDialogOpen}
-        onOpenChange={setConfigDialogOpen}
-        onConfigSaved={handleConfigSaved}
-      />
-
-      {/* Main Content - Only show if configured */}
-      {hasConfig && (
-        <>
-          {/* Summary Cards */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <PayrollSummaryCard
-              title="Total Payroll"
-              value={formatCurrency(summaryStats.totalPayroll)}
-              icon={DollarSign}
-              description="Total net salary for this month"
-            />
-            <PayrollSummaryCard
-              title="Total Employees"
-              value={summaryStats.totalEmployees}
-              icon={Users}
-              description="Active employees"
-            />
-            <PayrollSummaryCard
-              title="Average Salary"
-              value={formatCurrency(summaryStats.averageSalary)}
-              icon={TrendingUp}
-              description="Per employee"
-            />
-            <PayrollSummaryCard
-              title="Total Deductions"
-              value={formatCurrency(summaryStats.totalDeductions)}
-              icon={Calendar}
-              description="All deductions combined"
-            />
+      {hasConfig && !loading && (
+        <div className="flex items-center justify-between px-4 py-2 border-b border-[#e0e0e0] bg-[#f8f9fa] text-sm text-[#5f6368]">
+          <div className="flex items-center gap-4">
+            <span className="font-medium">
+              Total Records: {payrollData.length}
+            </span>
+            <span>•</span>
+            <span>
+              {getMonthName(filters.month)} {filters.year}
+            </span>
           </div>
+          <div className="flex items-center gap-2">
+            <span>1-{payrollData.length}</span>
+            <Button variant="ghost" size="icon" className="h-7 w-7" disabled>
+              <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                <path
+                  fillRule="evenodd"
+                  d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7" disabled>
+              <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                <path
+                  fillRule="evenodd"
+                  d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </Button>
+          </div>
+        </div>
+      )}
 
-          {/* Main Content */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Employee Payroll</CardTitle>
-              <CardDescription>
-                View and manage payroll for all employees based on attendance and leave records
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <PayrollFilters onFilterChange={handleFilterChange} onExport={handleExport} />
+      {!hasConfig && isAdmin && (
+        <div className="px-4 py-2">
+          <PayrollConfigBanner onConfigure={() => setConfigDialogOpen(true)} />
+        </div>
+      )}
 
-              {loading ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                </div>
-              ) : (
-                <Tabs defaultValue="all" className="w-full">
-                  <TabsList>
-                    <TabsTrigger value="all">All Employees</TabsTrigger>
-                    <TabsTrigger value="pending">Pending</TabsTrigger>
-                    <TabsTrigger value="processed">Processed</TabsTrigger>
-                    <TabsTrigger value="paid">Paid</TabsTrigger>
-                  </TabsList>
+      {hasConfig && (
+        <div className="flex-1 overflow-hidden">
+          {loading ? (
+            <div className="flex items-center justify-center h-full">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <EditablePayrollTable
+              data={payrollData}
+              onViewDetails={handleViewDetails}
+              onDownload={handleDownload}
+              onSendPayslip={handleSendPayslip}
+              onSave={handleSavePayroll}
+              isAdmin={isAdmin}
+              onDelete={handleDeletePayroll}
+              selectedIds={selectedIds}
+              onSelectionChange={setSelectedIds}
+            />
+          )}
+        </div>
+      )}
 
-                  <TabsContent value="all" className="mt-6">
-                    <EmployeePayrollTable
-                      data={payrollData}
-                      onViewDetails={handleViewDetails}
-                      onDownload={handleDownload}
-                      onSendPayslip={handleSendPayslip}
-                    />
-                  </TabsContent>
+      {isAdmin && (
+        <BulkOperationsBar
+          selectedCount={selectedIds.length}
+          onClearSelection={() => setSelectedIds([])}
+          onBulkDelete={handleBulkDelete}
+          onBulkExport={handleBulkExport}
+          isAdmin={isAdmin}
+        />
+      )}
 
-                  <TabsContent value="pending" className="mt-6">
-                    <EmployeePayrollTable
-                      data={payrollData.filter((emp) => emp.status === "pending")}
-                      onViewDetails={handleViewDetails}
-                      onDownload={handleDownload}
-                      onSendPayslip={handleSendPayslip}
-                    />
-                  </TabsContent>
+      <Dialog open={analyticsOpen} onOpenChange={setAnalyticsOpen}>
+        <DialogContent className="max-w-7xl max-h-[90vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle>Payroll Analytics</DialogTitle>
+          </DialogHeader>
+          <AnalyticsDashboard
+            payrollData={payrollData}
+            month={filters.month}
+            year={filters.year}
+          />
+        </DialogContent>
+      </Dialog>
 
-                  <TabsContent value="processed" className="mt-6">
-                    <EmployeePayrollTable
-                      data={payrollData.filter((emp) => emp.status === "processed")}
-                      onViewDetails={handleViewDetails}
-                      onDownload={handleDownload}
-                      onSendPayslip={handleSendPayslip}
-                    />
-                  </TabsContent>
+      {isAdmin && (
+        <>
+          <Dialog open={calculationsOpen} onOpenChange={setCalculationsOpen}>
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
+              <DialogHeader>
+                <DialogTitle>Custom Calculations</DialogTitle>
+              </DialogHeader>
+              <CalculationEditor onSave={handleSaveFormulas} />
+            </DialogContent>
+          </Dialog>
 
-                  <TabsContent value="paid" className="mt-6">
-                    <EmployeePayrollTable
-                      data={payrollData.filter((emp) => emp.status === "paid")}
-                      onViewDetails={handleViewDetails}
-                      onDownload={handleDownload}
-                      onSendPayslip={handleSendPayslip}
-                    />
-                  </TabsContent>
-                </Tabs>
-              )}
-            </CardContent>
-          </Card>
+          <Dialog open={leaveRulesOpen} onOpenChange={setLeaveRulesOpen}>
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
+              <DialogHeader>
+                <DialogTitle>Leave Rules</DialogTitle>
+              </DialogHeader>
+              <LeaveRulesManager />
+            </DialogContent>
+          </Dialog>
 
-          {/* Integration Info */}
-          <Card className="bg-muted/50">
-            <CardHeader>
-              <CardTitle className="text-lg">Data Integration</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="flex items-start gap-3">
-                  <div className="rounded-lg bg-primary/10 p-2">
-                    <Calendar className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold">Attendance Records</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Automatically fetches attendance data from configured form to calculate working days and overtime
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="rounded-lg bg-primary/10 p-2">
-                    <FileText className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold">Leave Records</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Integrates leave data from configured form to apply deductions and adjust payroll accordingly
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <PayrollConfigDialog
+            open={configDialogOpen}
+            onOpenChange={setConfigDialogOpen}
+            onConfigSaved={handleConfigSaved}
+          />
         </>
       )}
     </div>
-  )
+  );
 }

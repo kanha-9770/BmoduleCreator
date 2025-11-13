@@ -343,6 +343,30 @@ export default function FieldSettings({ field, open, onOpenChange, onUpdate }: F
                       onCheckedChange={(checked) => handleFieldUpdate({ readonly: checked })}
                     />
                   </div>
+                  {localField.type === "date" && (
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label>Auto-fetch Current Date</Label>
+                        <p className="text-sm text-muted-foreground">Automatically set the current date as the default value</p>
+                      </div>
+                      <Switch
+                        checked={localField.properties?.autoFetchDate || false}
+                        onCheckedChange={(checked) => handlePropertiesChange("autoFetchDate", checked)}
+                      />
+                    </div>
+                  )}
+                  {localField.type === "time" && (
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label>Auto-fetch Current Time</Label>
+                        <p className="text-sm text-muted-foreground">Automatically set the current time as the default value</p>
+                      </div>
+                      <Switch
+                        checked={localField.properties?.autoFetchTime || false}
+                        onCheckedChange={(checked) => handlePropertiesChange("autoFetchTime", checked)}
+                      />
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 

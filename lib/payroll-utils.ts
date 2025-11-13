@@ -1,40 +1,10 @@
 // Utility functions for payroll calculations
 
-export interface PayrollCalculation {
-  baseSalary: number
-  presentDays: number
-  leaveDays: number
-  overtimeHours: number
-  allowances: Record<string, number>
-  deductions: Record<string, number>
-}
-
-export function calculateGrossSalary(calc: PayrollCalculation): number {
-  const workingDays = 26
-  const perDaySalary = calc.baseSalary / workingDays
-  const earnedSalary = perDaySalary * calc.presentDays
-
-  const hourlyRate = calc.baseSalary / (workingDays * 8)
-  const overtimePay = calc.overtimeHours * hourlyRate * 1.5
-
-  const totalAllowances = Object.values(calc.allowances).reduce((sum, val) => sum + val, 0)
-
-  return earnedSalary + overtimePay + totalAllowances
-}
-
-export function calculateNetSalary(calc: PayrollCalculation): number {
-  const grossSalary = calculateGrossSalary(calc)
-  const totalDeductions = Object.values(calc.deductions).reduce((sum, val) => sum + val, 0)
-
-  return grossSalary - totalDeductions
-}
-
 export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("en-IN", {
+  return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "INR",
-    minimumFractionDigits: 2,
-  }).format(amount)
+    currency: "USD",
+  }).format(amount);
 }
 
 export function getMonthName(month: number): string {
@@ -51,23 +21,83 @@ export function getMonthName(month: number): string {
     "October",
     "November",
     "December",
-  ]
-  return months[month - 1] || ""
+  ];
+  return months[month - 1] || "Unknown";
 }
 
-export function getWorkingDaysInMonth(month: number, year: number): number {
-  const date = new Date(year, month - 1, 1)
-  const lastDay = new Date(year, month, 0).getDate()
-  let workingDays = 0
+interface LeaveRecord {
+  recordData: any;
+}
 
-  for (let day = 1; day <= lastDay; day++) {
-    date.setDate(day)
-    const dayOfWeek = date.getDay()
-    // Exclude Sundays (0)
-    if (dayOfWeek !== 0) {
-      workingDays++
+interface LeaveRule {
+  id: string;
+  leaveTypeId: string;
+  durationType: string;
+  deductionType: string;
+  deductionAmount: number;
+}
+
+export function calculateLeaveDeductions(
+  leaveRecords: LeaveRecord[],
+  leaveRules: LeaveRule[],
+  baseSalary: number,
+  workingDays: number
+): {
+  totalDeduction: number;
+  fullDays: number;
+  halfDays: number;
+  shortLeaves: number;
+} {
+  let totalDeduction = 0;
+  let fullDays = 0;
+  let halfDays = 0;
+  let shortLeaves = 0;
+
+  const perDaySalary = baseSalary / workingDays;
+
+  for (const leave of leaveRecords) {
+    const leaveType = leave.recordData?.leaveType || leave.recordData?.type;
+    const duration = leave.recordData?.duration || leave.recordData?.days || 1;
+
+    // Find matching leave rule
+    const rule = leaveRules.find((r) => r.leaveTypeId === leaveType);
+
+    if (!rule) {
+      // Default: full day deduction if no rule found
+      fullDays += Number(duration);
+      totalDeduction += perDaySalary * Number(duration);
+      continue;
+    }
+
+    // Apply rule based on duration type
+    if (rule.durationType === "full_day") {
+      fullDays += Number(duration);
+      if (rule.deductionType === "percentage") {
+        totalDeduction += (baseSalary * rule.deductionAmount) / 100;
+      } else {
+        totalDeduction += rule.deductionAmount;
+      }
+    } else if (rule.durationType === "half_day") {
+      halfDays += Number(duration);
+      if (rule.deductionType === "percentage") {
+        totalDeduction += (baseSalary * rule.deductionAmount) / 100;
+      } else {
+        totalDeduction += rule.deductionAmount;
+      }
+    } else if (rule.durationType === "short_leave") {
+      shortLeaves += Number(duration);
+      if (rule.deductionType === "percentage") {
+        totalDeduction += (baseSalary * rule.deductionAmount) / 100;
+      } else {
+        totalDeduction += rule.deductionAmount;
+      }
     }
   }
 
-  return workingDays
+  return {
+    totalDeduction,
+    fullDays,
+    halfDays,
+    shortLeaves,
+  };
 }

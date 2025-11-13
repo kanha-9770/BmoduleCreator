@@ -133,21 +133,15 @@ export function FormsPermissionMatrix({
     const fetchAll = async () => {
       try {
         setLoading(true);
-        const [
-          modRes,
-          roleRes,
-          userRes,
-          permRes,
-          rolePermRes,
-          userPermRes,
-        ] = await Promise.all([
-          fetch("/api/modules-permission").then((r) => r.json()),
-          fetch("/api/role").then((r) => r.json()),
-          fetch("/api/user").then((r) => r.json()),
-          fetch("/api/permissions").then((r) => r.json()),
-          fetch("/api/role-permissions").then((r) => r.json()),
-          fetch("/api/user-permissions").then((r) => r.json()),
-        ]);
+        const [modRes, roleRes, userRes, permRes, rolePermRes, userPermRes] =
+          await Promise.all([
+            fetch("/api/modules-permission").then((r) => r.json()),
+            fetch("/api/role").then((r) => r.json()),
+            fetch("/api/user").then((r) => r.json()),
+            fetch("/api/permissions").then((r) => r.json()),
+            fetch("/api/role-permissions").then((r) => r.json()),
+            fetch("/api/user-permissions").then((r) => r.json()),
+          ]);
 
         setModules(modRes.success ? modRes.data : []);
         setRoles(roleRes.success ? roleRes.data : []);
@@ -226,7 +220,9 @@ export function FormsPermissionMatrix({
     permissionId: string
   ) => {
     const key = `role-${roleId}-${formId}-${permissionId}`;
-    setChanges((prev) => new Map(prev).set(key, !hasRolePermission(roleId, formId, permissionId)));
+    setChanges((prev) =>
+      new Map(prev).set(key, !hasRolePermission(roleId, formId, permissionId))
+    );
   };
 
   const toggleUserPermission = (
@@ -235,7 +231,9 @@ export function FormsPermissionMatrix({
     permissionId: string
   ) => {
     const key = `user-${userId}-${formId}-${permissionId}`;
-    setChanges((prev) => new Map(prev).set(key, !hasUserPermission(userId, formId, permissionId)));
+    setChanges((prev) =>
+      new Map(prev).set(key, !hasUserPermission(userId, formId, permissionId))
+    );
   };
 
   /* ------------------------------- SAVE ----------------------------------- */
@@ -316,20 +314,30 @@ export function FormsPermissionMatrix({
 
   /* ------------------------------ HELPERS ------------------------------- */
   const getUsersForRole = (roleId: string): User[] =>
-    users.filter((u) =>
-      u.unitAssignments?.some((a) => a.roleId === roleId)
-    );
+    users.filter((u) => u.unitAssignments?.some((a) => a.roleId === roleId));
 
   const getSelectedFormDetails = () => {
     if (!selectedForm) return null;
 
     for (const mod of modules) {
       const f = mod.forms?.find((x) => x.id === selectedForm);
-      if (f) return { form: f, module: mod, submodule: null, path: `${mod.name} > ${f.name}` };
+      if (f)
+        return {
+          form: f,
+          module: mod,
+          submodule: null,
+          path: `${mod.name} > ${f.name}`,
+        };
 
       for (const sub of mod.children ?? []) {
         const sf = sub.forms?.find((x) => x.id === selectedForm);
-        if (sf) return { form: sf, module: mod, submodule: sub, path: `${mod.name} > ${sub.name} > ${sf.name}` };
+        if (sf)
+          return {
+            form: sf,
+            module: mod,
+            submodule: sub,
+            path: `${mod.name} > ${sub.name} > ${sf.name}`,
+          };
       }
     }
     return null;
@@ -378,9 +386,13 @@ export function FormsPermissionMatrix({
             <CardTitle className="text-green-900">Selected Form</CardTitle>
           </div>
           <div className="space-y-2">
-            <div className="text-sm text-green-700 font-medium">{formDetails.path}</div>
+            <div className="text-sm text-green-700 font-medium">
+              {formDetails.path}
+            </div>
             {formDetails.form.description && (
-              <div className="text-sm text-green-600">{formDetails.form.description}</div>
+              <div className="text-sm text-green-600">
+                {formDetails.form.description}
+              </div>
             )}
             <div className="flex gap-2">
               {formDetails.form.isEmployeeForm && (
@@ -402,12 +414,30 @@ export function FormsPermissionMatrix({
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <h4 className="font-semibold text-blue-900 mb-2">System Status</h4>
         <div className="grid grid-cols-2 md:grid-cols-6 gap-4 text-sm">
-          <div><span className="font-medium text-blue-800">Modules:</span> <span className="ml-2 text-blue-600">{modules.length}</span></div>
-          <div><span className="font-medium text-blue-800">Roles:</span> <span className="ml-2 text-blue-600">{filteredRoles.length}</span></div>
-          <div><span className="font-medium text-blue-800">Users:</span> <span className="ml-2 text-blue-600">{users.length}</span></div>
-          <div><span className="font-medium text-blue-800">Permissions:</span> <span className="ml-2 text-blue-600">{permissions.length}</span></div>
-          <div><span className="font-medium text-blue-800">Role Perms:</span> <span className="ml-2 text-blue-600">{rolePermissions.length}</span></div>
-          <div><span className="font-medium text-blue-800">Changes:</span> <span className="ml-2 text-blue-600">{changes.size}</span></div>
+          <div>
+            <span className="font-medium text-blue-800">Modules:</span>{" "}
+            <span className="ml-2 text-blue-600">{modules.length}</span>
+          </div>
+          <div>
+            <span className="font-medium text-blue-800">Roles:</span>{" "}
+            <span className="ml-2 text-blue-600">{filteredRoles.length}</span>
+          </div>
+          <div>
+            <span className="font-medium text-blue-800">Users:</span>{" "}
+            <span className="ml-2 text-blue-600">{users.length}</span>
+          </div>
+          <div>
+            <span className="font-medium text-blue-800">Permissions:</span>{" "}
+            <span className="ml-2 text-blue-600">{permissions.length}</span>
+          </div>
+          <div>
+            <span className="font-medium text-blue-800">Role Perms:</span>{" "}
+            <span className="ml-2 text-blue-600">{rolePermissions.length}</span>
+          </div>
+          <div>
+            <span className="font-medium text-blue-800">Changes:</span>{" "}
+            <span className="ml-2 text-blue-600">{changes.size}</span>
+          </div>
         </div>
       </div>
 
@@ -416,14 +446,20 @@ export function FormsPermissionMatrix({
         <div className="flex items-center justify-between p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
           <div className="flex items-center space-x-2">
             <Badge variant="secondary">{changes.size} changes</Badge>
-            <span className="text-sm text-muted-foreground">Unsaved changes</span>
+            <span className="text-sm text-muted-foreground">
+              Unsaved changes
+            </span>
           </div>
           <div className="flex items-center space-x-2">
             <Button variant="outline" onClick={() => setChanges(new Map())}>
               Discard
             </Button>
             <Button onClick={saveChanges} disabled={saving}>
-              {saving ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+              {saving ? (
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4 mr-2" />
+              )}
               Save
             </Button>
           </div>
@@ -442,8 +478,12 @@ export function FormsPermissionMatrix({
                 </div>
                 <div className="flex-1">
                   <div className="px-6 py-3 bg-gray-50 border-b text-center">
-                    <div className="font-semibold text-gray-900">Form: {formDetails.form.name}</div>
-                    <div className="text-xs text-gray-600 mt-1">{formDetails.path}</div>
+                    <div className="font-semibold text-gray-900">
+                      Form: {formDetails.form.name}
+                    </div>
+                    <div className="text-xs text-gray-600 mt-1">
+                      {formDetails.path}
+                    </div>
                   </div>
                   <div className="flex bg-gray-25">
                     {permissions.map((p) => (
@@ -451,8 +491,12 @@ export function FormsPermissionMatrix({
                         key={p.id}
                         className="min-w-[120px] p-3 border-r border-gray-200 text-center"
                       >
-                        <div className="text-sm font-medium text-gray-800">{p.name}</div>
-                        <div className="text-xs text-gray-600 mt-1">{p.category}</div>
+                        <div className="text-sm font-medium text-gray-800">
+                          {p.name}
+                        </div>
+                        <div className="text-xs text-gray-600 mt-1">
+                          {p.category}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -479,10 +523,19 @@ export function FormsPermissionMatrix({
                               <ChevronRight className="h-4 w-4 text-gray-600" />
                             )}
                             <div className="ml-2">
-                              <div className="font-semibold text-gray-900">{role.name}</div>
-                              <div className="text-sm text-gray-600">{role.description}</div>
+                              <div className="font-semibold text-gray-900">
+                                {role.name}
+                              </div>
+                              <div className="text-sm text-gray-600">
+                                {role.description}
+                              </div>
                               <div className="flex items-center space-x-2 mt-1">
-                                <Badge variant={role.isActive ? "default" : "secondary"} className="text-xs">
+                                <Badge
+                                  variant={
+                                    role.isActive ? "default" : "secondary"
+                                  }
+                                  className="text-xs"
+                                >
                                   {role.isActive ? "Active" : "Inactive"}
                                 </Badge>
                                 <div className="flex items-center text-xs text-gray-600">
@@ -503,8 +556,18 @@ export function FormsPermissionMatrix({
                               className="min-w-[120px] p-4 border-r border-gray-200 flex items-center justify-center bg-gray-25 hover:bg-blue-50"
                             >
                               <Checkbox
-                                checked={hasRolePermission(role.id, selectedForm!, p.id)}
-                                onCheckedChange={() => toggleRolePermission(role.id, selectedForm!, p.id)}
+                                checked={hasRolePermission(
+                                  role.id,
+                                  selectedForm!,
+                                  p.id
+                                )}
+                                onCheckedChange={() =>
+                                  toggleRolePermission(
+                                    role.id,
+                                    selectedForm!,
+                                    p.id
+                                  )
+                                }
                                 className="h-5 w-5"
                               />
                             </div>
@@ -516,14 +579,21 @@ export function FormsPermissionMatrix({
                     {/* Users under role */}
                     <CollapsibleContent>
                       {getUsersForRole(role.id).map((user) => (
-                        <div key={user.id} className="flex border-b bg-blue-25 hover:bg-blue-50">
+                        <div
+                          key={user.id}
+                          className="flex border-b bg-blue-25 hover:bg-blue-50"
+                        >
                           <div className="w-64 p-3 border-r pl-8">
                             <div className="text-sm font-medium text-gray-900">
                               {user.first_name} {user.last_name}
                             </div>
-                            <div className="text-xs text-gray-600">{user.email}</div>
+                            <div className="text-xs text-gray-600">
+                              {user.email}
+                            </div>
                             {user.department && (
-                              <div className="text-xs text-blue-600 mt-1">{user.department}</div>
+                              <div className="text-xs text-blue-600 mt-1">
+                                {user.department}
+                              </div>
                             )}
                           </div>
 
@@ -535,8 +605,18 @@ export function FormsPermissionMatrix({
                                   className="min-w-[120px] p-3 border-r border-gray-200 flex items-center justify-center bg-blue-25 hover:bg-blue-100"
                                 >
                                   <Checkbox
-                                    checked={hasUserPermission(user.id, selectedForm!, p.id)}
-                                    onCheckedChange={() => toggleUserPermission(user.id, selectedForm!, p.id)}
+                                    checked={hasUserPermission(
+                                      user.id,
+                                      selectedForm!,
+                                      p.id
+                                    )}
+                                    onCheckedChange={() =>
+                                      toggleUserPermission(
+                                        user.id,
+                                        selectedForm!,
+                                        p.id
+                                      )
+                                    }
                                     className="h-5 w-5"
                                   />
                                 </div>
@@ -564,14 +644,14 @@ export function FormsPermissionMatrix({
       {/* ---- Help ---- */}
       <div className="text-sm text-muted-foreground space-y-1">
         <p>
-          <strong>Form-Based Permissions:</strong> Grant permissions at the form level.
+          <strong>Form-Based Permissions:</strong> Grant permissions at the form
+          level.
         </p>
         <p>
           <strong>Permission Types:</strong>{" "}
           {permissions.map((p, i) => (
             <span key={p.id}>
-              {p.name} ({p.category})
-              {i < permissions.length - 1 ? ", " : ""}
+              {p.name} ({p.category}){i < permissions.length - 1 ? ", " : ""}
             </span>
           ))}
         </p>

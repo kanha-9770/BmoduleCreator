@@ -2,7 +2,6 @@ import { type NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { validateSession } from "@/lib/auth";
 
-// GET - Fetch all forms for payroll configuration
 export async function GET(request: NextRequest) {
   try {
     const token = request.cookies.get("auth-token")?.value;
@@ -23,36 +22,22 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Fetch all published forms with their module information
-    const forms = await prisma.form.findMany({
-      where: {
-        isPublished: true,
-      },
+    // Fetch leave types with their rules
+    const leaveTypes = await prisma.leaveType.findMany({
       include: {
-        module: {
-          select: {
-            name: true,
-          },
-        },
+        leaveRules: true,
       },
-      orderBy: [{ module: { name: "asc" } }, { name: "asc" }],
+      orderBy: { name: "asc" },
     });
 
     return NextResponse.json({
       success: true,
-      forms: forms.map((form) => ({
-        id: form.id,
-        name: form.name,
-        description: form.description,
-        module: {
-          name: form.module.name,
-        },
-      })),
+      leaveTypes,
     });
   } catch (error) {
-    console.error("[v0] Error fetching forms:", error);
+    console.error("[v0] Error fetching leave rules:", error);
     return NextResponse.json(
-      { success: false, error: "Failed to fetch forms" },
+      { success: false, error: "Failed to fetch leave rules" },
       { status: 500 }
     );
   }

@@ -3,118 +3,83 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Input } from "@/components/ui/input"
-import { Search, Download } from "lucide-react"
-import { getMonthName } from "@/lib/payroll-utils"
+import { Download } from "lucide-react"
+
+export interface PayrollFilterValues {
+  month: number
+  year: number
+}
 
 interface PayrollFiltersProps {
   onFilterChange: (filters: PayrollFilterValues) => void
   onExport: () => void
 }
 
-export interface PayrollFilterValues {
-  month: number
-  year: number
-  department?: string
-  status?: string
-  search?: string
-}
-
 export function PayrollFilters({ onFilterChange, onExport }: PayrollFiltersProps) {
   const currentDate = new Date()
-  const [filters, setFilters] = useState<PayrollFilterValues>({
-    month: currentDate.getMonth() + 1,
-    year: currentDate.getFullYear(),
-  })
+  const [month, setMonth] = useState(currentDate.getMonth() + 1)
+  const [year, setYear] = useState(currentDate.getFullYear())
 
-  const handleFilterUpdate = (key: keyof PayrollFilterValues, value: any) => {
-    const newFilters = { ...filters, [key]: value }
-    setFilters(newFilters)
-    onFilterChange(newFilters)
+  const months = [
+    { value: 1, label: "January" },
+    { value: 2, label: "February" },
+    { value: 3, label: "March" },
+    { value: 4, label: "April" },
+    { value: 5, label: "May" },
+    { value: 6, label: "June" },
+    { value: 7, label: "July" },
+    { value: 8, label: "August" },
+    { value: 9, label: "September" },
+    { value: 10, label: "October" },
+    { value: 11, label: "November" },
+    { value: 12, label: "December" },
+  ]
+
+  const years = Array.from({ length: 5 }, (_, i) => currentDate.getFullYear() - i)
+
+  const handleMonthChange = (value: string) => {
+    const newMonth = Number.parseInt(value)
+    setMonth(newMonth)
+    onFilterChange({ month: newMonth, year })
   }
 
-  const months = Array.from({ length: 12 }, (_, i) => i + 1)
-  const years = Array.from({ length: 5 }, (_, i) => currentDate.getFullYear() - i)
+  const handleYearChange = (value: string) => {
+    const newYear = Number.parseInt(value)
+    setYear(newYear)
+    onFilterChange({ month, year: newYear })
+  }
 
   return (
     <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-      <div className="flex flex-col sm:flex-row gap-3 flex-1">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search employees..."
-            className="pl-9"
-            value={filters.search || ""}
-            onChange={(e) => handleFilterUpdate("search", e.target.value)}
-          />
-        </div>
-
-        <Select
-          value={filters.month.toString()}
-          onValueChange={(value) => handleFilterUpdate("month", Number.parseInt(value))}
-        >
+      <div className="flex gap-3">
+        <Select value={month.toString()} onValueChange={handleMonthChange}>
           <SelectTrigger className="w-[140px]">
-            <SelectValue placeholder="Month" />
+            <SelectValue placeholder="Select month" />
           </SelectTrigger>
           <SelectContent>
-            {months.map((month) => (
-              <SelectItem key={month} value={month.toString()}>
-                {getMonthName(month)}
+            {months.map((m) => (
+              <SelectItem key={m.value} value={m.value.toString()}>
+                {m.label}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
 
-        <Select
-          value={filters.year.toString()}
-          onValueChange={(value) => handleFilterUpdate("year", Number.parseInt(value))}
-        >
+        <Select value={year.toString()} onValueChange={handleYearChange}>
           <SelectTrigger className="w-[120px]">
-            <SelectValue placeholder="Year" />
+            <SelectValue placeholder="Select year" />
           </SelectTrigger>
           <SelectContent>
-            {years.map((year) => (
-              <SelectItem key={year} value={year.toString()}>
-                {year}
+            {years.map((y) => (
+              <SelectItem key={y} value={y.toString()}>
+                {y}
               </SelectItem>
             ))}
-          </SelectContent>
-        </Select>
-
-        <Select
-          value={filters.department || "all"}
-          onValueChange={(value) => handleFilterUpdate("department", value === "all" ? undefined : value)}
-        >
-          <SelectTrigger className="w-[160px]">
-            <SelectValue placeholder="Department" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Departments</SelectItem>
-            <SelectItem value="Engineering">Engineering</SelectItem>
-            <SelectItem value="Marketing">Marketing</SelectItem>
-            <SelectItem value="Sales">Sales</SelectItem>
-            <SelectItem value="HR">HR</SelectItem>
-            <SelectItem value="Finance">Finance</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select
-          value={filters.status || "all"}
-          onValueChange={(value) => handleFilterUpdate("status", value === "all" ? undefined : value)}
-        >
-          <SelectTrigger className="w-[140px]">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="processed">Processed</SelectItem>
-            <SelectItem value="paid">Paid</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      <Button onClick={onExport} variant="outline">
+      <Button variant="outline" onClick={onExport}>
         <Download className="h-4 w-4 mr-2" />
         Export
       </Button>

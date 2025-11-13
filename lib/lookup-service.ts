@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma"
-import type { Prisma } from "@prisma/client"
 
 interface LookupOptions {
   search?: string
@@ -16,557 +15,197 @@ interface LookupSourceData {
   icon: string
 }
 
+const tableMappingCache = new Map<string, string>()
+
 export class LookupService {
-  private staticSources: Record<string, any[]> = {
-    countries: [
-      { id: "US", name: "United States", code: "US", description: "United States of America" },
-      { id: "CA", name: "Canada", code: "CA", description: "Canada" },
-      { id: "UK", name: "United Kingdom", code: "UK", description: "United Kingdom" },
-      { id: "DE", name: "Germany", code: "DE", description: "Germany" },
-      { id: "FR", name: "France", code: "FR", description: "France" },
-      { id: "JP", name: "Japan", code: "JP", description: "Japan" },
-      { id: "AU", name: "Australia", code: "AU", description: "Australia" },
-      { id: "IN", name: "India", code: "IN", description: "India" },
-      { id: "BR", name: "Brazil", code: "BR", description: "Brazil" },
-      { id: "CN", name: "China", code: "CN", description: "China" },
-    ],
-    currencies: [
-      { id: "USD", name: "US Dollar", code: "USD", symbol: "$", description: "United States Dollar" },
-      { id: "EUR", name: "Euro", code: "EUR", symbol: "€", description: "Euro" },
-      { id: "GBP", name: "British Pound", code: "GBP", symbol: "£", description: "British Pound Sterling" },
-      { id: "JPY", name: "Japanese Yen", code: "JPY", symbol: "¥", description: "Japanese Yen" },
-      { id: "CAD", name: "Canadian Dollar", code: "CAD", symbol: "C$", description: "Canadian Dollar" },
-      { id: "AUD", name: "Australian Dollar", code: "AUD", symbol: "A$", description: "Australian Dollar" },
-      { id: "CHF", name: "Swiss Franc", code: "CHF", symbol: "CHF", description: "Swiss Franc" },
-      { id: "CNY", name: "Chinese Yuan", code: "CNY", symbol: "¥", description: "Chinese Yuan" },
-    ],
-    priorities: [
-      { id: "low", name: "Low", value: 1, color: "green", description: "Low priority" },
-      { id: "medium", name: "Medium", value: 2, color: "yellow", description: "Medium priority" },
-      { id: "high", name: "High", value: 3, color: "orange", description: "High priority" },
-      { id: "critical", name: "Critical", value: 4, color: "red", description: "Critical priority" },
-    ],
-    statuses: [
-      { id: "draft", name: "Draft", color: "gray", description: "Draft status" },
-      { id: "pending", name: "Pending", color: "yellow", description: "Pending approval" },
-      { id: "approved", name: "Approved", color: "green", description: "Approved" },
-      { id: "rejected", name: "Rejected", color: "red", description: "Rejected" },
-      { id: "completed", name: "Completed", color: "blue", description: "Completed" },
-      { id: "cancelled", name: "Cancelled", color: "gray", description: "Cancelled" },
-    ],
-    departments: [
-      { id: "hr", name: "Human Resources", code: "HR", description: "Human Resources Department" },
-      { id: "it", name: "Information Technology", code: "IT", description: "IT Department" },
-      { id: "finance", name: "Finance", code: "FIN", description: "Finance Department" },
-      { id: "marketing", name: "Marketing", code: "MKT", description: "Marketing Department" },
-      { id: "sales", name: "Sales", code: "SAL", description: "Sales Department" },
-      { id: "operations", name: "Operations", code: "OPS", description: "Operations Department" },
-      { id: "legal", name: "Legal", code: "LEG", description: "Legal Department" },
-      { id: "support", name: "Customer Support", code: "SUP", description: "Customer Support" },
-    ],
+  private async getTableName(formId: string): Promise<string | null> {
+    if (tableMappingCache.has(formId)) {
+      return tableMappingCache.get(formId)!
+    }
+
+    const mapping = await prisma.formTableMapping.findUnique({
+      where: { formId },
+      select: { storageTable: true },
+    })
+
+    if (mapping) {
+      tableMappingCache.set(formId, mapping.storageTable)
+      return mapping.storageTable
+    }
+
+    return null
   }
 
-  // Helper function to get form records from the correct table
+  private getTableModel(tableName: string): any {
+    const tableMap: Record<string, any> = {
+      form_records_1: prisma.formRecord1,
+      form_records_2: prisma.formRecord2,
+      form_records_3: prisma.formRecord3,
+      form_records_4: prisma.formRecord4,
+      form_records_5: prisma.formRecord5,
+      form_records_6: prisma.formRecord6,
+      form_records_7: prisma.formRecord7,
+      form_records_8: prisma.formRecord8,
+      form_records_9: prisma.formRecord9,
+      form_records_10: prisma.formRecord10,
+      form_records_11: prisma.formRecord11,
+      form_records_12: prisma.formRecord12,
+      form_records_13: prisma.formRecord13,
+      form_records_14: prisma.formRecord14,
+      form_records_15: prisma.formRecord15,
+    }
+    return tableMap[tableName]
+  }
+
   private async getFormRecords(formId: string, options: { limit?: number; offset?: number } = {}): Promise<any[]> {
     const { limit = 50, offset = 0 } = options
 
-    // Get the table mapping for this form
-    const mapping = await prisma.formTableMapping.findUnique({
-      where: { formId },
-    })
-
-    if (!mapping) {
-      console.log(`No table mapping found for form ${formId}`)
+    const tableName = await this.getTableName(formId)
+    if (!tableName) {
       return []
     }
 
-    const tableName = mapping.storageTable
-    console.log(`Querying table ${tableName} for form ${formId}`)
+    const model = this.getTableModel(tableName)
+    if (!model) {
+      return []
+    }
 
-    // Query the appropriate table
-    const queryParams = {
+    const records = await model.findMany({
       where: { formId },
       orderBy: { createdAt: "desc" as const },
       take: limit,
       skip: offset,
-    }
-
-    let records: any[] = []
-
-    switch (tableName) {
-      case "form_records_1":
-        records = await prisma.formRecord1.findMany(queryParams)
-        break
-      case "form_records_2":
-        records = await prisma.formRecord2.findMany(queryParams)
-        break
-      case "form_records_3":
-        records = await prisma.formRecord3.findMany(queryParams)
-        break
-      case "form_records_4":
-        records = await prisma.formRecord4.findMany(queryParams)
-        break
-      case "form_records_5":
-        records = await prisma.formRecord5.findMany(queryParams)
-        break
-      case "form_records_6":
-        records = await prisma.formRecord6.findMany(queryParams)
-        break
-      case "form_records_7":
-        records = await prisma.formRecord7.findMany(queryParams)
-        break
-      case "form_records_8":
-        records = await prisma.formRecord8.findMany(queryParams)
-        break
-      case "form_records_9":
-        records = await prisma.formRecord9.findMany(queryParams)
-        break
-      case "form_records_10":
-        records = await prisma.formRecord10.findMany(queryParams)
-        break
-      case "form_records_11":
-        records = await prisma.formRecord11.findMany(queryParams)
-        break
-      case "form_records_12":
-        records = await prisma.formRecord12.findMany(queryParams)
-        break
-      case "form_records_13":
-        records = await prisma.formRecord13.findMany(queryParams)
-        break
-      case "form_records_14":
-        records = await prisma.formRecord14.findMany(queryParams)
-        break
-      case "form_records_15":
-        records = await prisma.formRecord15.findMany(queryParams)
-        break
-      default:
-        console.log(`Invalid table name: ${tableName}`)
-        return []
-    }
+      select: {
+        id: true,
+        recordData: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    })
 
     return records
   }
 
-  // Helper function to count form records
   private async countFormRecords(formId: string): Promise<number> {
-    const mapping = await prisma.formTableMapping.findUnique({
-      where: { formId },
-    })
+    const tableName = await this.getTableName(formId)
+    if (!tableName) return 0
 
-    if (!mapping) return 0
+    const model = this.getTableModel(tableName)
+    if (!model) return 0
 
-    const tableName = mapping.storageTable
-    const where = { formId }
-
-    switch (tableName) {
-      case "form_records_1":
-        return await prisma.formRecord1.count({ where })
-      case "form_records_2":
-        return await prisma.formRecord2.count({ where })
-      case "form_records_3":
-        return await prisma.formRecord3.count({ where })
-      case "form_records_4":
-        return await prisma.formRecord4.count({ where })
-      case "form_records_5":
-        return await prisma.formRecord5.count({ where })
-      case "form_records_6":
-        return await prisma.formRecord6.count({ where })
-      case "form_records_7":
-        return await prisma.formRecord7.count({ where })
-      case "form_records_8":
-        return await prisma.formRecord8.count({ where })
-      case "form_records_9":
-        return await prisma.formRecord9.count({ where })
-      case "form_records_10":
-        return await prisma.formRecord10.count({ where })
-      case "form_records_11":
-        return await prisma.formRecord11.count({ where })
-      case "form_records_12":
-        return await prisma.formRecord12.count({ where })
-      case "form_records_13":
-        return await prisma.formRecord13.count({ where })
-      case "form_records_14":
-        return await prisma.formRecord14.count({ where })
-      case "form_records_15":
-        return await prisma.formRecord15.count({ where })
-      default:
-        return 0
-    }
+    return await model.count({ where: { formId } })
   }
 
-  async seedStaticSources(): Promise<void> {
-    const staticSourceConfigs = [
-      {
-        id: "lookup_countries",
-        name: "Countries",
-        description: "World countries with codes and regions",
-        data: this.staticSources.countries,
-      },
-      {
-        id: "lookup_currencies",
-        name: "Currencies",
-        description: "World currencies with symbols",
-        data: this.staticSources.currencies,
-      },
-      {
-        id: "lookup_priorities",
-        name: "Priorities",
-        description: "Task and project priorities",
-        data: this.staticSources.priorities,
-      },
-      {
-        id: "lookup_statuses",
-        name: "Status Options",
-        description: "Common status values",
-        data: this.staticSources.statuses,
-      },
-      {
-        id: "lookup_departments",
-        name: "Departments",
-        description: "Common company departments",
-        data: this.staticSources.departments,
-      },
-    ]
-
-    for (const config of staticSourceConfigs) {
-      await prisma.lookupSource.upsert({
-        where: { id: config.id },
-        update: {
-          name: config.name,
-          type: "static",
-          description: config.description,
-          staticData: config.data as Prisma.InputJsonValue,
-          active: true,
-          updatedAt: new Date(),
-        },
-        create: {
-          id: config.id,
-          name: config.name,
-          type: "static",
-          description: config.description,
-          staticData: config.data as Prisma.InputJsonValue,
-          active: true,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      })
+  private transformRecord(record: any, form: any, module?: any): any {
+    const recordData = record.recordData as any
+    const transformedData: any = {
+      record_id: record.id,
+      form_id: form.id,
+      _recordId: record.id,
+      _formId: form.id,
+      _formName: form.name,
+      createdAt: record.createdAt.toISOString(),
+      updatedAt: record.updatedAt.toISOString(),
     }
 
-    console.log("Static lookup sources seeded.")
+    if (module) {
+      transformedData._moduleId = module.id
+      transformedData._moduleName = module.name
+    }
+
+    for (const [key, value] of Object.entries(recordData)) {
+      const fieldData = value as any
+      const fieldType = fieldData?.type || "text"
+      let fieldValue = fieldData?.value
+
+      // Type conversion
+      if (fieldType === "number" && fieldValue != null) {
+        const num = Number(fieldValue)
+        fieldValue = isNaN(num) ? fieldValue : num
+      } else if ((fieldType === "datetime" || fieldType === "date") && fieldValue) {
+        try {
+          const date = new Date(fieldValue)
+          fieldValue = fieldType === "date" ? date.toISOString().split("T")[0] : date.toISOString()
+        } catch {
+          // Keep original value
+        }
+      } else if (fieldType === "checkbox") {
+        fieldValue = Boolean(fieldValue)
+      } else if (["tel", "email", "url"].includes(fieldType)) {
+        fieldValue = String(fieldValue)
+      }
+
+      // Parse options and validation only if they exist
+      let parsedOptions = null
+      let parsedValidation = null
+
+      if (fieldData?.options != null) {
+        try {
+          parsedOptions = typeof fieldData.options === "string" ? JSON.parse(fieldData.options) : fieldData.options
+        } catch {
+          parsedOptions = []
+        }
+      }
+
+      if (fieldData?.validation != null) {
+        try {
+          parsedValidation =
+            typeof fieldData.validation === "string" ? JSON.parse(fieldData.validation) : fieldData.validation
+        } catch {
+          parsedValidation = {}
+        }
+      }
+
+      transformedData[key] = {
+        field_id: fieldData?.fieldId || key,
+        field_value: fieldValue,
+        field_label: fieldData?.label || key,
+        field_type: fieldType,
+        field_section_id: fieldData?.sectionId || null,
+        field_options: parsedOptions,
+        field_validation: parsedValidation,
+      }
+    }
+
+    return transformedData
+  }
+
+  private matchesSearch(transformedData: any, search: string): boolean {
+    const searchLower = search.toLowerCase()
+    return Object.values(transformedData).some((field: any) => {
+      const value = field?.field_value
+      return value != null && typeof value === "string" && value.toLowerCase().includes(searchLower)
+    })
   }
 
   async getData(sourceId: string, options: LookupOptions = {}): Promise<any[]> {
     const { search = "", limit = 50, offset = 0 } = options
-    console.log(`LookupService.getData called with:`, { sourceId, search, limit, offset })
-
-    try {
-      const lookupSource = await prisma.lookupSource.findUnique({
-        where: { id: sourceId },
-        include: { sourceModule: true, sourceForm: true },
-      })
-
-      if (!lookupSource) {
-        console.log(`No lookup source found for ID: ${sourceId}`)
-        return []
-      }
-
-      if (lookupSource.type === "static") {
-        console.log(`Using static data for source: ${sourceId}`)
-        let data = (lookupSource.staticData as any[]) || []
-
-        if (search) {
-          const searchLower = search.toLowerCase()
-          data = data.filter((item) =>
-            Object.values(item).some((value) => value != null && String(value).toLowerCase().includes(searchLower)),
-          )
-        }
-
-        const result = data.slice(offset, offset + limit).map((item) => ({
-          record_id: item.id || String(Math.random()),
-          ...item,
-          type: item.type || "text",
-        }))
-
-        console.log(`Returning ${result.length} static records`)
-        return result
-      }
-
-      if (lookupSource.type === "form" && lookupSource.sourceFormId) {
-        const form = await prisma.form.findUnique({
-          where: { id: lookupSource.sourceFormId },
-          include: {
-            tableMapping: true,
-          },
-        })
-
-        if (form) {
-          console.log(`Found form: ${form.name}`)
-          const records = await this.getFormRecords(form.id, { limit, offset })
-
-          const transformedRecords = records.map((record: any) => {
-            const recordData = record.recordData as any
-            const transformedData: any = {
-              record_id: record.id,
-              form_id: form.id,
-              _recordId: record.id,
-              _formId: form.id,
-              _formName: form.name,
-              createdAt: record.createdAt.toISOString(),
-              updatedAt: record.updatedAt.toISOString(),
-            }
-
-            Object.entries(recordData).forEach(([key, value]: [string, any]) => {
-              const fieldType = value?.type || "text"
-              let fieldValue = value?.value
-
-              if (fieldType === "number" && fieldValue != null) {
-                fieldValue = Number(fieldValue)
-                if (isNaN(fieldValue)) fieldValue = value.value
-              } else if (fieldType === "datetime" && fieldValue) {
-                try {
-                  fieldValue = new Date(fieldValue).toISOString()
-                } catch {
-                  fieldValue = value.value
-                }
-              } else if (fieldType === "date" && fieldValue) {
-                try {
-                  fieldValue = new Date(fieldValue).toISOString().split("T")[0]
-                } catch {
-                  fieldValue = value.value
-                }
-              } else if (fieldType === "checkbox") {
-                fieldValue = Boolean(fieldValue)
-              } else if (fieldType === "tel" || fieldType === "email" || fieldType === "url") {
-                fieldValue = String(fieldValue)
-              }
-
-              let parsedOptions: any = null
-              let parsedValidation: any = null
-
-              if (value?.options != null) {
-                try {
-                  parsedOptions = typeof value.options === "string" ? JSON.parse(value.options) : value.options
-                } catch {
-                  parsedOptions = []
-                }
-              }
-
-              if (value?.validation != null) {
-                try {
-                  parsedValidation =
-                    typeof value.validation === "string" ? JSON.parse(value.validation) : value.validation
-                } catch {
-                  parsedValidation = {}
-                }
-              }
-
-              transformedData[key] = {
-                field_id: value?.fieldId || key,
-                field_value: fieldValue,
-                field_label: value?.label || key,
-                field_type: fieldType,
-                field_section_id: value?.sectionId || null,
-                field_options: parsedOptions,
-                field_validation: parsedValidation,
-              }
-            })
-
-            if (search) {
-              const searchLower = search.toLowerCase()
-              const matchesSearch = Object.values(transformedData).some((field: any) =>
-                field.field_value != null && typeof field.field_value === "string"
-                  ? field.field_value.toLowerCase().includes(searchLower)
-                  : false,
-              )
-              return matchesSearch ? transformedData : null
-            }
-
-            return transformedData
-          })
-
-          const filteredRecords = transformedRecords.filter(
-            (record): record is NonNullable<typeof record> => record !== null,
-          )
-          console.log(`Processed ${filteredRecords.length} form records`)
-          return filteredRecords
-        }
-      }
-
-      if (lookupSource.type === "module" && lookupSource.sourceModuleId) {
-        const module = await prisma.formModule.findUnique({
-          where: { id: lookupSource.sourceModuleId },
-          include: {
-            forms: {
-              include: {
-                tableMapping: true,
-              },
-            },
-          },
-        })
-
-        if (module) {
-          console.log(`Found module: ${module.name} with ${module.forms.length} forms`)
-          const records: any[] = []
-
-          for (const form of module.forms) {
-            const formRecords = await this.getFormRecords(form.id, { limit: Math.floor(limit / module.forms.length) })
-
-            formRecords.forEach((record: any) => {
-              const recordData = record.recordData as any
-              const transformedData: any = {
-                record_id: record.id,
-                form_id: form.id,
-                _recordId: record.id,
-                _formId: form.id,
-                _formName: form.name,
-                _moduleId: module.id,
-                _moduleName: module.name,
-                createdAt: record.createdAt.toISOString(),
-                updatedAt: record.updatedAt.toISOString(),
-              }
-
-              Object.entries(recordData).forEach(([key, value]: [string, any]) => {
-                const fieldType = value?.type || "text"
-                let fieldValue = value?.value
-
-                if (fieldType === "number" && fieldValue != null) {
-                  fieldValue = Number(fieldValue)
-                  if (isNaN(fieldValue)) fieldValue = value.value
-                } else if (fieldType === "datetime" && fieldValue) {
-                  try {
-                    fieldValue = new Date(fieldValue).toISOString()
-                  } catch {
-                    fieldValue = value.value
-                  }
-                } else if (fieldType === "date" && fieldValue) {
-                  try {
-                    fieldValue = new Date(fieldValue).toISOString().split("T")[0]
-                  } catch {
-                    fieldValue = value.value
-                  }
-                } else if (fieldType === "checkbox") {
-                  fieldValue = Boolean(fieldValue)
-                } else if (fieldType === "tel" || fieldType === "email" || fieldType === "url") {
-                  fieldValue = String(fieldValue)
-                }
-
-                let parsedOptions: any = null
-                let parsedValidation: any = null
-
-                if (value?.options != null) {
-                  try {
-                    parsedOptions = typeof value.options === "string" ? JSON.parse(value.options) : value.options
-                  } catch {
-                    parsedOptions = []
-                  }
-                }
-
-                if (value?.validation != null) {
-                  try {
-                    parsedValidation =
-                      typeof value.validation === "string" ? JSON.parse(value.validation) : value.validation
-                  } catch {
-                    parsedValidation = {}
-                  }
-                }
-
-                transformedData[key] = {
-                  field_id: value?.fieldId || key,
-                  field_value: fieldValue,
-                  field_label: value?.label || key,
-                  field_type: fieldType,
-                  field_section_id: value?.sectionId || null,
-                  field_options: parsedOptions,
-                  field_validation: parsedValidation,
-                }
-              })
-
-              if (search) {
-                const searchLower = search.toLowerCase()
-                const matchesSearch = Object.values(transformedData).some((field: any) =>
-                  field.field_value != null && typeof field.field_value === "string"
-                    ? field.field_value.toLowerCase().includes(searchLower)
-                    : false,
-                )
-                if (matchesSearch) records.push(transformedData)
-              } else {
-                records.push(transformedData)
-              }
-            })
-          }
-
-          console.log(`Processed ${records.length} module records`)
-          return records.slice(0, limit)
-        }
-      }
-
-      console.log(`No data found for source: ${sourceId}`)
-      return []
-    } catch (error: any) {
-      console.log("Error in LookupService.getData:", { error: error.message, stack: error.stack })
-      throw error
-    }
-  }
-
-  async getFields(sourceId: string): Promise<string[]> {
-    console.log(`LookupService.getFields called for source: ${sourceId}`)
 
     try {
       const lookupSource = await prisma.lookupSource.findUnique({
         where: { id: sourceId },
         include: {
-          sourceForm: {
-            include: {
-              tableMapping: true,
-            },
-          },
           sourceModule: true,
+          sourceForm: { select: { id: true, name: true } },
         },
       })
 
       if (!lookupSource) {
-        console.log(`No lookup source found for ID: ${sourceId}`)
         return []
       }
 
-      if (lookupSource.type === "static") {
-        const data = (lookupSource.staticData as any[]) || []
-        const sampleData = data[0]
-        if (sampleData) {
-          const fields = Object.keys(sampleData)
-          console.log(`Static source ${sourceId} fields:`, fields)
-          return fields
-        }
-        return []
-      }
-
-      if (lookupSource.type === "form" && lookupSource.sourceForm) {
+      if (lookupSource.type === "form" && lookupSource.sourceFormId) {
         const form = lookupSource.sourceForm
-        const fields = new Set<string>()
+        if (!form) return []
 
-        // Get a sample record to extract field names
-        const sampleRecords = await this.getFormRecords(form.id, { limit: 1 })
+        const records = await this.getFormRecords(form.id, { limit: limit * 2, offset }) // Fetch extra for filtering
 
-        if (sampleRecords.length > 0) {
-          const recordData = sampleRecords[0].recordData as any
-          if (recordData && typeof recordData === "object") {
-            Object.entries(recordData).forEach(([key, value]: [string, any]) => {
-              const fieldLabel = value?.label || key
-              fields.add(fieldLabel)
-            })
-          }
-        }
+        const transformedRecords = records
+          .map((record) => this.transformRecord(record, form))
+          .filter((record) => !search || this.matchesSearch(record, search))
+          .slice(0, limit)
 
-        // fields.add("id")
-        // fields.add("name")
-        // fields.add("title")
-        // fields.add("description")
-        // fields.add("createdAt")
-        // fields.add("updatedAt")
-
-        const fieldArray = Array.from(fields)
-        console.log(`Form ${sourceId} fields:`, fieldArray)
-        return fieldArray
+        return transformedRecords
       }
 
       if (lookupSource.type === "module" && lookupSource.sourceModuleId) {
@@ -574,169 +213,206 @@ export class LookupService {
           where: { id: lookupSource.sourceModuleId },
           include: {
             forms: {
-              include: {
-                tableMapping: true,
-              },
+              select: { id: true, name: true },
             },
           },
         })
 
-        if (module) {
-          const fields = new Set<string>()
+        if (!module || module.forms.length === 0) return []
 
-          for (const form of module.forms) {
-            const sampleRecords = await this.getFormRecords(form.id, { limit: 1 })
+        const limitPerForm = Math.ceil((limit * 2) / module.forms.length)
 
-            if (sampleRecords.length > 0) {
-              const recordData = sampleRecords[0].recordData as any
-              if (recordData && typeof recordData === "object") {
-                Object.entries(recordData).forEach(([key, value]: [string, any]) => {
-                  const fieldLabel = value?.label || key
-                  fields.add(fieldLabel)
-                })
-              }
+        const allRecordsPromises = module.forms.map((form) =>
+          this.getFormRecords(form.id, { limit: limitPerForm }).then((records) => ({
+            form,
+            records,
+          })),
+        )
+
+        const allRecordsResults = await Promise.all(allRecordsPromises)
+
+        const transformedRecords: any[] = []
+        for (const { form, records } of allRecordsResults) {
+          for (const record of records) {
+            const transformed = this.transformRecord(record, form, module)
+            if (!search || this.matchesSearch(transformed, search)) {
+              transformedRecords.push(transformed)
             }
           }
+        }
 
-          // fields.add("id")
-          // fields.add("name")
-          // fields.add("title")
-          // fields.add("description")
-          // fields.add("createdAt")
-          // fields.add("updatedAt")
+        return transformedRecords.slice(0, limit)
+      }
 
-          const fieldArray = Array.from(fields)
-          console.log(`Module ${sourceId} fields:`, fieldArray)
-          return fieldArray
+      return []
+    } catch (error: any) {
+      console.error("Error in LookupService.getData:", error.message)
+      throw error
+    }
+  }
+
+  async getFields(sourceId: string): Promise<string[]> {
+    try {
+      const lookupSource = await prisma.lookupSource.findUnique({
+        where: { id: sourceId },
+        include: {
+          sourceForm: { select: { id: true } },
+          sourceModule: {
+            select: {
+              id: true,
+              forms: { select: { id: true } },
+            },
+          },
+        },
+      })
+
+      if (!lookupSource) {
+        return []
+      }
+
+      const fields = new Set<string>()
+
+      const extractFields = (recordData: any) => {
+        if (recordData && typeof recordData === "object") {
+          for (const value of Object.values(recordData)) {
+            const fieldData = value as any
+            const fieldLabel = fieldData?.label || fieldData?.fieldId
+            if (fieldLabel) fields.add(fieldLabel)
+          }
         }
       }
 
-      console.log(`No fields found for source: ${sourceId}`)
-      return []
+      if (lookupSource.type === "form" && lookupSource.sourceForm) {
+        const sampleRecords = await this.getFormRecords(lookupSource.sourceForm.id, { limit: 1 })
+        if (sampleRecords.length > 0) {
+          extractFields(sampleRecords[0].recordData)
+        }
+      } else if (lookupSource.type === "module" && lookupSource.sourceModule) {
+        const fieldPromises = lookupSource.sourceModule.forms.map(async (form) => {
+          const sampleRecords = await this.getFormRecords(form.id, { limit: 1 })
+          if (sampleRecords.length > 0) {
+            extractFields(sampleRecords[0].recordData)
+          }
+        })
+
+        await Promise.all(fieldPromises)
+      }
+
+      return Array.from(fields)
     } catch (error) {
       console.error("Error in LookupService.getFields:", error)
       throw error
     }
   }
 
-  static async getLookupSources(): Promise<LookupSourceData[]> {
+  static async getLookupSources(options: { quick?: boolean } = {}): Promise<LookupSourceData[]> {
+    const { quick = false } = options
+
     try {
-      const sources: LookupSourceData[] = []
-
-      // Get static sources
-      const staticSources = await prisma.lookupSource.findMany({
-        where: { type: "static", active: true },
-      })
-
-      sources.push(
-        ...staticSources.map((source) => ({
-          id: source.id,
-          name: source.name,
-          description: source.description,
-          type: source.type,
-          recordCount: (source.staticData as any[])?.length || 0,
-          icon: source.id.includes("countries")
-            ? "🌍"
-            : source.id.includes("currencies")
-              ? "💰"
-              : source.id.includes("priorities")
-                ? "⚡"
-                : source.id.includes("statuses")
-                  ? "🔄"
-                  : source.id.includes("departments")
-                    ? "🏢"
-                    : "📋",
-        })),
-      )
-
-      // Get modules and create lookup sources
+      // Fetch all modules with their forms in one query
       const modules = await prisma.formModule.findMany({
-        include: {
+        select: {
+          id: true,
+          name: true,
+          description: true,
           forms: {
-            include: {
-              tableMapping: true,
+            select: {
+              id: true,
+              name: true,
+              tableMapping: { select: { storageTable: true } },
             },
           },
         },
       })
 
-      for (const module of modules) {
-        // Count total records across all forms in the module
-        let totalRecords = 0
-        for (const form of module.forms) {
-          const service = new LookupService()
-          totalRecords += await service.countFormRecords(form.id)
-        }
+      const allSources: LookupSourceData[] = []
 
-        // Create/update module lookup source
-        const moduleSource = await prisma.lookupSource.upsert({
-          where: { id: `module_${module.id}` },
-          update: {
-            name: module.name,
-            type: "module",
-            description: module.description,
-            active: true,
-            updatedAt: new Date(),
-          },
-          create: {
+      if (quick) {
+        for (const module of modules) {
+          // Module source without count
+          allSources.push({
             id: `module_${module.id}`,
             name: module.name,
-            type: "module",
-            sourceModuleId: module.id,
             description: module.description,
-            active: true,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          },
-        })
+            type: "module",
+            recordCount: 0, // Will be loaded later
+            icon: "folder",
+          })
 
-        sources.push({
-          id: moduleSource.id,
-          name: moduleSource.name,
-          description: moduleSource.description,
-          type: moduleSource.type,
-          recordCount: totalRecords,
-          icon: "📁",
-        })
-
-        // Create/update form lookup sources
-        for (const form of module.forms) {
-          const service = new LookupService()
-          const formRecordCount = await service.countFormRecords(form.id)
-
-          const formSource = await prisma.lookupSource.upsert({
-            where: { id: `form_${form.id}` },
-            update: {
+          // Form sources without counts
+          for (const form of module.forms) {
+            allSources.push({
+              id: `form_${form.id}`,
               name: `${form.name} (${module.name})`,
-              type: "form",
               description: `Records from ${form.name} form in ${module.name} module`,
+              type: "form",
+              recordCount: 0, // Will be loaded later
+              icon: "document",
+            })
+          }
+        }
+
+        return allSources
+      }
+
+      const service = new LookupService()
+      const modulePromises = modules.map(async (module) => {
+        // Count records for all forms in parallel
+        const countPromises = module.forms.map((form) => service.countFormRecords(form.id))
+        const counts = await Promise.all(countPromises)
+        const totalRecords = counts.reduce((sum, count) => sum + count, 0)
+
+        const moduleSource: LookupSourceData = {
+          id: `module_${module.id}`,
+          name: module.name,
+          description: module.description,
+          type: "module",
+          recordCount: totalRecords,
+          icon: "folder",
+        }
+
+        const formSources: LookupSourceData[] = module.forms.map((form, index) => ({
+          id: `form_${form.id}`,
+          name: `${form.name} (${module.name})`,
+          description: `Records from ${form.name} form in ${module.name} module`,
+          type: "form",
+          recordCount: counts[index],
+          icon: "document",
+        }))
+
+        return [moduleSource, ...formSources]
+      })
+
+      const allSourcesArrays = await Promise.all(modulePromises)
+      const sourcesWithCounts = allSourcesArrays.flat()
+
+      Promise.all(
+        sourcesWithCounts.map((source) =>
+          prisma.lookupSource.upsert({
+            where: { id: source.id },
+            update: {
+              name: source.name,
+              type: source.type as any,
+              description: source.description,
               active: true,
               updatedAt: new Date(),
             },
             create: {
-              id: `form_${form.id}`,
-              name: `${form.name} (${module.name})`,
-              type: "form",
-              sourceFormId: form.id,
-              description: `Records from ${form.name} form in ${module.name} module`,
+              id: source.id,
+              name: source.name,
+              type: source.type as any,
+              sourceModuleId: source.type === "module" ? source.id.replace("module_", "") : undefined,
+              sourceFormId: source.type === "form" ? source.id.replace("form_", "") : undefined,
+              description: source.description,
               active: true,
               createdAt: new Date(),
               updatedAt: new Date(),
             },
-          })
+          }),
+        ),
+      ).catch((error) => console.error("Background upsert error:", error))
 
-          sources.push({
-            id: formSource.id,
-            name: formSource.name,
-            description: formSource.description,
-            type: formSource.type,
-            recordCount: formRecordCount,
-            icon: "📄",
-          })
-        }
-      }
-
-      return sources
+      return sourcesWithCounts
     } catch (error) {
       console.error("Error fetching lookup sources:", error)
       return []

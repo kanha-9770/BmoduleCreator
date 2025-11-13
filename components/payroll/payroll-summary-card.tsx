@@ -5,14 +5,10 @@ interface PayrollSummaryCardProps {
   title: string
   value: string | number
   icon: LucideIcon
-  description?: string
-  trend?: {
-    value: number
-    isPositive: boolean
-  }
+  description: string
 }
 
-export function PayrollSummaryCard({ title, value, icon: Icon, description, trend }: PayrollSummaryCardProps) {
+export function PayrollSummaryCard({ title, value, icon: Icon, description }: PayrollSummaryCardProps) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -21,13 +17,7 @@ export function PayrollSummaryCard({ title, value, icon: Icon, description, tren
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold">{value}</div>
-        {description && <p className="text-xs text-muted-foreground mt-1">{description}</p>}
-        {trend && (
-          <p className={`text-xs mt-1 ${trend.isPositive ? "text-green-600" : "text-red-600"}`}>
-            {trend.isPositive ? "+" : ""}
-            {trend.value}% from last month
-          </p>
-        )}
+        <p className="text-xs text-muted-foreground mt-1">{description}</p>
       </CardContent>
     </Card>
   )
