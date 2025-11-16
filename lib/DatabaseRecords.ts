@@ -167,14 +167,8 @@ export class DatabaseRecords {
   }
 
 
-  // Create a form record in the appropriate table
   static async createFormRecord(
-    formId: string,
-    recordData: any,
-    submittedBy?: string,
-    employeeId?: string,
-    amount?: number,
-    date?: Date,
+    formId: string, recordData: any, submittedBy?: string, employeeId?: string, amount?: number, date?: Date, userId?: string,
   ): Promise<FormRecord> {
     try {
       console.log("DatabaseService.createFormRecord called with:", {
@@ -184,6 +178,7 @@ export class DatabaseRecords {
         employeeId,
         amount,
         date,
+        userId,
       })
 
       // Validate inputs
@@ -210,6 +205,7 @@ export class DatabaseRecords {
         date: date || null,
         submittedAt: new Date(),
         status: "submitted",
+        userId,
         createdAt: new Date(),
         updatedAt: new Date(),
       }
@@ -287,6 +283,7 @@ export class DatabaseRecords {
       employeeId?: string
       dateFrom?: Date
       dateTo?: Date
+      userId?: string
     },
   ): Promise<FormRecord[]> {
     try {
@@ -300,6 +297,7 @@ export class DatabaseRecords {
         employeeId,
         dateFrom,
         dateTo,
+        userId,
       } = options || {}
 
       console.log(`[DatabaseService] Getting form records for form: ${formId}`)
@@ -338,6 +336,10 @@ export class DatabaseRecords {
 
       if (employeeId) {
         where.employee_id = employeeId
+      }
+
+      if (userId) {
+        where.userId = userId
       }
 
       if (dateFrom || dateTo) {
@@ -447,7 +449,6 @@ export class DatabaseRecords {
       throw new Error(`Failed to fetch form records: ${error?.message}`)
     }
   }
-
   static async getFormSubmissionCount(formId: string): Promise<number> {
     try {
       const tableName = await DatabaseTransforms.getFormRecordTable(formId)

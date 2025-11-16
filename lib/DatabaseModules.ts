@@ -1653,6 +1653,49 @@ export class DatabaseModules {
     }
   }
 
+  /**
+   * Get all fields in the system or scoped by formId or moduleId.
+   * - If `formId` is provided, returns fields for that form (including subforms).
+   * - Else if `moduleId` is provided, returns fields for all forms in that module.
+   * - If neither is provided, returns all fields.
+   */
+  static async getAllFields(options?: {
+    moduleId?: string;
+    formId?: string;
+  }): Promise<FormField[]> {
+    try {
+      const opts = options || {};
+
+      let where: any = {};
+
+      if (opts.formId) {
+        where = {
+          OR: [
+            { section: { formId: opts.formId } },
+            { subform: { section: { formId: opts.formId } } },
+          ],
+        };
+      } else if (opts.moduleId) {
+        where = {
+          OR: [
+            { section: { form: { moduleId: opts.moduleId } } },
+            { subform: { section: { form: { moduleId: opts.moduleId } } } },
+          ],
+        };
+      }
+
+      const fields = await prisma.formField.findMany({
+        where: Object.keys(where).length ? where : undefined,
+        orderBy: { order: "asc" },
+      });
+
+      return fields.map((field) => DatabaseTransforms.transformField(field));
+    } catch (error: any) {
+      console.error("Database error fetching all fields:", error);
+      throw new Error(`Failed to fetch all fields: ${error?.message}`);
+    }
+  }
+
   static async updateField(
     id: string,
     data: Partial<FormField>

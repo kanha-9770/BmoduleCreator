@@ -218,6 +218,8 @@ export interface LookupConfig {
 }
 
 export interface FormRecord {
+  userId: string
+  userId: any
   status: string
   id: string
   formId: string

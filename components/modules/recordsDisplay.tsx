@@ -3,7 +3,6 @@
 import React from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -17,7 +16,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Search, Filter, ArrowUp, ArrowDown, Save, X, MoreHorizontal, Eye, Edit, Trash2, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useToast } from "@/hooks/use-toast"
 
 interface Form {
   id: string
@@ -129,7 +127,6 @@ interface RecordsDisplayProps {
 const RecordsDisplay: React.FC<RecordsDisplayProps> = ({
   allModuleForms,
   formRecords,
-  formFieldsWithSections,
   recordSearchQuery,
   selectedFormFilter,
   recordsPerPage,
@@ -155,15 +152,40 @@ const RecordsDisplay: React.FC<RecordsDisplayProps> = ({
   discardAllPendingChanges,
   setEditingCell,
   setPendingChanges,
-  setFormRecords,
 }) => {
-  const { toast } = useToast()
+
+  // === Helper: Build processedData from recordData ===
+  const buildProcessedDataFromRecordData = (rec: EnhancedFormRecord): ProcessedFieldData[] => {
+    return Object.entries(rec.recordData).map(([key, field]: [string, any]) => ({
+      recordId: rec.id,
+      lookup: field.lookup,
+      options: field.options,
+      fieldId: field.fieldId || key,
+      fieldLabel: field.label,
+      fieldType: field.type,
+      value: field.value,
+      displayValue: field.value != null ? field.value.toString() : '',
+      icon: '',
+      order: field.order || 999,
+      sectionId: field.sectionId,
+      sectionTitle: field.sectionTitle || 'Default Section',
+      formId: rec.formId,
+      formName: rec.formName || 'Unknown Form',
+    }))
+  }
+
+  // === Helper: Get field data based on mode ===
+  const getFieldData = (record: EnhancedFormRecord, fieldDef: FormFieldWithSection): ProcessedFieldData | undefined => {
+    if (record.formId === "merged") {
+      return record.processedData.find((pd) => pd.formId === fieldDef.formId && pd.fieldId === fieldDef.originalId)
+    } else {
+      return record.processedData.find((pd) => pd.fieldId === fieldDef.id)
+    }
+  }
 
   // === renderFieldEditor – handles all field types ===
   const renderFieldEditor = (record: EnhancedFormRecord, fieldDef: FormFieldWithSection) => {
-    const fieldData = record.processedData.find(
-      (pd) => pd.fieldId === fieldDef.id || pd.fieldId === fieldDef.originalId,
-    )
+    const fieldData = getFieldData(record, fieldDef)
 
     const actualRecordId = fieldData?.recordId || record.id
     const actualFormId = fieldData?.formId || record.formId
@@ -262,23 +284,24 @@ const RecordsDisplay: React.FC<RecordsDisplayProps> = ({
   }
 
   // === Helper: Get unique field definitions ===
-  const getUniqueFieldDefinitions = () => {
+  const getUniqueFieldDefinitions = (records: EnhancedFormRecord[], isMerged: boolean) => {
     const fieldMap = new Map()
 
-    formRecords.forEach((record) => {
+    records.forEach((record) => {
       record.processedData.forEach((fieldData) => {
-        const key = fieldData.fieldId
+        const formId = fieldData.formId || record.formId
+        const key = isMerged ? `${formId}_${fieldData.fieldId}` : fieldData.fieldId
         if (!fieldMap.has(key)) {
           fieldMap.set(key, {
-            id: fieldData.fieldId,
+            id: key,
             originalId: fieldData.fieldId,
             label: fieldData.fieldLabel,
             type: fieldData.fieldType,
             order: fieldData.order || 999,
             sectionTitle: fieldData.sectionTitle || "Default Section",
             sectionId: fieldData.sectionId || "",
-            formId: fieldData.formId || record.formId,
-            formName: record.formName || "Unknown Form",
+            formId,
+            formName: fieldData.formName || record.formName || "Unknown Form",
             options: fieldData.options,
             lookup: fieldData.lookup,
           })
@@ -286,14 +309,20 @@ const RecordsDisplay: React.FC<RecordsDisplayProps> = ({
       })
     })
 
-    return Array.from(fieldMap.values()).sort((a, b) => {
+    const uniqueFields = Array.from(fieldMap.values()).sort((a, b) => {
       if (a.formId !== b.formId) return a.formId.localeCompare(b.formId)
       return a.order - b.order
     })
+
+    console.log('Unique field definitions from records (isMerged:', isMerged, '):', uniqueFields);
+
+    return uniqueFields
   }
 
   // === Helper: Compute merged records ===
   const computeMergedRecords = (): EnhancedFormRecord[] => {
+    console.log('Computing merged records. Input formRecords:', formRecords);
+
     const recordsByForm = new Map<string, EnhancedFormRecord[]>()
     for (const record of formRecords) {
       if (!recordsByForm.has(record.formId)) {
@@ -302,17 +331,25 @@ const RecordsDisplay: React.FC<RecordsDisplayProps> = ({
       recordsByForm.get(record.formId)!.push(record)
     }
 
+    console.log('Records grouped by formId:', recordsByForm);
+
     for (const records of recordsByForm.values()) {
       records.sort((a, b) => new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime())
     }
+
+    console.log('Records sorted by submittedAt within each form:', recordsByForm);
 
     let maxRows = 0
     for (const records of recordsByForm.values()) {
       maxRows = Math.max(maxRows, records.length)
     }
 
+    console.log('Max rows to merge:', maxRows);
+
     const mergedRecordsList: EnhancedFormRecord[] = []
     for (let i = 0; i < maxRows; i++) {
+      console.log(`\n--- Processing merged row ${i} ---`);
+
       const mergedRecord: EnhancedFormRecord = {
         id: `merged-${i}`,
         formId: "merged",
@@ -327,25 +364,33 @@ const RecordsDisplay: React.FC<RecordsDisplayProps> = ({
       let latestSubmittedAt = 0
       let latestStatus: EnhancedFormRecord["status"] = "submitted"
       const combinedProcessedData: ProcessedFieldData[] = []
-      const combinedRecordData: Record<string, any> = {}
+      const combinedRecordData: Record<string, Record<string, any>> = {}
 
       for (const [formId, records] of recordsByForm.entries()) {
         if (i < records.length) {
           const rec = records[i]
-          mergedRecord.originalRecordIds!.set(rec.formId, rec.id)
+          console.log(`  Adding data from form "${formId}" (record ID: ${rec.id}, submittedAt: ${rec.submittedAt})`);
 
-          const updatedProcessedData = rec.processedData.map((pd) => ({
+          mergedRecord.originalRecordIds!.set(formId, rec.id)
+
+          const builtProcessedData = buildProcessedDataFromRecordData(rec)
+          const updatedProcessedData = builtProcessedData.map((pd) => ({
             ...pd,
-            formId: rec.formId,
+            formId,
+            formName: rec.formName,
           }))
+          console.log(`    Processed data for this record (${builtProcessedData.length} fields):`, updatedProcessedData);
           combinedProcessedData.push(...updatedProcessedData)
-          Object.assign(combinedRecordData, rec.recordData)
+          combinedRecordData[formId] = rec.recordData
           const subTime = new Date(rec.submittedAt).getTime()
           if (subTime > latestSubmittedAt) {
             latestSubmittedAt = subTime
             mergedRecord.submittedAt = rec.submittedAt
             latestStatus = rec.status
+            console.log(`    Updated latest submittedAt to ${rec.submittedAt} and status to ${rec.status}`);
           }
+        } else {
+          console.log(`  No record for form "${formId}" at row ${i} (skipping)`);
         }
       }
 
@@ -353,17 +398,31 @@ const RecordsDisplay: React.FC<RecordsDisplayProps> = ({
       mergedRecord.recordData = combinedRecordData
       mergedRecord.status = latestStatus
 
+      console.log(`  Final merged record for row ${i}:`, {
+        id: mergedRecord.id,
+        submittedAt: mergedRecord.submittedAt,
+        status: mergedRecord.status,
+        numProcessedFields: mergedRecord.processedData.length,
+        originalRecordIds: Array.from(mergedRecord.originalRecordIds!.entries()),
+      });
+
       if (latestSubmittedAt > 0) {
         mergedRecordsList.push(mergedRecord)
+        console.log(`  Added merged record ${i} to list`);
+      } else {
+        console.log(`  Skipped merged record ${i} (no valid submittedAt)`);
       }
     }
+
+    console.log('Final mergedRecordsList:', mergedRecordsList);
+    console.log('Total merged records created:', mergedRecordsList.length, '\n');
 
     return mergedRecordsList
   }
 
   // === Sorting ===
   const sortRecords = (records: EnhancedFormRecord[]): EnhancedFormRecord[] => {
-    return [...records].sort((a, b) => {
+    const sorted = [...records].sort((a, b) => {
       let valA: any, valB: any
       if (recordSortField === "submittedAt") {
         valA = new Date(a.submittedAt).getTime()
@@ -372,8 +431,21 @@ const RecordsDisplay: React.FC<RecordsDisplayProps> = ({
         valA = a.status
         valB = b.status
       } else {
-        const fieldDataA = a.processedData.find((pd) => pd.fieldId === recordSortField)
-        const fieldDataB = b.processedData.find((pd) => pd.fieldId === recordSortField)
+        let targetFieldId: string
+        let targetFormId: string | undefined
+        if (recordSortField.includes('_')) {
+          const parts = recordSortField.split('_', 2)
+          targetFormId = parts[0]
+          targetFieldId = parts[1]
+        } else {
+          targetFieldId = recordSortField
+        }
+        const fieldDataA = targetFormId
+          ? a.processedData.find((pd) => (pd.formId || a.formId) === targetFormId && pd.fieldId === targetFieldId)
+          : a.processedData.find((pd) => pd.fieldId === targetFieldId)
+        const fieldDataB = targetFormId
+          ? b.processedData.find((pd) => (pd.formId || b.formId) === targetFormId && pd.fieldId === targetFieldId)
+          : b.processedData.find((pd) => pd.fieldId === targetFieldId)
         valA = fieldDataA?.displayValue || fieldDataA?.value || ""
         valB = fieldDataB?.displayValue || fieldDataB?.value || ""
       }
@@ -381,12 +453,16 @@ const RecordsDisplay: React.FC<RecordsDisplayProps> = ({
       if (valA > valB) return recordSortOrder === "asc" ? 1 : -1
       return 0
     })
+
+    console.log(`Sorted records (field: ${recordSortField}, order: ${recordSortOrder}):`, sorted.map(r => ({ id: r.id, submittedAt: r.submittedAt })));
+
+    return sorted
   }
 
   const handleDoubleClick = (record: EnhancedFormRecord, fieldDef: FormFieldWithSection) => {
     if (editMode !== "double-click" || savingChanges) return
 
-    const fieldData = record.processedData.find((pd) => pd.fieldId === fieldDef.id)
+    const fieldData = getFieldData(record, fieldDef)
     if (!fieldData) return
 
     setEditingCell({
@@ -405,7 +481,7 @@ const RecordsDisplay: React.FC<RecordsDisplayProps> = ({
     fieldDef: FormFieldWithSection,
   ) => {
     if (e.key === "Enter" && !savingChanges && editMode !== "locked") {
-      const fieldData = record.processedData.find((pd) => pd.fieldId === fieldDef.id)
+      const fieldData = getFieldData(record, fieldDef)
       if (!fieldData) return
 
       setEditingCell({
@@ -421,12 +497,25 @@ const RecordsDisplay: React.FC<RecordsDisplayProps> = ({
 
   // === DATA PREPARATION ===
   const mergedRecords = computeMergedRecords()
-  const originalRecords = formRecords
+
+  // Populate processedData for original records if empty
+  const populatedOriginalRecords = formRecords.map((r) => ({
+    ...r,
+    processedData: r.processedData.length > 0 ? [...r.processedData] : buildProcessedDataFromRecordData(r),
+  }))
+
+  console.log('Selected form filter:', selectedFormFilter);
+  console.log('Merged records length:', mergedRecords.length);
+  console.log('Populated original records length:', populatedOriginalRecords.length);
 
   // Choose base records: merged or filtered by form
   let baseRecords: EnhancedFormRecord[] = mergedRecords
-  if (selectedFormFilter !== "all") {
-    baseRecords = originalRecords.filter((r) => r.formId === selectedFormFilter)
+  const isMergedMode = selectedFormFilter === "all"
+  if (!isMergedMode) {
+    baseRecords = populatedOriginalRecords.filter((r) => r.formId === selectedFormFilter)
+    console.log(`Filtered to form "${selectedFormFilter}": ${baseRecords.length} records`);
+  } else {
+    console.log('Using merged records as base');
   }
 
   const sortedRecords = sortRecords(baseRecords)
@@ -438,6 +527,7 @@ const RecordsDisplay: React.FC<RecordsDisplayProps> = ({
     filteredRecords = filteredRecords.filter((record) =>
       record.processedData.some((pd) => (pd.displayValue ?? "").toString().toLowerCase().includes(lowerQuery)),
     )
+    console.log(`After search filter "${recordSearchQuery}": ${filteredRecords.length} records`);
   }
 
   const totalRecords = filteredRecords.length
@@ -445,7 +535,9 @@ const RecordsDisplay: React.FC<RecordsDisplayProps> = ({
   const endIdx = currentPage * recordsPerPage
   const paginatedRecords = filteredRecords.slice(startIdx, endIdx)
 
-  const uniqueFieldDefs = getUniqueFieldDefinitions()
+  console.log('Paginated records (page', currentPage, 'of', Math.ceil(totalRecords / recordsPerPage), '):', paginatedRecords.map(r => ({ id: r.id, formId: r.formId })));
+
+  const uniqueFieldDefs = getUniqueFieldDefinitions(baseRecords, isMergedMode)
 
   const editModeInfo = getEditModeInfo()
 
@@ -739,7 +831,7 @@ const RecordsDisplay: React.FC<RecordsDisplayProps> = ({
                       </div>
 
                       {uniqueFieldDefs.map((fieldDef) => {
-                        const fieldData = record.processedData.find((pd) => pd.fieldId === fieldDef.id)
+                        const fieldData = getFieldData(record, fieldDef)
                         const pendingChange = pendingChanges.get(`${record.id}-${fieldDef.id}`)
                         const displayValue = pendingChange
                           ? pendingChange.value

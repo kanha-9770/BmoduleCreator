@@ -41,17 +41,16 @@ export default function PayrollPage() {
   const [processing, setProcessing] = useState(false);
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [hasConfig, setHasConfig] = useState(false);
-  const [config, setConfig] = useState<any>(null);
+  const [, setConfig] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [, setCurrentUserId] = useState<string | null>(null);
   const [filters, setFilters] = useState<PayrollFilterValues>({
     month: new Date().getMonth() + 1,
     year: new Date().getFullYear(),
   });
   const [payrollData, setPayrollData] = useState<EmployeePayroll[]>([]);
-  const [employees, setEmployees] = useState<any[]>([]);
+  const [, setEmployees] = useState<any[]>([]);
   const [leaveRules, setLeaveRules] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<string>("payroll");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const [calculationsOpen, setCalculationsOpen] = useState(false);
@@ -70,9 +69,13 @@ export default function PayrollPage() {
   }, [hasConfig, filters]);
 
   const checkUserRole = async () => {
+    console.log("[Payroll API] Fetching current user role...");
     try {
       const response = await fetch("/api/auth/me");
+      console.log("[Payroll API] GET /api/auth/me → Status:", response.status);
+
       const data = await response.json();
+      console.log("[Payroll API] User data received:", data);
 
       if (data.success) {
         setCurrentUserId(data.user.id);
@@ -82,20 +85,23 @@ export default function PayrollPage() {
         setIsAdmin(hasAdminRole || false);
       }
     } catch (error) {
-      console.error("[v0] Error checking user role:", error);
+      console.error("[Payroll API] Error checking user role:", error);
     }
   };
 
   const checkConfiguration = async () => {
     setLoading(true);
+    console.log("[Payroll API] Checking payroll configuration...");
     try {
       const response = await fetch("/api/payroll/config");
+      console.log("[Payroll API] GET /api/payroll/config → Status:", response.status);
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
+      console.log("[Payroll API] Configuration data:", data);
 
       if (data.success && data.config) {
         setHasConfig(true);
@@ -104,7 +110,7 @@ export default function PayrollPage() {
         setHasConfig(false);
       }
     } catch (error) {
-      console.error("[v0] Error checking config:", error);
+      console.error("[Payroll API] Error checking configuration:", error);
       setHasConfig(false);
     } finally {
       setLoading(false);
@@ -112,52 +118,63 @@ export default function PayrollPage() {
   };
 
   const fetchLeaveRules = async () => {
+    console.log("[Payroll API] Fetching leave rules...");
     try {
       const response = await fetch("/api/payroll/leave-rules");
+      console.log("[Payroll API] GET /api/payroll/leave-rules → Status:", response.status);
 
       if (!response.ok) {
-        console.error(
-          "[v0] Leave rules endpoint returned error:",
-          response.status
-        );
+        console.error("[Payroll API] Leave rules endpoint error:", response.status);
         return;
       }
 
       const data = await response.json();
+      console.log("[Payroll API] Leave rules data:", data);
 
       if (data.success) {
-        const allRules = data.leaveTypes.flatMap(
-          (type: any) => type.leaveRules
-        );
+        const allRules = data.leaveTypes.flatMap((type: any) => type.leaveRules);
         setLeaveRules(allRules);
       }
     } catch (error) {
-      console.error("[v0] Error fetching leave rules:", error);
+      console.error("[Payroll API] Error fetching leave rules:", error);
       setLeaveRules([]);
     }
   };
 
   const fetchPayrollData = async () => {
     setLoading(true);
+    console.log("[Payroll API] Fetching payroll data for:", filters);
+
     try {
+      // Fetch Employees
+      console.log("[Payroll API] Fetching employees list...");
       const employeesResponse = await fetch("/api/employees");
+      console.log("[Payroll API] GET /api/employees → Status:", employeesResponse.status);
+
       if (!employeesResponse.ok) {
         throw new Error("Failed to fetch employees");
       }
+
       const employeesData = await employeesResponse.json();
+      console.log("[Payroll API] Employees data received:", employeesData);
 
       if (employeesData.success) {
         setEmployees(employeesData.employees);
         setIsAdmin(employeesData.isAdmin);
       }
 
-      const recordsResponse = await fetch(
-        `/api/payroll/records?month=${filters.month}&year=${filters.year}`
-      );
+      // Fetch Payroll Records
+      const recordsUrl = `/api/payroll/records?month=${filters.month}&year=${filters.year}`;
+      console.log("[Payroll API] Fetching payroll records from:", recordsUrl);
+      const recordsResponse = await fetch(recordsUrl);
+      console.log("[Payroll API] GET /api/payroll/records → Status:", recordsResponse.status);
+
       if (!recordsResponse.ok) {
         throw new Error("Failed to fetch payroll records");
       }
+
       const recordsData = await recordsResponse.json();
+      console.log("[Payroll API] Payroll records data:", recordsData);
 
       if (recordsData.success) {
         const calculatedPayroll = calculatePayrollForEmployees(
@@ -165,13 +182,12 @@ export default function PayrollPage() {
           recordsData.data.attendance,
           recordsData.data.leave
         );
+        console.log("[Payroll API] Calculated payroll for", calculatedPayroll.length, "employees");
         setPayrollData(calculatedPayroll);
       }
     } catch (error) {
-      console.error("[v0] Error fetching payroll data:", error);
-      toast.error(
-        "Failed to load payroll data. Please check your configuration."
-      );
+      console.error("[Payroll API] Error fetching payroll data:", error);
+      toast.error("Failed to load payroll data. Please check your configuration.");
     } finally {
       setLoading(false);
     }
@@ -217,9 +233,7 @@ export default function PayrollPage() {
         Number(employee.oneHourExtra || 0);
 
       const grossSalary = earnedSalary + overtimePay + allowances;
-
       const deductions = leaveCalculation.totalDeduction;
-
       const netSalary = grossSalary - deductions;
 
       return {
@@ -243,7 +257,7 @@ export default function PayrollPage() {
     averageSalary:
       payrollData.length > 0
         ? payrollData.reduce((sum, emp) => sum + emp.netSalary, 0) /
-          payrollData.length
+        payrollData.length
         : 0,
     totalDeductions: payrollData.reduce((sum, emp) => sum + emp.deductions, 0),
   };
@@ -268,18 +282,17 @@ export default function PayrollPage() {
     id: string,
     data: Partial<EmployeePayroll>
   ) => {
+    const recordId = `${id}-${filters.month}-${filters.year}`;
+    const requestBody = {
+      ...data,
+      employeeId: id,
+      month: filters.month,
+      year: filters.year,
+    };
+
+    console.log("[Payroll API] Saving payroll record:", { recordId, body: requestBody });
+
     try {
-      const recordId = `${id}-${filters.month}-${filters.year}`;
-
-      const requestBody = {
-        ...data,
-        employeeId: id,
-        month: filters.month,
-        year: filters.year,
-      };
-
-      console.log("[v0] Saving payroll record:", recordId, requestBody);
-
       const response = await fetch(`/api/payroll/records/${recordId}`, {
         method: "PATCH",
         headers: {
@@ -288,28 +301,30 @@ export default function PayrollPage() {
         body: JSON.stringify(requestBody),
       });
 
+      console.log("[Payroll API] PATCH /api/payroll/records/:id → Status:", response.status);
+
       if (!response.ok) {
         const errorData = await response.json();
+        console.error("[Payroll API] Save failed with error:", errorData);
         throw new Error(errorData.error || "Failed to save payroll data");
       }
 
       const result = await response.json();
+      console.log("[Payroll API] Payroll save success:", result);
 
       if (result.success) {
-        // Update local state with saved data
         setPayrollData((prev) =>
           prev.map((emp) =>
             emp.id === id
               ? {
-                  ...emp,
-                  ...data,
-                  netSalary:
-                    data.grossSalary !== undefined ||
-                    data.deductions !== undefined
-                      ? (data.grossSalary ?? emp.grossSalary) -
-                        (data.deductions ?? emp.deductions)
-                      : emp.netSalary,
-                }
+                ...emp,
+                ...data,
+                netSalary:
+                  data.grossSalary !== undefined || data.deductions !== undefined
+                    ? (data.grossSalary ?? emp.grossSalary) -
+                    (data.deductions ?? emp.deductions)
+                    : emp.netSalary,
+              }
               : emp
           )
         );
@@ -318,7 +333,7 @@ export default function PayrollPage() {
         throw new Error(result.error || "Failed to save");
       }
     } catch (error) {
-      console.error("[v0] Error saving payroll:", error);
+      console.error("[Payroll API] Error saving payroll:", error);
       toast.error(
         error instanceof Error ? error.message : "Failed to save payroll data"
       );
@@ -327,31 +342,33 @@ export default function PayrollPage() {
   };
 
   const handleDeletePayroll = async (id: string) => {
+    const recordId = `${id}-${filters.month}-${filters.year}`;
+    console.log("[Payroll API] Deleting payroll record:", recordId);
+
     try {
-      const recordId = `${id}-${filters.month}-${filters.year}`;
-
-      console.log("[v0] Deleting payroll record:", recordId);
-
       const response = await fetch(`/api/payroll/records/${recordId}`, {
         method: "DELETE",
       });
 
+      console.log("[Payroll API] DELETE /api/payroll/records/:id → Status:", response.status);
+
       if (!response.ok) {
         const errorData = await response.json();
+        console.error("[Payroll API] Delete failed:", errorData);
         throw new Error(errorData.error || "Failed to delete payroll record");
       }
 
       const result = await response.json();
+      console.log("[Payroll API] Payroll delete success:", result);
 
       if (result.success) {
-        // Remove from local state
         setPayrollData((prev) => prev.filter((emp) => emp.id !== id));
         toast.success("Payroll record deleted successfully from database!");
       } else {
         throw new Error(result.error || "Failed to delete");
       }
     } catch (error) {
-      console.error("[v0] Error deleting payroll:", error);
+      console.error("[Payroll API] Error deleting payroll:", error);
       toast.error(
         error instanceof Error
           ? error.message
@@ -407,7 +424,7 @@ export default function PayrollPage() {
 
       toast.success("Payroll data exported successfully!");
     } catch (error) {
-      console.error("[v0] Error exporting payroll:", error);
+      console.error("[Payroll API] Error exporting payroll:", error);
       toast.error("Failed to export payroll data");
     }
   };
@@ -431,7 +448,7 @@ export default function PayrollPage() {
   };
 
   const handleSaveFormulas = (formulas: any[]) => {
-    console.log("[v0] Saving custom formulas:", formulas);
+    console.log("[Payroll API] Saving custom formulas:", formulas);
     toast.success("Calculation formulas saved!");
   };
 
@@ -502,7 +519,7 @@ export default function PayrollPage() {
 
       toast.success(`Exported ${selectedIds.length} records successfully!`);
     } catch (error) {
-      console.error("[v0] Error exporting selected records:", error);
+      console.error("[Payroll API] Error exporting selected records:", error);
       toast.error("Failed to export selected records");
     }
   };
@@ -524,20 +541,18 @@ export default function PayrollPage() {
             onFilterChange={handleFilterChange}
           />
 
-          {/* Month/Year Display */}
           <div className="text-sm font-medium text-[#202124]">
             {getMonthName(filters.month)} {filters.year}
           </div>
 
           {!hasConfig && isAdmin && (
             <span className="text-sm text-amber-600 font-medium">
-              ⚠ Configuration required
+              Warning: Configuration required
             </span>
           )}
         </div>
 
         <div className="flex items-center gap-2">
-          {/* View Toggle */}
           <Button
             variant="ghost"
             size="icon"
@@ -558,7 +573,6 @@ export default function PayrollPage() {
             </svg>
           </Button>
 
-          {/* Export Button */}
           <Button
             variant="outline"
             size="sm"
@@ -569,7 +583,6 @@ export default function PayrollPage() {
             Export
           </Button>
 
-          {/* Process Payroll Button (Admin only) */}
           {isAdmin && (
             <Button
               size="sm"
@@ -591,7 +604,6 @@ export default function PayrollPage() {
             </Button>
           )}
 
-          {/* Actions Dropdown */}
           <PayrollMenu
             isAdmin={isAdmin}
             filters={filters}

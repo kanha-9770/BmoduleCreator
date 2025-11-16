@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { DatabaseService } from "@/lib/database-service"
 import { headers } from "next/headers"
+import { validateSession } from "@/lib/auth"
 
 export async function POST(request: NextRequest, { params }: { params: { formId: string } }) {
   try {
@@ -36,6 +37,24 @@ export async function POST(request: NextRequest, { params }: { params: { formId:
       return NextResponse.json({ error: "Form is not published" }, { status: 403 })
     }
 
+    // Handle authentication: always try to validate session if token present
+    const token = request.cookies.get("auth-token")?.value
+    let session = null
+    let userId: string | null = null
+    console.log("Auth token akash:", token)
+    if (token) {
+      session = await validateSession(token)
+      console.log("this is the session data", session)
+      if (session?.user?.id) {
+        userId = session.user.id
+      }
+    }
+
+    // Enforce login if required
+    if (form.requireLogin && !userId) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
+    }
+
     // Check submission limits if configured
     if (form.maxSubmissions) {
       const currentCount = await DatabaseService.getFormSubmissionCount(formId)
@@ -59,7 +78,7 @@ export async function POST(request: NextRequest, { params }: { params: { formId:
     const amount = body.amount ? Number.parseFloat(body.amount) : undefined
     const date = body.date ? new Date(body.date) : undefined
 
-    // Create the form record in the appropriate table with structured data
+    // Create the form record in the appropriate table with structured data and userId
     const record = await DatabaseService.createFormRecord(
       formId,
       structuredRecordData,
@@ -67,6 +86,7 @@ export async function POST(request: NextRequest, { params }: { params: { formId:
       employeeId,
       amount,
       date,
+      userId, // Pass userId to DatabaseService (null if not authenticated)
     )
 
     // Track form submission event
@@ -75,6 +95,7 @@ export async function POST(request: NextRequest, { params }: { params: { formId:
       "submit",
       {
         recordId: record.id,
+        userId, // Include userId in event tracking (null if anonymous)
         fieldsCount: Object.keys(structuredRecordData).length,
         submissionSource: "form",
         hasEmployeeId: !!employeeId,
@@ -91,6 +112,7 @@ export async function POST(request: NextRequest, { params }: { params: { formId:
     console.log("Form submission successful:", {
       recordId: record.id,
       formId,
+      userId: record.userId, // Log the set userId
       submittedBy: record.submittedBy,
       structuredData: structuredRecordData,
     })
@@ -100,6 +122,7 @@ export async function POST(request: NextRequest, { params }: { params: { formId:
       message: form.submissionMessage || "Form submitted successfully!",
       data: {
         id: record.id,
+        userId: record.userId, // Include userId in response (null if anonymous)
         recordData: structuredRecordData,
         submittedAt: record.submittedAt,
         form: {
@@ -157,7 +180,7 @@ async function transformToStructuredData(form: any, recordData: Record<string, a
   for (const [fieldId, value] of Object.entries(recordData)) {
     const fieldDef = fieldIdToFieldMap[fieldId]
     console.log(`Processing field ID: ${fieldId}, value: ${value}, definition:`, fieldDef);
-    
+
     if (fieldDef) {
       // Store structured data with field metadata
       structuredData[fieldId] = {

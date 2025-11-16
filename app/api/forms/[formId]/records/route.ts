@@ -1,6 +1,7 @@
 // app/api/forms/[formId]/records/route.ts
 import { type NextRequest, NextResponse } from "next/server"
 import { DatabaseService } from "@/lib/database-service"
+import { validateSession } from "@/lib/auth"
 
 export async function GET(request: NextRequest, { params }: { params: { formId: string } }) {
   try {
@@ -28,13 +29,23 @@ export async function GET(request: NextRequest, { params }: { params: { formId: 
       sortOrder,
     })
 
+    // Get current user from session
+    const token = request.cookies.get("auth-token")?.value
+    let userId: string | null = null
+    if (token) {
+      const session = await validateSession(token)
+      if (session?.user?.id) {
+        userId = session.user.id
+      }
+    }
+
     // Get form to ensure it exists
     const form = await DatabaseService.getForm(formId)
     if (!form) {
       return NextResponse.json({ error: "Form not found" }, { status: 404 })
     }
 
-    // Fetch records with enhanced options
+    // Fetch records with enhanced options, including userId filter
     const records = await DatabaseService.getFormRecords(formId, {
       page,
       limit,
@@ -45,10 +56,11 @@ export async function GET(request: NextRequest, { params }: { params: { formId: 
       employeeId,
       dateFrom,
       dateTo,
+      userId,
     })
 
-    // Get total count for pagination
-    const totalCount = await DatabaseService.getFormSubmissionCount(formId)
+    // Get total count for pagination (also filtered by userId if provided)
+    const totalCount = await DatabaseService.getFormSubmissionCount(formId, userId)
 
     console.log(`Found ${records.length} records out of ${totalCount} total`)
 

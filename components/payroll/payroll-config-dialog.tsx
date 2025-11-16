@@ -50,7 +50,7 @@ export function PayrollConfigDialog({ open, onOpenChange, onConfigSaved }: Payro
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [selectedFormIds, setSelectedFormIds] = useState<string[]>([])
-  const [fieldMappings, setFieldMappings] = useState<Record<string, PayrollFieldMapping>>({})
+  const [fieldMappings, setFieldMappings] = useState<PayrollFieldMapping>({})
   const [formFields, setFormFields] = useState<Record<string, FormField[]>>({})
   const [loadingFields, setLoadingFields] = useState(false)
   useEffect(() => {
@@ -95,28 +95,30 @@ export function PayrollConfigDialog({ open, onOpenChange, onConfigSaved }: Payro
   const handleFormToggle = (formId: string) => {
     setSelectedFormIds((prev) => {
       const newIds = prev.includes(formId) ? prev.filter((id) => id !== formId) : [...prev, formId]
-      if (!prev.includes(formId) && newIds.includes(formId)) {
-        setFieldMappings((prevMappings) => ({
-          ...prevMappings,
-          [formId]: {},
-        }))
-      } else if (!newIds.includes(formId)) {
-        setFieldMappings((prevMappings) => {
-          const { [formId]: _, ...rest } = prevMappings
-          return rest
-        })
-      }
       return newIds
     })
   }
-  const updateFieldMapping = (formId: string, field: keyof PayrollFieldMapping, value: string) => {
+  const updateFieldMapping = (field: keyof PayrollFieldMapping, value: string) => {
     setFieldMappings((prev) => ({
       ...prev,
-      [formId]: {
-        ...prev[formId],
-        [field]: value === "none" ? undefined : value,
-      },
+      [field]: value === "none" ? undefined : value,
     }))
+  }
+  const getCombinedFields = (filterFn: (field: FormField) => boolean = () => true) => {
+    const combined: { value: string; label: string }[] = []
+    selectedFormIds.forEach((formId) => {
+      const formFieldsList = formFields[formId] || []
+      const form = forms.find((f) => f.id === formId)
+      formFieldsList
+        .filter(filterFn)
+        .forEach((field) => {
+          combined.push({
+            value: `${formId}-${field.id}`,
+            label: `${form?.name || 'Unknown'} - ${field.label} (${field.type})`,
+          })
+        })
+    })
+    return combined
   }
   const handleNextStep = async () => {
     if (step === 1) {
@@ -128,6 +130,7 @@ export function PayrollConfigDialog({ open, onOpenChange, onConfigSaved }: Payro
       setLoadingFields(true)
       try {
         await Promise.all(selectedFormIds.map((formId) => fetchFormFields(formId)))
+        setFieldMappings({})
         setStep(2)
       } catch (error) {
         toast.error("Failed to load form fields")
@@ -142,13 +145,9 @@ export function PayrollConfigDialog({ open, onOpenChange, onConfigSaved }: Payro
     }
   }
   const validateFieldMappings = () => {
-    for (const formId of selectedFormIds) {
-      const mapping = fieldMappings[formId]
-      if (!mapping?.employeeIdField || !mapping?.dateField) {
-        const form = forms.find((f) => f.id === formId)
-        toast.error(`Please map required fields (Employee ID and Date) for ${form?.name || "selected form"}`)
-        return false
-      }
+    if (!fieldMappings.employeeIdField || !fieldMappings.dateField) {
+      toast.error(`Please map required fields (Employee ID and Date)`)
+      return false
     }
     return true
   }
@@ -197,9 +196,8 @@ export function PayrollConfigDialog({ open, onOpenChange, onConfigSaved }: Payro
         <div className="flex items-center justify-center gap-2 px-6 py-3 border-b shrink-0">
           <div className={`flex items-center gap-2 ${step >= 1 ? "text-primary" : "text-muted-foreground"}`}>
             <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center border-2 text-sm font-medium ${
-                step >= 1 ? "border-primary bg-primary text-primary-foreground" : "border-muted"
-              }`}
+              className={`w-8 h-8 rounded-full flex items-center justify-center border-2 text-sm font-medium ${step >= 1 ? "border-primary bg-primary text-primary-foreground" : "border-muted"
+                }`}
             >
               {step > 1 ? <CheckCircle2 className="h-4 w-4" /> : "1"}
             </div>
@@ -208,9 +206,8 @@ export function PayrollConfigDialog({ open, onOpenChange, onConfigSaved }: Payro
           <div className="w-12 h-0.5 bg-border" />
           <div className={`flex items-center gap-2 ${step >= 2 ? "text-primary" : "text-muted-foreground"}`}>
             <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center border-2 text-sm font-medium ${
-                step >= 2 ? "border-primary bg-primary text-primary-foreground" : "border-muted"
-              }`}
+              className={`w-8 h-8 rounded-full flex items-center justify-center border-2 text-sm font-medium ${step >= 2 ? "border-primary bg-primary text-primary-foreground" : "border-muted"
+                }`}
             >
               2
             </div>
@@ -270,39 +267,85 @@ export function PayrollConfigDialog({ open, onOpenChange, onConfigSaved }: Payro
               )}
               {step === 2 && (
                 <div className="space-y-6">
-                  {selectedFormIds.map((formId) => {
-                    const form = forms.find((f) => f.id === formId)
-                    const fields = formFields[formId] || []
-                    const mapping = fieldMappings[formId] || {}
-                    return (
-                      <div key={formId} className="p-4 border rounded-lg space-y-4 bg-card">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h4 className="font-semibold">{form?.name}</h4>
-                            <p className="text-sm text-muted-foreground">{form?.module.name}</p>
-                          </div>
-                          <Badge variant="secondary">{fields.length} fields</Badge>
-                        </div>
+                  <div className="p-4 border rounded-lg space-y-4 bg-card">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-semibold">Combined Forms Configuration</h4>
+                        <p className="text-sm text-muted-foreground">
+                          Selected forms: {selectedFormIds
+                            .map((id) => forms.find((f) => f.id === id)?.name)
+                            .filter(Boolean)
+                            .join(', ')}
+                        </p>
+                      </div>
+                      <Badge variant="secondary">
+                        {selectedFormIds.reduce((acc, formId) => acc + (formFields[formId]?.length || 0), 0)} total fields
+                      </Badge>
+                    </div>
+                    <div className="grid gap-4">
+                      {/* Required Fields */}
+                      <div className="space-y-2">
+                        <Label className="flex items-center gap-2">
+                          Employee ID <span className="text-destructive">*</span>
+                        </Label>
+                        <Select
+                          value={fieldMappings.employeeIdField || ""}
+                          onValueChange={(value) => updateFieldMapping("employeeIdField", value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select employee ID field from any form" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {getCombinedFields().map((item) => (
+                              <SelectItem key={item.value} value={item.value}>
+                                {item.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="flex items-center gap-2">
+                          Date <span className="text-destructive">*</span>
+                        </Label>
+                        <Select
+                          value={fieldMappings.dateField || ""}
+                          onValueChange={(value) => updateFieldMapping("dateField", value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select date field from any form" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {getCombinedFields((f) => f.type === "date" || f.type === "datetime").map((item) => (
+                              <SelectItem key={item.value} value={item.value}>
+                                {item.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {/* Optional Fields */}
+                      <div className="pt-2 border-t">
+                        <Label className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                          Optional Fields
+                        </Label>
                         <div className="grid gap-4">
-                          {/* Required Fields */}
                           <div className="space-y-2">
                             <Label className="flex items-center gap-2">
-                              {/* <Badge variant="destructive" className="text-[10px]">
-                                FIXED FIELD
-                              </Badge> */}
-                              Employee ID <span className="text-destructive">*</span>
+                              Overtime Hours
                             </Label>
                             <Select
-                              value={mapping.employeeIdField || ""}
-                              onValueChange={(value) => updateFieldMapping(formId, "employeeIdField", value)}
+                              value={fieldMappings.overtimeField || "none"}
+                              onValueChange={(value) => updateFieldMapping("overtimeField", value)}
                             >
                               <SelectTrigger>
-                                <SelectValue placeholder="Select employee ID field" />
+                                <SelectValue placeholder="Select overtime field" />
                               </SelectTrigger>
                               <SelectContent>
-                                {fields.map((field) => (
-                                  <SelectItem key={field.id} value={field.id}>
-                                    {field.label} ({field.type})
+                                <SelectItem value="none">None</SelectItem>
+                                {getCombinedFields((f) => f.type === "number" || f.type === "text").map((item) => (
+                                  <SelectItem key={item.value} value={item.value}>
+                                    {item.label}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -310,228 +353,138 @@ export function PayrollConfigDialog({ open, onOpenChange, onConfigSaved }: Payro
                           </div>
                           <div className="space-y-2">
                             <Label className="flex items-center gap-2">
-                              {/* <Badge variant="destructive" className="text-[10px]">
-                                FIXED FIELD
-                              </Badge> */}
-                              Date <span className="text-destructive">*</span>
+                              Type/Category
                             </Label>
                             <Select
-                              value={mapping.dateField || ""}
-                              onValueChange={(value) => updateFieldMapping(formId, "dateField", value)}
+                              value={fieldMappings.typeField || "none"}
+                              onValueChange={(value) => updateFieldMapping("typeField", value)}
                             >
                               <SelectTrigger>
-                                <SelectValue placeholder="Select date field" />
+                                <SelectValue placeholder="Select type field" />
                               </SelectTrigger>
                               <SelectContent>
-                                {fields
-                                  .filter((f) => f.type === "date" || f.type === "datetime")
-                                  .map((field) => (
-                                    <SelectItem key={field.id} value={field.id}>
-                                      {field.label} ({field.type})
-                                    </SelectItem>
-                                  ))}
+                                <SelectItem value="none">None</SelectItem>
+                                {getCombinedFields().map((item) => (
+                                  <SelectItem key={item.value} value={item.value}>
+                                    {item.label}
+                                  </SelectItem>
+                                ))}
                               </SelectContent>
                             </Select>
                           </div>
-                          {/* Optional Fields */}
-                          <div className="pt-2 border-t">
-                            <Label className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
-                              {/* <Badge variant="secondary" className="text-[10px]">
-                                OPTIONAL
-                              </Badge> */}
-                              Optional Fixed Fields
+                          <div className="space-y-2">
+                            <Label className="flex items-center gap-2">
+                              Duration/Quantity
                             </Label>
-                            <div className="grid gap-4">
-                              <div className="space-y-2">
-                                <Label className="flex items-center gap-2">
-                                  {/* <Badge variant="outline" className="text-[10px]">
-                                    FIXED FIELD
-                                  </Badge> */}
-                                  Overtime Hours
-                                </Label>
-                                <Select
-                                  value={mapping.overtimeField || "none"}
-                                  onValueChange={(value) => updateFieldMapping(formId, "overtimeField", value)}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select overtime field" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="none">None</SelectItem>
-                                    {fields
-                                      .filter((f) => f.type === "number" || f.type === "text")
-                                      .map((field) => (
-                                        <SelectItem key={field.id} value={field.id}>
-                                          {field.label} ({field.type})
-                                        </SelectItem>
-                                      ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="space-y-2">
-                                <Label className="flex items-center gap-2">
-                                  {/* <Badge variant="outline" className="text-[10px]">
-                                    FIXED FIELD
-                                  </Badge> */}
-                                  Type/Category
-                                </Label>
-                                <Select
-                                  value={mapping.typeField || "none"}
-                                  onValueChange={(value) => updateFieldMapping(formId, "typeField", value)}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select type field" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="none">None</SelectItem>
-                                    {fields.map((field) => (
-                                      <SelectItem key={field.id} value={field.id}>
-                                        {field.label} ({field.type})
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="space-y-2">
-                                <Label className="flex items-center gap-2">
-                                  {/* <Badge variant="outline" className="text-[10px]">
-                                    FIXED FIELD
-                                  </Badge> */}
-                                  Duration/Quantity
-                                </Label>
-                                <Select
-                                  value={mapping.durationField || "none"}
-                                  onValueChange={(value) => updateFieldMapping(formId, "durationField", value)}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select duration field" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="none">None</SelectItem>
-                                    {fields
-                                      .filter((f) => f.type === "number" || f.type === "text" || f.type === "select")
-                                      .map((field) => (
-                                        <SelectItem key={field.id} value={field.id}>
-                                          {field.label} ({field.type})
-                                        </SelectItem>
-                                      ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                  <Label className="flex items-center gap-2">
-                                    {/* <Badge variant="outline" className="text-[10px]">
-                                      FIXED FIELD
-                                    </Badge> */}
-                                    Check-In/Start Time
-                                  </Label>
-                                  <Select
-                                    value={mapping.checkInField || "none"}
-                                    onValueChange={(value) => updateFieldMapping(formId, "checkInField", value)}
-                                  >
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Select check-in" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="none">None</SelectItem>
-                                      {fields
-                                        .filter((f) => f.type === "time" || f.type === "datetime")
-                                        .map((field) => (
-                                          <SelectItem key={field.id} value={field.id}>
-                                            {field.label}
-                                          </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                                <div className="space-y-2">
-                                  <Label className="flex items-center gap-2">
-                                    {/* <Badge variant="outline" className="text-[10px]">
-                                      FIXED FIELD
-                                    </Badge> */}
-                                    Check-Out/End Time
-                                  </Label>
-                                  <Select
-                                    value={mapping.checkOutField || "none"}
-                                    onValueChange={(value) => updateFieldMapping(formId, "checkOutField", value)}
-                                  >
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Select check-out" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="none">None</SelectItem>
-                                      {fields
-                                        .filter((f) => f.type === "time" || f.type === "datetime")
-                                        .map((field) => (
-                                          <SelectItem key={field.id} value={field.id}>
-                                            {field.label}
-                                          </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              </div>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                  <Label className="flex items-center gap-2">
-                                    {/* <Badge variant="outline" className="text-[10px]">
-                                      FIXED FIELD
-                                    </Badge> */}
-                                    Start Date
-                                  </Label>
-                                  <Select
-                                    value={mapping.startDateField || "none"}
-                                    onValueChange={(value) => updateFieldMapping(formId, "startDateField", value)}
-                                  >
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Select start date" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="none">None</SelectItem>
-                                      {fields
-                                        .filter((f) => f.type === "date" || f.type === "datetime")
-                                        .map((field) => (
-                                          <SelectItem key={field.id} value={field.id}>
-                                            {field.label}
-                                          </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                                <div className="space-y-2">
-                                  <Label className="flex items-center gap-2">
-                                    {/* <Badge variant="outline" className="text-[10px]">
-                                      FIXED FIELD
-                                    </Badge> */}
-                                    End Date
-                                  </Label>
-                                  <Select
-                                    value={mapping.endDateField || "none"}
-                                    onValueChange={(value) => updateFieldMapping(formId, "endDateField", value)}
-                                  >
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Select end date" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="none">None</SelectItem>
-                                      {fields
-                                        .filter((f) => f.type === "date" || f.type === "datetime")
-                                        .map((field) => (
-                                          <SelectItem key={field.id} value={field.id}>
-                                            {field.label}
-                                          </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              </div>
+                            <Select
+                              value={fieldMappings.durationField || "none"}
+                              onValueChange={(value) => updateFieldMapping("durationField", value)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select duration field" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">None</SelectItem>
+                                {getCombinedFields((f) => f.type === "number" || f.type === "text" || f.type === "select").map((item) => (
+                                  <SelectItem key={item.value} value={item.value}>
+                                    {item.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label className="flex items-center gap-2">
+                                Check-In/Start Time
+                              </Label>
+                              <Select
+                                value={fieldMappings.checkInField || "none"}
+                                onValueChange={(value) => updateFieldMapping("checkInField", value)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select check-in" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">None</SelectItem>
+                                  {getCombinedFields((f) => f.type === "time" || f.type === "datetime").map((item) => (
+                                    <SelectItem key={item.value} value={item.value}>
+                                      {item.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="flex items-center gap-2">
+                                Check-Out/End Time
+                              </Label>
+                              <Select
+                                value={fieldMappings.checkOutField || "none"}
+                                onValueChange={(value) => updateFieldMapping("checkOutField", value)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select check-out" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">None</SelectItem>
+                                  {getCombinedFields((f) => f.type === "time" || f.type === "datetime").map((item) => (
+                                    <SelectItem key={item.value} value={item.value}>
+                                      {item.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label className="flex items-center gap-2">
+                                Start Date
+                              </Label>
+                              <Select
+                                value={fieldMappings.startDateField || "none"}
+                                onValueChange={(value) => updateFieldMapping("startDateField", value)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select start date" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">None</SelectItem>
+                                  {getCombinedFields((f) => f.type === "date" || f.type === "datetime").map((item) => (
+                                    <SelectItem key={item.value} value={item.value}>
+                                      {item.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="flex items-center gap-2">
+                                End Date
+                              </Label>
+                              <Select
+                                value={fieldMappings.endDateField || "none"}
+                                onValueChange={(value) => updateFieldMapping("endDateField", value)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select end date" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">None</SelectItem>
+                                  {getCombinedFields((f) => f.type === "date" || f.type === "datetime").map((item) => (
+                                    <SelectItem key={item.value} value={item.value}>
+                                      {item.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </div>
                           </div>
                         </div>
                       </div>
-                    )
-                  })}
+                    </div>
+                  </div>
                 </div>
               )}
             </>

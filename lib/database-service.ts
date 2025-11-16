@@ -673,6 +673,7 @@ export class DatabaseService {
   // Field operations
   static createField = DatabaseModules.createField;
   static getFields = DatabaseModules.getFields;
+  static getAllFields = DatabaseModules.getAllFields;
   static updateField = DatabaseModules.updateField;
   static deleteField = DatabaseModules.deleteField;
 

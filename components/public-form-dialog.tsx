@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle, AlertCircle, Loader2, Send, Eye, Star, Trash2, ImageIcon } from "lucide-react";
+import { CheckCircle, AlertCircle, Loader2, Send, Eye, Star, Trash2, ImageIcon } from 'lucide-react';
 import type { Form, FormField } from "@/types/form-builder";
 import { LookupField } from "@/components/lookup-field";
 import CameraCapture from "@/components/camera-capture";
@@ -42,16 +42,19 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [completionPercentage, setCompletionPercentage] = useState(0);
-  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({}); // Store refs for file inputs
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   useEffect(() => {
+    console.log("Dialog props changed:", { formId, isOpen });
     if (formId && isOpen) {
+      console.log("Fetching form for ID:", formId);
       fetchForm();
       trackFormView();
     }
   }, [formId, isOpen]);
 
   useEffect(() => {
+    console.log("Form or formData changed, recalculating completion");
     calculateCompletion();
   }, [formData, form]);
 
@@ -59,9 +62,10 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
     console.log("Form data changed:", formData);
   }, [formData]);
 
-  // Reset form when dialog closes
   useEffect(() => {
+    console.log("Dialog open state changed:", isOpen);
     if (!isOpen) {
+      console.log("Resetting form state");
       setForm(null);
       setFormData({});
       setErrors({});
@@ -70,21 +74,93 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (form) {
+      console.log("Form loaded, checking for auto-fetch fields");
+      autoFetchDateTimeFields();
+    }
+  }, [form]);
+
+  const autoFetchDateTimeFields = async () => {
+    try {
+      const fieldsToAutoFetch = form?.sections.flatMap((section) =>
+        section.fields.filter(
+          (field) =>
+            (field.type === "date" && field.properties?.autoFetchDate) ||
+            (field.type === "time" && field.properties?.autoFetchTime) ||
+            (field.type === "datetime" && (field.properties?.autoFetchDate || field.properties?.autoFetchTime))
+        )
+      );
+
+      if (!fieldsToAutoFetch || fieldsToAutoFetch.length === 0) {
+        console.log("No auto-fetch fields found");
+        return;
+      }
+
+      console.log("Auto-fetching date/time for fields:", fieldsToAutoFetch.map((f) => f.id));
+
+      const response = await fetch("/api/system-time");
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || "Failed to fetch system time");
+      }
+
+      const { date, time, datetime } = result.data;
+      console.log("Fetched system time:", { date, time, datetime });
+
+      const updates: Record<string, string> = {};
+      fieldsToAutoFetch.forEach((field) => {
+        if (field.type === "date" && field.properties?.autoFetchDate) {
+          updates[field.id] = date;
+          console.log(`Auto-filled date field ${field.id} with ${date}`);
+        } else if (field.type === "time" && field.properties?.autoFetchTime) {
+          updates[field.id] = time;
+          console.log(`Auto-filled time field ${field.id} with ${time}`);
+        } else if (field.type === "datetime" && (field.properties?.autoFetchDate || field.properties?.autoFetchTime)) {
+          updates[field.id] = datetime;
+          console.log(`Auto-filled datetime field ${field.id} with ${datetime}`);
+        }
+      });
+
+      if (Object.keys(updates).length > 0) {
+        setFormData((prev) => ({
+          ...prev,
+          ...updates,
+        }));
+        console.log("Form data updated with auto-fetched values");
+      }
+    } catch (error) {
+      console.error("Error auto-fetching date/time:", error);
+      toast({
+        title: "Warning",
+        description: "Could not auto-fetch date/time from system",
+        variant: "destructive",
+      });
+    }
+  };
+
   const fetchForm = async () => {
-    if (!formId) return;
+    if (!formId) {
+      console.log("No formId provided, skipping fetch");
+      return;
+    }
 
     try {
+      console.log("Starting form fetch");
       setLoading(true);
       const response = await fetch(`/api/forms/${formId}`);
+      console.log("Form fetch response status:", response.status);
       const result = await response.json();
+      console.log("Form fetch result:", result);
       if (!result.success) {
         throw new Error(result.error);
       }
       if (!result.data.isPublished) {
         throw new Error("This form is not published");
       }
+      console.log("Setting form:", result.data);
       setForm(result.data);
-      // Initialize form data with default values using field IDs as keys
       const initialData: Record<string, any> = {};
       result.data.sections.forEach((section: any) => {
         section.fields.forEach((field: FormField) => {
@@ -93,23 +169,29 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
           }
         });
       });
-      setFormData(initialData);
       console.log("Initial form data:", initialData);
+      setFormData(initialData);
     } catch (error: any) {
+      console.error("Error in fetchForm:", error);
       toast({
         title: "Error",
         description: error.message,
         variant: "destructive",
       });
     } finally {
+      console.log("Form fetch completed, loading set to false");
       setLoading(false);
     }
   };
 
   const trackFormView = async () => {
-    if (!formId) return;
+    if (!formId) {
+      console.log("No formId for tracking view");
+      return;
+    }
 
     try {
+      console.log("Tracking form view event");
       await fetch(`/api/forms/${formId}/events`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -121,89 +203,104 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
           },
         }),
       });
+      console.log("Form view tracked successfully");
     } catch (error) {
       console.error("Error tracking form view:", error);
     }
   };
 
   const calculateCompletion = () => {
-    if (!form) return;
+    console.log("Calculating completion percentage");
+    if (!form) {
+      console.log("No form available for completion calculation");
+      return;
+    }
     const allFields = form.sections.flatMap((section) => section.fields);
+    console.log("All fields:", allFields.length);
     const requiredFields = allFields.filter((field) => field.validation?.required);
+    console.log("Required fields:", requiredFields.length);
     const completedRequired = requiredFields.filter((field) => {
       const value = formData[field.id];
       return value !== undefined && value !== null && value !== "";
     });
+    console.log("Completed required fields:", completedRequired.length);
     const percentage =
       requiredFields.length > 0 ? Math.round((completedRequired.length / requiredFields.length) * 100) : 100;
+    console.log("Completion percentage:", percentage);
     setCompletionPercentage(percentage);
   };
 
   const validateField = (field: FormField, value: any): string | null => {
+    console.log(`Validating field ${field.id} with value:`, value);
     const validation = field.validation || {};
-    // Required validation
     if (validation.required && (!value || value === "")) {
+      console.log(`Validation failed: ${field.label} is required`);
       return `${field.label} is required`;
     }
-    // Email validation
     if (field.type === "email" && value) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(value)) {
+        console.log(`Validation failed: Invalid email for ${field.id}`);
         return "Please enter a valid email address";
       }
     }
-    // URL validation
     if (field.type === "url" && value) {
       try {
         new URL(value);
+        console.log(`URL validation passed for ${field.id}`);
       } catch {
+        console.log(`Validation failed: Invalid URL for ${field.id}`);
         return "Please enter a valid URL";
       }
     }
-    // Phone validation
     if (field.type === "tel" && value) {
       const phoneRegex = /^[+]?[1-9][\d]{0,15}$/;
       if (!phoneRegex.test(value.replace(/[\s\-()]/g, ""))) {
+        console.log(`Validation failed: Invalid phone for ${field.id}`);
         return "Please enter a valid phone number";
       }
     }
-    // Number validation
     if (field.type === "number" && value) {
       const num = Number(value);
       if (isNaN(num)) {
+        console.log(`Validation failed: Invalid number for ${field.id}`);
         return "Please enter a valid number";
       }
       if (validation.min !== undefined && num < validation.min) {
+        console.log(`Validation failed: Number too low for ${field.id}`);
         return `Value must be at least ${validation.min}`;
       }
       if (validation.max !== undefined && num > validation.max) {
+        console.log(`Validation failed: Number too high for ${field.id}`);
         return `Value must be at most ${validation.max}`;
       }
     }
-    // Text length validation
     if ((field.type === "text" || field.type === "textarea") && value) {
       if (validation.minLength && value.length < validation.minLength) {
+        console.log(`Validation failed: Text too short for ${field.id}`);
         return `Must be at least ${validation.minLength} characters`;
       }
       if (validation.maxLength && value.length > validation.maxLength) {
+        console.log(`Validation failed: Text too long for ${field.id}`);
         return `Must be at most ${validation.maxLength} characters`;
       }
     }
-    // Pattern validation
     if (validation.pattern && value) {
       const regex = new RegExp(validation.pattern);
       if (!regex.test(value)) {
+        console.log(`Validation failed: Pattern mismatch for ${field.id}`);
         return validation.patternMessage || "Invalid format";
       }
     }
-    // Image and Signature validation
     if ((field.type === "image" || field.type === "signature") && validation.required && !value) {
+      console.log(`Validation failed: ${field.label} is required`);
       return `${field.label} is required`;
     }
-    // Camera validation
     if (field.type === "camera" && validation.required && !value) {
+      console.log(`Validation failed: ${field.label} is required`);
       return `${field.label} is required`;
     }
+    console.log(`Validation passed for field ${field.id}`);
     return null;
   };
 
@@ -212,23 +309,24 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
     let storeValue = value;
     if (value && typeof value === "object") {
       if (Array.isArray(value)) {
-        // Multiple selection - extract store values
         storeValue = value.map((item) => item.storeValue || item.label || item.value);
+        console.log(`Handled array value for ${fieldId}:`, storeValue);
       } else if (value.storeValue !== undefined) {
-        // Single selection - use store value
         storeValue = value.storeValue;
+        console.log(`Handled single selection for ${fieldId}:`, storeValue);
       } else if (value instanceof File) {
-        // Handle file input for image and signature
+        console.log(`Processing file for ${fieldId}:`, value.name);
         const reader = new FileReader();
         reader.onload = () => {
           const result = reader.result as string;
+          console.log(`File read success for ${fieldId}, data URL length:`, result.length);
           setFormData((prev) => {
             const newData = { ...prev, [fieldId]: result };
             console.log("Updated form data with file:", newData);
             return newData;
           });
-          // Clear error for this field
           if (errors[fieldId]) {
+            console.log(`Clearing error for ${fieldId}`);
             setErrors((prev) => {
               const newErrors = { ...prev };
               delete newErrors[fieldId];
@@ -237,6 +335,7 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
           }
         };
         reader.onerror = () => {
+          console.error(`File read error for ${fieldId}`);
           toast({
             title: "Error",
             description: "Failed to read file",
@@ -244,16 +343,17 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
           });
         };
         reader.readAsDataURL(value);
-        return; // Exit early as FileReader is asynchronous
+        return;
       }
     }
+    console.log(`Setting form data for ${fieldId}:`, storeValue);
     setFormData((prev) => {
       const newData = { ...prev, [fieldId]: storeValue };
       console.log("Updated form data:", newData);
       return newData;
     });
-    // Clear error for this field
     if (errors[fieldId]) {
+      console.log(`Clearing error for ${fieldId}`);
       setErrors((prev) => {
         const newErrors = { ...prev };
         delete newErrors[fieldId];
@@ -263,16 +363,18 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
   };
 
   const handleClearFile = (fieldId: string) => {
+    console.log(`Clearing file for field:`, fieldId);
     setFormData((prev) => {
       const newData = { ...prev, [fieldId]: "" };
       console.log("Cleared file for field:", fieldId, newData);
       return newData;
     });
     if (fileInputRefs.current[fieldId]) {
+      console.log(`Resetting file input ref for ${fieldId}`);
       fileInputRefs.current[fieldId]!.value = "";
     }
-    // Clear error for this field
     if (errors[fieldId]) {
+      console.log(`Clearing error for ${fieldId} on clear`);
       setErrors((prev) => {
         const newErrors = { ...prev };
         delete newErrors[fieldId];
@@ -282,27 +384,36 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
   };
 
   const validateForm = (): boolean => {
-    if (!form) return false;
+    console.log("Starting form validation");
+    if (!form) {
+      console.log("No form for validation");
+      return false;
+    }
     const newErrors: Record<string, string> = {};
     let isValid = true;
     form.sections.forEach((section) => {
+      console.log(`Validating section: ${section.title}`);
       section.fields.forEach((field) => {
         const error = validateField(field, formData[field.id]);
         if (error) {
           newErrors[field.id] = error;
           isValid = false;
+          console.log(`Validation error for ${field.id}:`, error);
         }
       });
     });
+    console.log("Setting new errors:", newErrors);
     setErrors(newErrors);
+    console.log("Form validation result:", isValid);
     return isValid;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
     console.log("Form submission started");
     console.log("Current form data:", formData);
+    e.preventDefault();
     if (!validateForm()) {
+      console.log("Form validation failed");
       toast({
         title: "Validation Error",
         description: "Please fix the errors below",
@@ -312,6 +423,7 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
     }
 
     if (Object.keys(formData).length === 0) {
+      console.log("No data in form");
       toast({
         title: "No Data",
         description: "Please fill out the form before submitting",
@@ -320,6 +432,7 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
       return;
     }
 
+    console.log("Starting submission process");
     setSubmitting(true);
     try {
       console.log("Sending form submission with field IDs as keys...");
@@ -332,17 +445,20 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
           userAgent: navigator.userAgent,
         }),
       });
+      console.log("Submission response status:", response.status);
       const result = await response.json();
       console.log("Submission response:", result);
       if (!result.success) {
         throw new Error(result.error);
       }
+      console.log("Submission successful, setting submitted state");
       setSubmitted(true);
       toast({
         title: "Success!",
         description: form?.submissionMessage || "Form submitted successfully",
       });
 
+      console.log("Tracking submit event");
       await fetch(`/api/forms/${formId}/events`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -355,6 +471,7 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
           },
         }),
       });
+      console.log("Submit event tracked");
       console.log("Form submitted successfully with field labels:", result.data.recordData);
     } catch (error: any) {
       console.error("Submission error:", error);
@@ -364,6 +481,7 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
         variant: "destructive",
       });
     } finally {
+      console.log("Submission process ended, resetting submitting state");
       setSubmitting(false);
     }
   };
@@ -371,6 +489,11 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
   const renderField = (field: FormField) => {
     const value = formData[field.id];
     const error = errors[field.id];
+    console.log(`Rendering field ${field.id} of type ${field.type}, value:`, value, `error:`, error);
+
+    const isAutoFetched = field.properties?.autoFetchDate || field.properties?.autoFetchTime;
+    const isReadOnly = field.readonly || isAutoFetched;
+
     const fieldProps = {
       id: field.id,
       disabled: submitting || submitted,
@@ -378,6 +501,7 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
     };
 
     const options = Array.isArray(field.options) ? field.options : [];
+    console.log(`Field ${field.id} options:`, options);
 
     const lookupFieldData = {
       id: field.id,
@@ -430,6 +554,19 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
             type="date"
             value={value || ""}
             onChange={(e) => handleFieldChange(field.id, e.target.value)}
+            readOnly={isReadOnly}
+            className={`${fieldProps.className} ${isReadOnly ? 'bg-muted cursor-not-allowed' : ''}`}
+          />
+        );
+      case "time":
+        return (
+          <Input
+            {...fieldProps}
+            type="time"
+            value={value || ""}
+            onChange={(e) => handleFieldChange(field.id, e.target.value)}
+            readOnly={isReadOnly}
+            className={`${fieldProps.className} ${isReadOnly ? 'bg-muted cursor-not-allowed' : ''}`}
           />
         );
       case "datetime":
@@ -439,6 +576,8 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
             type="datetime-local"
             value={value || ""}
             onChange={(e) => handleFieldChange(field.id, e.target.value)}
+            readOnly={isReadOnly}
+            className={`${fieldProps.className} ${isReadOnly ? 'bg-muted cursor-not-allowed' : ''}`}
           />
         );
       case "checkbox":
@@ -557,6 +696,7 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (file) {
+                console.log(`File selected for ${field.id}:`, file.name);
                 handleFieldChange(field.id, file);
               }
             }}
@@ -579,7 +719,7 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
             {value ? (
               <div className="relative">
                 <img
-                  src={value}
+                  src={value || "/placeholder.svg"}
                   alt={field.type === "image" ? "Uploaded image" : "Uploaded signature"}
                   className={`max-w-full h-auto rounded border ${error ? "border-red-500" : ""}`}
                 />
@@ -603,6 +743,7 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) {
+                      console.log(`File selected for ${field.id}:`, file.name);
                       handleFieldChange(field.id, file);
                     }
                   }}
@@ -615,6 +756,7 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
       case "hidden":
         return <Input {...fieldProps} type="hidden" value={value || field.defaultValue || ""} />;
       default:
+        console.log(`Unknown field type ${field.type}, falling back to input`);
         return (
           <Input
             {...fieldProps}
@@ -626,7 +768,10 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
     }
   };
 
+  console.log("Rendering dialog, submitted:", submitted, "loading:", loading, "form:", !!form);
+
   if (submitted) {
+    console.log("Rendering submitted state");
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="max-w-md">
@@ -639,6 +784,7 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
             <div className="flex gap-2 justify-center">
               <Button
                 onClick={() => {
+                  console.log("Resetting for another submission");
                   setSubmitted(false);
                   setFormData({});
                   setErrors({});
