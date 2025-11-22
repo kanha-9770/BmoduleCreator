@@ -16,18 +16,20 @@ import { Loader2, Shield, ArrowLeft, RefreshCw } from "lucide-react"
 import Link from "next/link"
 import type { z } from "zod"
 import { CreateOrganizationModal } from "@/components/create-organization-modal"
+import { useVerifyOTPMutation, useResendOTPMutation } from "@/lib/api/auth"
 
 type VerifyOTPFormData = z.infer<typeof VerifyOTPSchema>
 
 export default function VerifyOTPPage() {
-  const [isLoading, setIsLoading] = useState(false)
-  const [isResending, setIsResending] = useState(false)
   const [timeLeft, setTimeLeft] = useState(0)
   const [showOrgModal, setShowOrgModal] = useState(false)
   const router = useRouter()
   const searchParams = useSearchParams()
   const { toast } = useToast()
   const inputRefs = useRef<(HTMLInputElement | null)[]>([])
+
+  const [verifyOTP, { isLoading: isVerifying }] = useVerifyOTPMutation()
+  const [resendOTP, { isLoading: isResending }] = useResendOTPMutation()
 
   const userId = searchParams.get("userId")
   const type = searchParams.get("type") || "REGISTRATION"
@@ -59,7 +61,6 @@ export default function VerifyOTPPage() {
     newOTP[index] = value
     form.setValue("otp", newOTP.join(""))
 
-    // Move to next input
     if (value && index < 5) {
       inputRefs.current[index + 1]?.focus()
     }
@@ -74,35 +75,12 @@ export default function VerifyOTPPage() {
   const onSubmit = async (data: VerifyOTPFormData) => {
     if (!userId) return
 
-    setIsLoading(true)
-
-    console.log("Submitting OTP verification:", { otp: data.otp, userId, type })
-
     try {
-      const response = await fetch("/api/auth/verify-otp", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          ...data,
-          userId,
-          type,
-        }),
-      })
-
-      const result = await response.json()
-      console.log("OTP verification response:", result)
-
-      if (!response.ok) {
-        console.error("OTP verification failed:", result)
-        toast({
-          title: "Verification Failed",
-          description: result.error || "Invalid verification code",
-          variant: "destructive",
-        })
-        return
-      }
+      const result = await verifyOTP({
+        otp: data.otp,
+        userId,
+        type,
+      }).unwrap()
 
       toast({
         title: "Success!",
@@ -112,20 +90,17 @@ export default function VerifyOTPPage() {
       if (type === "registration" && result.needsOrganization) {
         setShowOrgModal(true)
       } else {
-        // Redirect to profile/dashboard
         setTimeout(() => {
           window.location.href = "/profile"
         }, 100)
       }
-    } catch (error) {
-      console.error("Network error during OTP verification:", error)
+    } catch (error: any) {
+      console.error("OTP verification failed:", error)
       toast({
-        title: "Error",
-        description: "Network error. Please try again.",
+        title: "Verification Failed",
+        description: error?.data?.error || "Invalid verification code",
         variant: "destructive",
       })
-    } finally {
-      setIsLoading(false)
     }
   }
 
@@ -136,55 +111,26 @@ export default function VerifyOTPPage() {
     }, 100)
   }
 
-  const resendOTP = async () => {
+  const handleResendOTP = async () => {
     if (!userId || timeLeft > 0 || isResending) return
 
-    setIsResending(true)
-
     try {
-      const response = await fetch("/api/auth/resend-otp", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          userId,
-          type: type.toLowerCase(),
-        }),
+      const result = await resendOTP({
+        userId,
+        type: type.toLowerCase(),
+      }).unwrap()
+
+      toast({
+        title: "Code Sent",
+        description: result.message || "A new verification code has been sent to your email",
       })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        toast({
-          title: "Error",
-          description: result.error || "Failed to resend code",
-          variant: "destructive",
-        })
-        return
-      }
-
-      if (result.success) {
-        toast({
-          title: "Code Sent",
-          description: result.message || "A new verification code has been sent to your email",
-        })
-        setTimeLeft(60) // 1 minute cooldown
-      } else {
-        toast({
-          title: "Error",
-          description: result.error || "Failed to resend code",
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
+      setTimeLeft(60)
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to resend code. Please try again.",
+        description: error?.data?.error || "Failed to resend code",
         variant: "destructive",
       })
-    } finally {
-      setIsResending(false)
     }
   }
 
@@ -228,7 +174,7 @@ export default function VerifyOTPPage() {
                                 value={otpValue[index] || ""}
                                 onChange={(e) => handleOTPChange(index, e.target.value)}
                                 onKeyDown={(e) => handleKeyDown(index, e)}
-                                disabled={isLoading}
+                                disabled={isVerifying}
                               />
                             ))}
                           </div>
@@ -241,9 +187,9 @@ export default function VerifyOTPPage() {
                   <Button
                     type="submit"
                     className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-medium transition-all duration-200 hover:scale-[1.02]"
-                    disabled={isLoading || otpValue.length !== 6}
+                    disabled={isVerifying || otpValue.length !== 6}
                   >
-                    {isLoading ? (
+                    {isVerifying ? (
                       <div className="flex items-center space-x-2">
                         <Loader2 className="h-4 w-4 animate-spin" />
                         <span>Verifying...</span>
@@ -257,7 +203,7 @@ export default function VerifyOTPPage() {
 
               <div className="mt-6 text-center space-y-3">
                 <button
-                  onClick={resendOTP}
+                  onClick={handleResendOTP}
                   disabled={timeLeft > 0 || isResending}
                   className="text-sm text-blue-600 hover:text-blue-500 font-medium disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
                 >

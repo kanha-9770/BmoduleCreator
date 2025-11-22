@@ -314,7 +314,7 @@ export function FormsPermissionMatrix({
 
   /* ------------------------------ HELPERS ------------------------------- */
   const getUsersForRole = (roleId: string): User[] =>
-    users.filter((u) => u.unitAssignments?.some((a) => a.roleId === roleId));
+    users?.filter((u) => u.unitAssignments?.some((a) => a.roleId === roleId));
 
   const getSelectedFormDetails = () => {
     if (!selectedForm) return null;
@@ -424,7 +424,7 @@ export function FormsPermissionMatrix({
           </div>
           <div>
             <span className="font-medium text-blue-800">Users:</span>{" "}
-            <span className="ml-2 text-blue-600">{users.length}</span>
+            <span className="ml-2 text-blue-600">{users?.length}</span>
           </div>
           <div>
             <span className="font-medium text-blue-800">Permissions:</span>{" "}

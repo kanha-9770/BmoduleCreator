@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -10,7 +11,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Filter } from "lucide-react"
+import { Filter } from 'lucide-react'
+import { getAttendanceStatus, canCheckOut } from "@/lib/attendance"
 
 interface Form {
   id: string
@@ -38,32 +40,155 @@ const FormsContent: React.FC<FormsContentProps> = ({
   const visible = forms.slice(0, 2)
   const hasMore = forms.length > 2
 
-  const FormButton = (f: Form) => (
-    <Button
-      key={f.id}
-      variant="outline"
-      className="w-full justify-start text-left text-blue-600 hover:text-blue-800 border-blue-600 hover:border-blue-800"
-      onClick={(e) => {
-        e.stopPropagation()
-        openFormDialog(f.id)
-      }}
-    >
-      {f.name}
-    </Button>
-  )
+  const [userId, setUserId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const [attendanceStatus, setAttendanceStatus] = useState({
+    checkedIn: false,
+    checkedOut: false,
+    canCheckIn: true,
+    canCheckOut: false,
+  })
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        setLoading(true)
+        const response = await fetch("/api/auth/me")
+        const data = await response.json()
+
+        if (data.success && data.user?.id) {
+          console.log("[v0] User authenticated:", data.user.id)
+          setUserId(data.user.id)
+        } else {
+          console.log("[v0] User not authenticated")
+          setUserId(null)
+        }
+      } catch (error) {
+        console.error("[v0] Failed to fetch user:", error)
+        setUserId(null)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchUser()
+  }, [])
+
+  useEffect(() => {
+    if (userId) {
+      updateAttendanceStatus()
+    }
+  }, [userId])
+
+  const updateAttendanceStatus = async () => {
+    if (!userId) return
+    const status = await getAttendanceStatus(userId)
+    if (status) {
+      setAttendanceStatus(status)
+    }
+  }
+
+  const getButtonState = (formName: string): { disabled: boolean; title?: string } => {
+    const lowerName = formName.toLowerCase()
+
+    if (lowerName === "check-in") {
+      return {
+        disabled: !attendanceStatus.canCheckIn,
+        title: attendanceStatus.checkedIn ? "Already checked in today" : undefined,
+      }
+    }
+
+    if (lowerName === "check-out") {
+      return {
+        disabled: !attendanceStatus.canCheckOut,
+        title: !attendanceStatus.checkedIn ? "Please complete Check-In first!" : "Already checked out today",
+      }
+    }
+
+    return { disabled: false }
+  }
+
+  const handleFormClick = async (formId: string, formName: string) => {
+    const lowerName = formName.toLowerCase()
+
+    if (lowerName === "check-out") {
+      if (!userId) {
+        alert("User not authenticated")
+        return
+      }
+
+      const canOut = await canCheckOut(userId)
+      if (!canOut) {
+        const status = await getAttendanceStatus(userId)
+        const message = !status?.checkedIn ? "Please complete Check-In first!" : "Already checked out today!"
+        alert(message)
+        return
+      }
+    }
+
+    ;(window as any).__currentUserId = userId
+    openFormDialog(formId)
+  }
+
+  const handleFormSubmitted = async (formName: string) => {
+    console.log("[v0] Form submitted:", formName)
+    if (formName.toLowerCase() === "check-in" || formName.toLowerCase() === "check-out") {
+      // Update state after attendance form submission
+      setTimeout(() => {
+        updateAttendanceStatus()
+      }, 500)
+    }
+  }
+
+  useEffect(() => {
+    ;(window as any).__handleFormSubmitted = handleFormSubmitted
+  }, [])
+
+  const FormButton = (f: Form) => {
+    const buttonState = getButtonState(f.name)
+
+    return (
+      <Button
+        key={f.id}
+        variant="outline"
+        className="w-full justify-start text-left text-blue-600 hover:text-blue-800 border-blue-600 hover:border-blue-800 disabled:opacity-50 disabled:cursor-not-allowed"
+        onClick={(e) => {
+          e.stopPropagation()
+          handleFormClick(f.id, f.name)
+        }}
+        disabled={buttonState.disabled || loading}
+        title={buttonState.title}
+      >
+        {f.name}
+      </Button>
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="border-gray-300">
+        <div className="grid grid-cols-4 gap-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={`skeleton-${i}`} className="col-span-1 h-10 bg-gray-200 rounded animate-pulse" />
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="border-gray-300">
       {forms.length ? (
         <div className="grid grid-cols-4 gap-2">
-          {/* ---- LEFT EMPTY CELLS TO PUSH EVERYTHING TO THE RIGHT ---- */}
+          {/* EMPTY CELLS */}
           {Array.from({ length: 4 - (visible.length + (hasMore ? 1 : 0)) }).map(
             (_, i) => (
               <div key={`empty-left-${i}`} className="col-span-1" />
             )
           )}
 
-          {/* ---- VISIBLE FORM BUTTONS (max 2) ---- */}
+          {/* TWO VISIBLE BUTTONS */}
           {visible.map((f) => (
             <div
               key={f.id}
@@ -74,7 +199,7 @@ const FormsContent: React.FC<FormsContentProps> = ({
             </div>
           ))}
 
-          {/* ---- FUNNEL ICON (tiny, not full width) ---- */}
+          {/* FUNNEL ICON */}
           {hasMore && (
             <div className="flex items-center justify-center">
               <Dialog>

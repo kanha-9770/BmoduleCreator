@@ -12,7 +12,12 @@ const publicRoutes = [
   "/organization",
   "/profile",
   "/builder",
-  "/sub-admin/cmhady3zj0027vjck0dlsod19"
+  "/sub-admin/cmhady3zj0027vjck0dlsod19",
+  "/payroll",
+  "/admin/roles-permissions",
+  "/admin/modules",
+
+
 ];
 
 const protectedRoutes = {
@@ -23,7 +28,7 @@ const protectedRoutes = {
     "/admin",
     "/admin/modules",
     "/admin/roles-permissions",
-    "/builder", // Add /builder to protect all /builder/* routes
+    "/builder",
   ],
 };
 

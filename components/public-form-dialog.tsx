@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,21 +16,66 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle, AlertCircle, Loader2, Send, Eye, Star, Trash2, ImageIcon } from 'lucide-react';
+import { CheckCircle, AlertCircle, Loader2, Send, Eye, Star, Trash2, ImageIcon, MapPin } from 'lucide-react';
 import type { Form, FormField } from "@/types/form-builder";
 import { LookupField } from "@/components/lookup-field";
 import CameraCapture from "@/components/camera-capture";
+import { recordCheckIn, recordCheckOut } from "@/lib/attendance";
+import { FileUploadZone } from "./file-upload-zone";
+
+interface LocationResult {
+  address: string;
+  lat: number;
+  lng: number;
+}
+
+const fetchUserLocation = async (retry = false): Promise<LocationResult | null> => {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      console.warn("Geolocation not supported");
+      return resolve(null);
+    }
+
+    const handleSuccess = async (pos: GeolocationPosition) => {
+      const { latitude, longitude } = pos.coords;
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1`
+        );
+        const data = await res.json();
+        const address = data.display_name || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+        resolve({ address, lat: latitude, lng: longitude });
+      } catch {
+        resolve(null);
+      }
+    };
+
+    const handleError = (err: GeolocationPositionError) => {
+      console.warn("Geolocation error:", err.message);
+      if (!retry && err.code === 1) {
+        setTimeout(() => {
+          navigator.geolocation.getCurrentPosition(handleSuccess, () => resolve(null), {
+            enableHighAccuracy: true,
+            timeout: 10000,
+          });
+        }, 500);
+      } else {
+        resolve(null);
+      }
+    };
+
+    navigator.geolocation.getCurrentPosition(
+      handleSuccess,
+      handleError,
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 300000 }
+    );
+  });
+};
 
 interface PublicFormDialogProps {
   formId: string | null;
   isOpen: boolean;
   onClose: () => void;
-}
-
-interface FormSection {
-  id: string;
-  title: string;
-  fields: FormField[];
 }
 
 export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogProps) {
@@ -42,401 +87,351 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [completionPercentage, setCompletionPercentage] = useState(0);
+  const [locationStatus, setLocationStatus] = useState<Record<string, "idle" | "fetching" | "success" | "failed">>({});
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const hasUserInteracted = useRef(false);
 
   useEffect(() => {
-    console.log("Dialog props changed:", { formId, isOpen });
+    if (!isOpen) {
+      setForm(null);
+      setFormData({});
+      setErrors({});
+      setSubmitted(false);
+      setCompletionPercentage(0);
+      setLocationStatus({});
+      hasUserInteracted.current = false;
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
     if (formId && isOpen) {
-      console.log("Fetching form for ID:", formId);
       fetchForm();
       trackFormView();
     }
   }, [formId, isOpen]);
 
   useEffect(() => {
-    console.log("Form or formData changed, recalculating completion");
     calculateCompletion();
   }, [formData, form]);
 
-  useEffect(() => {
-    console.log("Form data changed:", formData);
-  }, [formData]);
+  const triggerLocationFetch = useCallback(async () => {
+    if (!form) return;
+
+    const locationFields = form.sections.flatMap((s) =>
+      s.fields.filter((f) => {
+        const type = (f.type || "").toString().toLowerCase();
+        return (type === "location" || type === "newlocation") && f.properties?.autoFetchLocation;
+      })
+    );
+
+    if (locationFields.length === 0) return;
+
+    const updates: Record<string, any> = {};
+    let anySuccess = false;
+
+    for (const field of locationFields) {
+      const fieldId = field.id;
+      if (formData[fieldId]) continue;
+
+      setLocationStatus((prev) => ({ ...prev, [fieldId]: "fetching" }));
+
+      const loc = await fetchUserLocation(true);
+      if (loc) {
+        updates[fieldId] = loc.address;
+        const coordId = `${fieldId}_coords`;
+        const hasCoord = form.sections
+          .flatMap((s) => s.fields)
+          .some((f) => f.id === coordId && f.type === "hidden");
+        if (hasCoord) updates[coordId] = `${loc.lat},${loc.lng}`;
+        setLocationStatus((prev) => ({ ...prev, [fieldId]: "success" }));
+        anySuccess = true;
+      } else {
+        setLocationStatus((prev) => ({ ...prev, [fieldId]: "failed" }));
+      }
+    }
+
+    if (Object.keys(updates).length > 0) {
+      setFormData((prev) => ({ ...prev, ...updates }));
+    }
+
+    if (!anySuccess && locationFields.length > 0) {
+      toast({
+        title: "Location",
+        description: "Could not auto-fetch location. Please type it manually.",
+        variant: "default",
+      });
+    }
+  }, [form, formData, toast]);
 
   useEffect(() => {
-    console.log("Dialog open state changed:", isOpen);
-    if (!isOpen) {
-      console.log("Resetting form state");
-      setForm(null);
-      setFormData({});
-      setErrors({});
-      setSubmitted(false);
-      setCompletionPercentage(0);
+    if (!hasUserInteracted.current && isOpen && form) {
+      const handler = () => {
+        hasUserInteracted.current = true;
+        triggerLocationFetch();
+        document.removeEventListener("click", handler);
+        document.removeEventListener("keydown", handler);
+      };
+      document.addEventListener("click", handler);
+      document.addEventListener("keydown", handler);
+      return () => {
+        document.removeEventListener("click", handler);
+        document.removeEventListener("keydown", handler);
+      };
     }
-  }, [isOpen]);
+  }, [isOpen, form, triggerLocationFetch]);
 
   useEffect(() => {
-    if (form) {
-      console.log("Form loaded, checking for auto-fetch fields");
-      autoFetchDateTimeFields();
+    if (hasUserInteracted.current && form) {
+      triggerLocationFetch();
     }
+  }, [form, triggerLocationFetch]);
+
+  useEffect(() => {
+    if (!form) return;
+    const dateTimeFields = form.sections.flatMap((s) =>
+      s.fields.filter(
+        (f) =>
+          (f.type === "date" && f.properties?.autoFetchDate) ||
+          (f.type === "time" && f.properties?.autoFetchTime) ||
+          (f.type === "datetime" && (f.properties?.autoFetchDate || f.properties?.autoFetchTime))
+      )
+    );
+
+    if (dateTimeFields.length === 0) return;
+
+    fetch("/api/system-time")
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.success) {
+          const { date, time, datetime } = json.data;
+          const updates: Record<string, any> = {};
+          dateTimeFields.forEach((f) => {
+            if (f.type === "date" && f.properties?.autoFetchDate) updates[f.id] = date;
+            else if (f.type === "time" && f.properties?.autoFetchTime) updates[f.id] = time;
+            else if (f.type === "datetime") updates[f.id] = datetime;
+          });
+          setFormData((prev) => ({ ...prev, ...updates }));
+        }
+      })
+      .catch(() => { });
   }, [form]);
 
-  const autoFetchDateTimeFields = async () => {
-    try {
-      const fieldsToAutoFetch = form?.sections.flatMap((section) =>
-        section.fields.filter(
-          (field) =>
-            (field.type === "date" && field.properties?.autoFetchDate) ||
-            (field.type === "time" && field.properties?.autoFetchTime) ||
-            (field.type === "datetime" && (field.properties?.autoFetchDate || field.properties?.autoFetchTime))
-        )
-      );
-
-      if (!fieldsToAutoFetch || fieldsToAutoFetch.length === 0) {
-        console.log("No auto-fetch fields found");
-        return;
-      }
-
-      console.log("Auto-fetching date/time for fields:", fieldsToAutoFetch.map((f) => f.id));
-
-      const response = await fetch("/api/system-time");
-      const result = await response.json();
-
-      if (!result.success) {
-        throw new Error(result.error || "Failed to fetch system time");
-      }
-
-      const { date, time, datetime } = result.data;
-      console.log("Fetched system time:", { date, time, datetime });
-
-      const updates: Record<string, string> = {};
-      fieldsToAutoFetch.forEach((field) => {
-        if (field.type === "date" && field.properties?.autoFetchDate) {
-          updates[field.id] = date;
-          console.log(`Auto-filled date field ${field.id} with ${date}`);
-        } else if (field.type === "time" && field.properties?.autoFetchTime) {
-          updates[field.id] = time;
-          console.log(`Auto-filled time field ${field.id} with ${time}`);
-        } else if (field.type === "datetime" && (field.properties?.autoFetchDate || field.properties?.autoFetchTime)) {
-          updates[field.id] = datetime;
-          console.log(`Auto-filled datetime field ${field.id} with ${datetime}`);
-        }
-      });
-
-      if (Object.keys(updates).length > 0) {
-        setFormData((prev) => ({
-          ...prev,
-          ...updates,
-        }));
-        console.log("Form data updated with auto-fetched values");
-      }
-    } catch (error) {
-      console.error("Error auto-fetching date/time:", error);
-      toast({
-        title: "Warning",
-        description: "Could not auto-fetch date/time from system",
-        variant: "destructive",
-      });
-    }
-  };
-
   const fetchForm = async () => {
-    if (!formId) {
-      console.log("No formId provided, skipping fetch");
-      return;
-    }
-
+    if (!formId) return;
     try {
-      console.log("Starting form fetch");
       setLoading(true);
       const response = await fetch(`/api/forms/${formId}`);
-      console.log("Form fetch response status:", response.status);
       const result = await response.json();
-      console.log("Form fetch result:", result);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      if (!result.data.isPublished) {
-        throw new Error("This form is not published");
-      }
-      console.log("Setting form:", result.data);
+      if (!result.success) throw new Error(result.error);
+      if (!result.data.isPublished) throw new Error("This form is not published");
       setForm(result.data);
+
       const initialData: Record<string, any> = {};
       result.data.sections.forEach((section: any) => {
         section.fields.forEach((field: FormField) => {
-          if (field.defaultValue) {
-            initialData[field.id] = field.defaultValue;
-          }
+          if (field.defaultValue) initialData[field.id] = field.defaultValue;
         });
       });
-      console.log("Initial form data:", initialData);
       setFormData(initialData);
     } catch (error: any) {
-      console.error("Error in fetchForm:", error);
       toast({
         title: "Error",
         description: error.message,
         variant: "destructive",
       });
     } finally {
-      console.log("Form fetch completed, loading set to false");
       setLoading(false);
     }
   };
 
   const trackFormView = async () => {
-    if (!formId) {
-      console.log("No formId for tracking view");
-      return;
-    }
-
+    if (!formId) return;
     try {
-      console.log("Tracking form view event");
       await fetch(`/api/forms/${formId}/events`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           eventType: "view",
-          payload: {
-            userAgent: navigator.userAgent,
-            timestamp: new Date().toISOString(),
-          },
+          payload: { userAgent: navigator.userAgent, timestamp: new Date().toISOString() },
         }),
       });
-      console.log("Form view tracked successfully");
     } catch (error) {
-      console.error("Error tracking form view:", error);
+      console.error("Track view failed", error);
     }
   };
 
   const calculateCompletion = () => {
-    console.log("Calculating completion percentage");
-    if (!form) {
-      console.log("No form available for completion calculation");
-      return;
-    }
-    const allFields = form.sections.flatMap((section) => section.fields);
-    console.log("All fields:", allFields.length);
-    const requiredFields = allFields.filter((field) => field.validation?.required);
-    console.log("Required fields:", requiredFields.length);
-    const completedRequired = requiredFields.filter((field) => {
-      const value = formData[field.id];
-      return value !== undefined && value !== null && value !== "";
+    if (!form) return;
+    const allFields = form.sections.flatMap((s) => s.fields);
+    const required = allFields.filter((f) => f.validation?.required);
+    const filled = required.filter((f) => {
+      const v = formData[f.id];
+      return v !== undefined && v !== null && v !== "";
     });
-    console.log("Completed required fields:", completedRequired.length);
-    const percentage =
-      requiredFields.length > 0 ? Math.round((completedRequired.length / requiredFields.length) * 100) : 100;
-    console.log("Completion percentage:", percentage);
+    const percentage = required.length > 0 ? Math.round((filled.length / required.length) * 100) : 100;
     setCompletionPercentage(percentage);
   };
 
   const validateField = (field: FormField, value: any): string | null => {
-    console.log(`Validating field ${field.id} with value:`, value);
-    const validation = field.validation || {};
-    if (validation.required && (!value || value === "")) {
-      console.log(`Validation failed: ${field.label} is required`);
-      return `${field.label} is required`;
-    }
+    const v = field.validation || {};
+    if (v.required && (!value || value === "")) return `${field.label} is required`;
+
     if (field.type === "email" && value) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(value)) {
-        console.log(`Validation failed: Invalid email for ${field.id}`);
-        return "Please enter a valid email address";
-      }
+      const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!re.test(value)) return "Please enter a valid email address";
     }
+
     if (field.type === "url" && value) {
-      try {
-        new URL(value);
-        console.log(`URL validation passed for ${field.id}`);
-      } catch {
-        console.log(`Validation failed: Invalid URL for ${field.id}`);
-        return "Please enter a valid URL";
-      }
+      try { new URL(value); } catch { return "Please enter a valid URL"; }
     }
+
     if (field.type === "tel" && value) {
-      const phoneRegex = /^[+]?[1-9][\d]{0,15}$/;
-      if (!phoneRegex.test(value.replace(/[\s\-()]/g, ""))) {
-        console.log(`Validation failed: Invalid phone for ${field.id}`);
-        return "Please enter a valid phone number";
-      }
+      const cleaned = value.replace(/[\s\-()]/g, "");
+      const re = /^[+]?[1-9][\d]{0,15}$/;
+      if (!re.test(cleaned)) return "Please enter a valid phone number";
     }
+
     if (field.type === "number" && value) {
       const num = Number(value);
-      if (isNaN(num)) {
-        console.log(`Validation failed: Invalid number for ${field.id}`);
-        return "Please enter a valid number";
-      }
-      if (validation.min !== undefined && num < validation.min) {
-        console.log(`Validation failed: Number too low for ${field.id}`);
-        return `Value must be at least ${validation.min}`;
-      }
-      if (validation.max !== undefined && num > validation.max) {
-        console.log(`Validation failed: Number too high for ${field.id}`);
-        return `Value must be at most ${validation.max}`;
-      }
+      if (isNaN(num)) return "Please enter a valid number";
+      if (v.min !== undefined && num < v.min) return `Value must be at least ${v.min}`;
+      if (v.max !== undefined && num > v.max) return `Value must be at most ${v.max}`;
     }
+
     if ((field.type === "text" || field.type === "textarea") && value) {
-      if (validation.minLength && value.length < validation.minLength) {
-        console.log(`Validation failed: Text too short for ${field.id}`);
-        return `Must be at least ${validation.minLength} characters`;
-      }
-      if (validation.maxLength && value.length > validation.maxLength) {
-        console.log(`Validation failed: Text too long for ${field.id}`);
-        return `Must be at most ${validation.maxLength} characters`;
-      }
+      if (v.minLength && value.length < v.minLength) return `Must be at least ${v.minLength} characters`;
+      if (v.maxLength && value.length > v.maxLength) return `Must be at most ${v.maxLength} characters`;
     }
-    if (validation.pattern && value) {
-      const regex = new RegExp(validation.pattern);
-      if (!regex.test(value)) {
-        console.log(`Validation failed: Pattern mismatch for ${field.id}`);
-        return validation.patternMessage || "Invalid format";
-      }
+
+    if (v.pattern && value) {
+      const re = new RegExp(v.pattern);
+      if (!re.test(value)) return v.patternMessage || "Invalid format";
     }
-    if ((field.type === "image" || field.type === "signature") && validation.required && !value) {
-      console.log(`Validation failed: ${field.label} is required`);
-      return `${field.label} is required`;
-    }
-    if (field.type === "camera" && validation.required && !value) {
-      console.log(`Validation failed: ${field.label} is required`);
-      return `${field.label} is required`;
-    }
-    console.log(`Validation passed for field ${field.id}`);
+
     return null;
   };
 
   const handleFieldChange = (fieldId: string, value: any) => {
-    console.log(`Field ${fieldId} changed to:`, value);
     let storeValue = value;
+
     if (value && typeof value === "object") {
       if (Array.isArray(value)) {
-        storeValue = value.map((item) => item.storeValue || item.label || item.value);
-        console.log(`Handled array value for ${fieldId}:`, storeValue);
+        storeValue = value.map((i) => i.storeValue || i.label || i.value);
       } else if (value.storeValue !== undefined) {
         storeValue = value.storeValue;
-        console.log(`Handled single selection for ${fieldId}:`, storeValue);
       } else if (value instanceof File) {
-        console.log(`Processing file for ${fieldId}:`, value.name);
         const reader = new FileReader();
         reader.onload = () => {
-          const result = reader.result as string;
-          console.log(`File read success for ${fieldId}, data URL length:`, result.length);
-          setFormData((prev) => {
-            const newData = { ...prev, [fieldId]: result };
-            console.log("Updated form data with file:", newData);
-            return newData;
+          setFormData((prev) => ({ ...prev, [fieldId]: reader.result as string }));
+          setErrors((prev) => {
+            const e = { ...prev };
+            delete e[fieldId];
+            return e;
           });
-          if (errors[fieldId]) {
-            console.log(`Clearing error for ${fieldId}`);
-            setErrors((prev) => {
-              const newErrors = { ...prev };
-              delete newErrors[fieldId];
-              return newErrors;
-            });
-          }
         };
         reader.onerror = () => {
-          console.error(`File read error for ${fieldId}`);
-          toast({
-            title: "Error",
-            description: "Failed to read file",
-            variant: "destructive",
-          });
+          toast({ title: "Error", description: "Failed to read file", variant: "destructive" });
         };
         reader.readAsDataURL(value);
         return;
       }
     }
-    console.log(`Setting form data for ${fieldId}:`, storeValue);
-    setFormData((prev) => {
-      const newData = { ...prev, [fieldId]: storeValue };
-      console.log("Updated form data:", newData);
-      return newData;
+
+    setFormData((prev) => ({ ...prev, [fieldId]: storeValue }));
+    setErrors((prev) => {
+      const e = { ...prev };
+      delete e[fieldId];
+      return e;
     });
-    if (errors[fieldId]) {
-      console.log(`Clearing error for ${fieldId}`);
-      setErrors((prev) => {
-        const newErrors = { ...prev };
-        delete newErrors[fieldId];
-        return newErrors;
-      });
-    }
   };
 
   const handleClearFile = (fieldId: string) => {
-    console.log(`Clearing file for field:`, fieldId);
-    setFormData((prev) => {
-      const newData = { ...prev, [fieldId]: "" };
-      console.log("Cleared file for field:", fieldId, newData);
-      return newData;
+    setFormData((prev) => ({ ...prev, [fieldId]: "" }));
+    if (fileInputRefs.current[fieldId]) fileInputRefs.current[fieldId]!.value = "";
+    setErrors((prev) => {
+      const e = { ...prev };
+      delete e[fieldId];
+      return e;
     });
-    if (fileInputRefs.current[fieldId]) {
-      console.log(`Resetting file input ref for ${fieldId}`);
-      fileInputRefs.current[fieldId]!.value = "";
-    }
-    if (errors[fieldId]) {
-      console.log(`Clearing error for ${fieldId} on clear`);
-      setErrors((prev) => {
-        const newErrors = { ...prev };
-        delete newErrors[fieldId];
-        return newErrors;
-      });
-    }
   };
 
   const validateForm = (): boolean => {
-    console.log("Starting form validation");
-    if (!form) {
-      console.log("No form for validation");
-      return false;
-    }
+    if (!form) return false;
     const newErrors: Record<string, string> = {};
-    let isValid = true;
+    let valid = true;
+
     form.sections.forEach((section) => {
-      console.log(`Validating section: ${section.title}`);
       section.fields.forEach((field) => {
-        const error = validateField(field, formData[field.id]);
-        if (error) {
-          newErrors[field.id] = error;
-          isValid = false;
-          console.log(`Validation error for ${field.id}:`, error);
+        const err = validateField(field, formData[field.id]);
+        if (err) {
+          newErrors[field.id] = err;
+          valid = false;
         }
       });
     });
-    console.log("Setting new errors:", newErrors);
+
     setErrors(newErrors);
-    console.log("Form validation result:", isValid);
-    return isValid;
+    return valid;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    console.log("Form submission started");
-    console.log("Current form data:", formData);
     e.preventDefault();
     if (!validateForm()) {
-      console.log("Form validation failed");
-      toast({
-        title: "Validation Error",
-        description: "Please fix the errors below",
-        variant: "destructive",
-      });
+      toast({ title: "Validation Error", description: "Please fix the errors", variant: "destructive" });
       return;
     }
 
-    if (Object.keys(formData).length === 0) {
-      console.log("No data in form");
-      toast({
-        title: "No Data",
-        description: "Please fill out the form before submitting",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    console.log("Starting submission process");
     setSubmitting(true);
     try {
-      console.log("Sending form submission with field IDs as keys...");
-      const response = await fetch(`/api/forms/${formId}/submit`, {
+      const userId = (window as any).__currentUserId;
+      
+      if (!userId) {
+        toast({ title: "Error", description: "User not authenticated", variant: "destructive" });
+        setSubmitting(false);
+        return;
+      }
+
+      const formNameLower = form?.name.toLowerCase() || "";
+
+      if (formNameLower === "check-in") {
+        console.log("[v0] Recording check-in for user:", userId)
+        const response = await fetch("/api/attendance", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: userId,
+            action: "checkin",
+          }),
+        });
+
+        const data = await response.json();
+        console.log("[v0] Check-in response:", data)
+        if (!data.success) {
+          toast({ title: "Error", description: data.error || "Check-In failed", variant: "destructive" });
+          setSubmitting(false);
+          return;
+        }
+      } else if (formNameLower === "check-out") {
+        console.log("[v0] Recording check-out for user:", userId)
+        const response = await fetch("/api/attendance", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: userId,
+            action: "checkout",
+          }),
+        });
+
+        const data = await response.json();
+        console.log("[v0] Check-out response:", data)
+        if (!data.success) {
+          toast({ title: "Error", description: data.error || "Check-Out failed", variant: "destructive" });
+          setSubmitting(false);
+          return;
+        }
+      }
+
+      const res = await fetch(`/api/forms/${formId}/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -445,43 +440,34 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
           userAgent: navigator.userAgent,
         }),
       });
-      console.log("Submission response status:", response.status);
-      const result = await response.json();
-      console.log("Submission response:", result);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      console.log("Submission successful, setting submitted state");
-      setSubmitted(true);
-      toast({
-        title: "Success!",
-        description: form?.submissionMessage || "Form submitted successfully",
-      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
 
-      console.log("Tracking submit event");
+      setSubmitted(true);
+      toast({ title: "Success!", description: form?.submissionMessage || "Form submitted!" });
+
       await fetch(`/api/forms/${formId}/events`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           eventType: "submit",
-          payload: {
-            recordId: result.data.id,
-            timestamp: new Date().toISOString(),
-            fieldLabels: result.data.form?.sections.flatMap((s: any) => s.fields.map((f: any) => f.label)) || [],
-          },
+          payload: { recordId: json.data.id, timestamp: new Date().toISOString() },
         }),
       });
-      console.log("Submit event tracked");
-      console.log("Form submitted successfully with field labels:", result.data.recordData);
+
+      if ((window as any).__handleFormSubmitted) {
+        console.log("[v0] Calling form submitted callback for:", form?.name)
+        await (window as any).__handleFormSubmitted(form?.name || "");
+      }
+
+      // Auto-close after brief delay for smooth UX
+      setTimeout(() => {
+        onClose();
+      }, 1500);
     } catch (error: any) {
-      console.error("Submission error:", error);
-      toast({
-        title: "Submission Error",
-        description: error.message,
-        variant: "destructive",
-      });
+      console.error("[v0] Submit error:", error)
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     } finally {
-      console.log("Submission process ended, resetting submitting state");
       setSubmitting(false);
     }
   };
@@ -489,10 +475,12 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
   const renderField = (field: FormField) => {
     const value = formData[field.id];
     const error = errors[field.id];
-    console.log(`Rendering field ${field.id} of type ${field.type}, value:`, value, `error:`, error);
+    const fieldType = (field.type || "").toString().toLowerCase();
+    const isLocation = fieldType === "location" || fieldType === "newlocation";
+    const autoFetch = isLocation && field.properties?.autoFetchLocation;
+    const status = locationStatus[field.id] || "idle";
 
-    const isAutoFetched = field.properties?.autoFetchDate || field.properties?.autoFetchTime;
-    const isReadOnly = field.readonly || isAutoFetched;
+    const isReadOnly = field.readonly || (autoFetch && status === "success");
 
     const fieldProps = {
       id: field.id,
@@ -501,18 +489,8 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
     };
 
     const options = Array.isArray(field.options) ? field.options : [];
-    console.log(`Field ${field.id} options:`, options);
 
-    const lookupFieldData = {
-      id: field.id,
-      label: field.label,
-      placeholder: field.placeholder || undefined,
-      description: field.description || undefined,
-      validation: field.validation || { required: false },
-      lookup: field.lookup || undefined,
-    };
-
-    switch (field.type) {
+    switch (fieldType) {
       case "text":
       case "email":
       case "number":
@@ -527,6 +505,7 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
             onChange={(e) => handleFieldChange(field.id, e.target.value)}
           />
         );
+
       case "password":
         return (
           <Input
@@ -537,6 +516,7 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
             onChange={(e) => handleFieldChange(field.id, e.target.value)}
           />
         );
+
       case "textarea":
         return (
           <Textarea
@@ -547,6 +527,7 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
             rows={3}
           />
         );
+
       case "date":
         return (
           <Input
@@ -554,10 +535,11 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
             type="date"
             value={value || ""}
             onChange={(e) => handleFieldChange(field.id, e.target.value)}
-            readOnly={isReadOnly}
+            readOnly={field.readonly || field.properties?.autoFetchDate}
             className={`${fieldProps.className} ${isReadOnly ? 'bg-muted cursor-not-allowed' : ''}`}
           />
         );
+
       case "time":
         return (
           <Input
@@ -565,10 +547,11 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
             type="time"
             value={value || ""}
             onChange={(e) => handleFieldChange(field.id, e.target.value)}
-            readOnly={isReadOnly}
+            readOnly={field.readonly || field.properties?.autoFetchTime}
             className={`${fieldProps.className} ${isReadOnly ? 'bg-muted cursor-not-allowed' : ''}`}
           />
         );
+
       case "datetime":
         return (
           <Input
@@ -580,70 +563,108 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
             className={`${fieldProps.className} ${isReadOnly ? 'bg-muted cursor-not-allowed' : ''}`}
           />
         );
+
+      case "location":
+      case "newlocation":
+        let placeholder = field.placeholder || "Enter location";
+        let icon: React.ReactNode = null;
+
+        if (autoFetch) {
+          if (status === "fetching") {
+            placeholder = "Fetching your location…";
+            icon = <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />;
+          } else if (status === "failed") {
+            placeholder = "Location denied – type manually";
+            icon = <MapPin className="h-4 w-4 text-amber-600" />;
+          } else if (status === "success") {
+            placeholder = "Location auto-filled";
+            icon = <MapPin className="h-4 w-4 text-green-600" />;
+          } else if (status === "idle") {
+            placeholder = "Click anywhere to allow location";
+            icon = <MapPin className="h-4 w-4 text-muted-foreground" />;
+          }
+        }
+
+        return (
+          <div className="space-y-1">
+            <div className="relative">
+              <Input
+                {...fieldProps}
+                type="text"
+                placeholder={placeholder}
+                value={value || ""}
+                readOnly={isReadOnly}
+                className={`${fieldProps.className} ${isReadOnly ? 'bg-muted cursor-not-allowed' : ''} pl-10`}
+                onChange={(e) => handleFieldChange(field.id, e.target.value)}
+              />
+              {icon && (
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                  {icon}
+                </div>
+              )}
+            </div>
+            {autoFetch && status === "failed" && (
+              <p className="text-xs text-amber-600">
+                Enable location in browser settings or type your address.
+              </p>
+            )}
+          </div>
+        );
+
       case "checkbox":
         return (
           <div className="flex items-center space-x-2">
             <Checkbox
               id={field.id}
               checked={value || false}
-              onCheckedChange={(checked) => handleFieldChange(field.id, checked)}
+              onCheckedChange={(c) => handleFieldChange(field.id, c)}
               disabled={submitting || submitted}
             />
-            <Label htmlFor={field.id} className="text-sm">
-              {field.label}
-            </Label>
+            <Label htmlFor={field.id} className="text-sm">{field.label}</Label>
           </div>
         );
+
       case "switch":
         return (
           <div className="flex items-center space-x-2">
             <Switch
               id={field.id}
               checked={value || false}
-              onCheckedChange={(checked) => handleFieldChange(field.id, checked)}
+              onCheckedChange={(c) => handleFieldChange(field.id, c)}
               disabled={submitting || submitted}
             />
-            <Label htmlFor={field.id} className="text-sm">
-              {field.label}
-            </Label>
+            <Label htmlFor={field.id} className="text-sm">{field.label}</Label>
           </div>
         );
+
       case "radio":
         return (
-          <RadioGroup
-            value={value || ""}
-            onValueChange={(val) => handleFieldChange(field.id, val)}
-            disabled={submitting || submitted}
-          >
-            {options.map((option: any) => (
-              <div key={option.value} className="flex items-center space-x-2">
-                <RadioGroupItem value={option.value} id={`${field.id}-${option.value}`} />
-                <Label htmlFor={`${field.id}-${option.value}`} className="text-sm">
-                  {option.label}
-                </Label>
+          <RadioGroup value={value || ""} onValueChange={(v) => handleFieldChange(field.id, v)} disabled={submitting || submitted}>
+            {options.map((opt: any) => (
+              <div key={opt.value} className="flex items-center space-x-2">
+                <RadioGroupItem value={opt.value} id={`${field.id}-${opt.value}`} />
+                <Label htmlFor={`${field.id}-${opt.value}`} className="text-sm">{opt.label}</Label>
               </div>
             ))}
           </RadioGroup>
         );
+
       case "select":
         return (
-          <Select
-            value={value || ""}
-            onValueChange={(val) => handleFieldChange(field.id, val)}
-            disabled={submitting || submitted}
-          >
+          <Select value={value || ""} onValueChange={(v) => handleFieldChange(field.id, v)} disabled={submitting || submitted}>
             <SelectTrigger className={error ? "border-red-500" : ""}>
               <SelectValue placeholder={field.placeholder || "Select an option"} />
             </SelectTrigger>
             <SelectContent>
-              {options.map((option: any) => (
-                <SelectItem key={option.value || option.id} value={option.value || option.id}>
-                  {option.label}
+              {options.map((opt: any) => (
+                <SelectItem key={opt.value || opt.id} value={opt.value || opt.id}>
+                  {opt.label}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         );
+
       case "slider":
         return (
           <div className="space-y-2">
@@ -654,109 +675,77 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
               min={field.validation?.min || 0}
               step={1}
               disabled={submitting || submitted}
-              className="w-full"
             />
             <div className="text-center text-sm text-muted-foreground">Value: {value || 0}</div>
           </div>
         );
+
       case "rating":
         return (
           <div className="flex items-center space-x-2">
-            {[1, 2, 3, 4, 5].map((rating) => (
+            {[1, 2, 3, 4, 5].map((r) => (
               <button
-                key={rating}
+                key={r}
                 type="button"
-                onClick={() => handleFieldChange(field.id, rating)}
+                onClick={() => handleFieldChange(field.id, r)}
                 disabled={submitting || submitted}
                 className="p-1 hover:scale-110 transition-transform"
               >
-                <Star
-                  className={`h-4 w-4 ${rating <= (value || 0) ? "fill-yellow-400 text-yellow-400" : "text-gray-300"}`}
-                />
+                <Star className={`h-4 w-4 ${r <= (value || 0) ? "fill-yellow-400 text-yellow-400" : "text-gray-300"}`} />
               </button>
             ))}
             <span className="pl-2 text-sm text-muted-foreground">{value ? `${value}/5` : "Not rated"}</span>
           </div>
         );
+
       case "lookup":
+        const lookupData = {
+          id: field.id,
+          label: field.label,
+          type: field.type,
+          placeholder: field.placeholder,
+          description: field.description,
+          validation: field.validation || { required: false },
+          lookup: field.lookup,
+        };
         return (
           <LookupField
-            field={lookupFieldData}
+            field={lookupData}
             value={value}
-            onChange={(val) => handleFieldChange(field.id, val)}
+            onChange={(v) => handleFieldChange(field.id, v)}
             disabled={submitting || submitted}
             error={error}
           />
         );
+
       case "file":
+      case "image":
+      case "video":
+      case "signature":
         return (
-          <Input
-            {...fieldProps}
-            type="file"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) {
-                console.log(`File selected for ${field.id}:`, file.name);
-                handleFieldChange(field.id, file);
-              }
-            }}
-            multiple={field.properties?.multiple || false}
+          <FileUploadZone
+            fieldType={fieldType as "image" | "file" | "signature" | "video"}
+            currentValue={value}
+            onUploadComplete={(url) => handleFieldChange(field.id, url)}
+            onClear={() => handleClearFile(field.id)}
+            disabled={submitting || submitted}
+            maxSize={10}
           />
         );
+
       case "camera":
         return (
           <CameraCapture
-            onCapture={(imageData) => handleFieldChange(field.id, imageData)}
+            onCapture={(img) => handleFieldChange(field.id, img)}
             capturedImage={value || null}
             onClear={() => handleFieldChange(field.id, "")}
-            disabled={submitting || submitted}
           />
         );
-      case "image":
-      case "signature":
-        return (
-          <div className="space-y-2">
-            {value ? (
-              <div className="relative">
-                <img
-                  src={value || "/placeholder.svg"}
-                  alt={field.type === "image" ? "Uploaded image" : "Uploaded signature"}
-                  className={`max-w-full h-auto rounded border ${error ? "border-red-500" : ""}`}
-                />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="absolute top-1 right-1 bg-white/80 hover:bg-white"
-                  onClick={() => handleClearFile(field.id)}
-                  disabled={submitting || submitted}
-                >
-                  <Trash2 className="h-4 w-4 text-red-600" />
-                </Button>
-              </div>
-            ) : (
-              <div className="flex items-center space-x-2">
-                <Input
-                  {...fieldProps}
-                  type="file"
-                  ref={(el) => (fileInputRefs.current[field.id] = el)}
-                  accept={field.type === "image" ? "image/*" : "image/png,image/jpeg"}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      console.log(`File selected for ${field.id}:`, file.name);
-                      handleFieldChange(field.id, file);
-                    }
-                  }}
-                />
-                <ImageIcon className="h-5 w-5 text-gray-500" />
-              </div>
-            )}
-          </div>
-        );
+
       case "hidden":
         return <Input {...fieldProps} type="hidden" value={value || field.defaultValue || ""} />;
+
       default:
-        console.log(`Unknown field type ${field.type}, falling back to input`);
         return (
           <Input
             {...fieldProps}
@@ -768,15 +757,12 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
     }
   };
 
-  console.log("Rendering dialog, submitted:", submitted, "loading:", loading, "form:", !!form);
-
   if (submitted) {
-    console.log("Rendering submitted state");
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="max-w-md">
           <div className="text-center py-6">
-            <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
+            <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4 animate-bounce" />
             <h2 className="text-xl font-semibold mb-2">Thank You!</h2>
             <p className="text-muted-foreground mb-4">
               {form?.submissionMessage || "Your form has been submitted successfully."}
@@ -784,14 +770,13 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
             <div className="flex gap-2 justify-center">
               <Button
                 onClick={() => {
-                  console.log("Resetting for another submission");
                   setSubmitted(false);
                   setFormData({});
                   setErrors({});
                 }}
                 variant="outline"
               >
-                Submit Another Response
+                Submit Another
               </Button>
               <Button onClick={onClose}>Close</Button>
             </div>
@@ -822,12 +807,10 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
             </div>
           </div>
         ) : !form ? (
-          <div className="py-8">
-            <div className="text-center">
-              <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-              <h2 className="text-xl font-semibold mb-2">Form Not Found</h2>
-              <p className="text-muted-foreground">This form may have been removed or is not published.</p>
-            </div>
+          <div className="py-8 text-center">
+            <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+            <h2 className="text-xl font-semibold mb-2">Form Not Found</h2>
+            <p className="text-muted-foreground">This form may have been removed or is not published.</p>
           </div>
         ) : (
           <>
@@ -850,15 +833,14 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
                 <Progress value={completionPercentage} className="h-2" />
               </div>
             </DialogHeader>
+
             <form onSubmit={handleSubmit}>
               <div className="space-y-8 py-4">
                 {form.sections.map((section) => (
                   <div key={section.id} className="space-y-6">
                     <div className="border-b pb-4">
                       <h3 className="text-lg font-semibold">{section.title}</h3>
-                      {section.description && (
-                        <p className="text-sm text-muted-foreground mt-1">{section.description}</p>
-                      )}
+                      {section.description && <p className="text-sm text-muted-foreground mt-1">{section.description}</p>}
                     </div>
                     <div className={`grid gap-6 ${section.columns > 1 ? `md:grid-cols-${section.columns}` : ""}`}>
                       {section.fields.map((field) => (
@@ -884,6 +866,7 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
                     </div>
                   </div>
                 ))}
+
                 <div className="pt-6 border-t flex gap-2 justify-end">
                   <Button type="button" variant="outline" onClick={onClose}>
                     Cancel

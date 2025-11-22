@@ -93,6 +93,7 @@ const UserCreationPage: React.FC = () => {
       if (response.ok) {
         const data = await response.json();
         setEmployeeRecords(data.records || []);
+        console.log("Fetched employee records:", data.records);
       } else {
         setMessage({ type: "error", text: "Failed to fetch employee records" });
       }
@@ -232,11 +233,10 @@ const UserCreationPage: React.FC = () => {
         {/* Message Display */}
         {message && (
           <div
-            className={`mb-6 p-4 rounded-lg flex items-center gap-2 ${
-              message.type === "success"
-                ? "bg-green-50 border border-green-200 text-green-800"
-                : "bg-red-50 border border-red-200 text-red-800"
-            }`}
+            className={`mb-6 p-4 rounded-lg flex items-center gap-2 ${message.type === "success"
+              ? "bg-green-50 border border-green-200 text-green-800"
+              : "bg-red-50 border border-red-200 text-red-800"
+              }`}
           >
             {message.type === "success" ? (
               <Check className="w-5 h-5" />
@@ -286,11 +286,10 @@ const UserCreationPage: React.FC = () => {
                 filteredRecords.map((record) => (
                   <div
                     key={record.id}
-                    className={`p-4 border rounded-lg cursor-pointer transition-all duration-200 hover:shadow-md ${
-                      selectedRecord?.id === record.id
-                        ? "border-blue-500 bg-blue-50 shadow-md"
-                        : "border-gray-200 hover:border-gray-300"
-                    }`}
+                    className={`p-4 border rounded-lg cursor-pointer transition-all duration-200 hover:shadow-md ${selectedRecord?.id === record.id
+                      ? "border-blue-500 bg-blue-50 shadow-md"
+                      : "border-gray-200 hover:border-gray-300"
+                      }`}
                     onClick={() => selectEmployee(record)}
                   >
                     <div className="flex justify-between items-start">
@@ -320,12 +319,11 @@ const UserCreationPage: React.FC = () => {
                         )}
                         {record.parsedData?.status && (
                           <span
-                            className={`inline-block px-2 py-1 text-xs rounded-full mt-1 ${
-                              record.parsedData.status.toLowerCase() ===
+                            className={`inline-block px-2 py-1 text-xs rounded-full mt-1 ${record.parsedData.status.toLowerCase() ===
                               "active"
-                                ? "bg-green-100 text-green-800"
-                                : "bg-gray-100 text-gray-800"
-                            }`}
+                              ? "bg-green-100 text-green-800"
+                              : "bg-gray-100 text-gray-800"
+                              }`}
                           >
                             {record.parsedData.status}
                           </span>

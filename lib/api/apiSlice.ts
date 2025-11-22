@@ -43,7 +43,6 @@ export const apiSlice = createApi({
       // Keep cached data for 5 minutes
       keepUnusedDataFor: 300,
     }),
-
     // Get current user with automatic caching
     getCurrentUser: builder.query<UserResponse, void>({
       query: () => "/auth/me",
@@ -53,5 +52,4 @@ export const apiSlice = createApi({
     }),
   }),
 })
-
 export const { useGetPermittedModulesQuery, useGetCurrentUserQuery } = apiSlice

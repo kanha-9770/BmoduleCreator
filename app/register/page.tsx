@@ -13,15 +13,17 @@ import { useToast } from "@/hooks/use-toast"
 import { Loader2, Mail, ArrowRight, User, Lock, Eye, EyeOff } from "lucide-react"
 import Link from "next/link"
 import type { z } from "zod"
+import { useRegisterMutation } from "@/lib/api/auth"
 
 type RegisterFormData = z.infer<typeof RegisterSchema>
 
 export default function RegisterPage() {
-  const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
+
+  const [register, { isLoading }] = useRegisterMutation()
 
   const form = useForm<RegisterFormData>({
     resolver: zodResolver(RegisterSchema),
@@ -34,27 +36,13 @@ export default function RegisterPage() {
   })
 
   const onSubmit = async (data: RegisterFormData) => {
-    setIsLoading(true)
-
     try {
-      const response = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        toast({
-          title: "Registration Failed",
-          description: result.error || "Something went wrong",
-          variant: "destructive",
-        })
-        return
-      }
+      const result = await register({
+        name: data.name,
+        email: data.email,
+        password: data.password,
+        confirmPassword: data.confirmPassword,
+      }).unwrap()
 
       toast({
         title: "Success!",
@@ -63,14 +51,12 @@ export default function RegisterPage() {
 
       // Redirect to OTP verification page with user ID
       router.push(`/verify-otp?userId=${result.userId}&type=registration`)
-    } catch (error) {
+    } catch (error: any) {
       toast({
-        title: "Error",
-        description: "Network error. Please try again.",
+        title: "Registration Failed",
+        description: error?.data?.error || "Something went wrong",
         variant: "destructive",
       })
-    } finally {
-      setIsLoading(false)
     }
   }
 

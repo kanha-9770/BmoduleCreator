@@ -1,313 +1,224 @@
-import React from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { FileText } from "lucide-react";
-import NextLink from "next/link";
+"use client"
+
+import type React from "react"
+import { useEffect, useState } from "react"
+import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Filter } from "lucide-react"
+import { getAttendanceStatus, canCheckOut } from "@/lib/attendance"
 
 interface Form {
-  id: string;
-  name: string;
-  description?: string;
-  moduleId: string;
-  isPublished: boolean;
-  updatedAt: string;
-  sections: any[];
+  id: string
+  name: string
+  description?: string
+  moduleId: string
+  isPublished: boolean
+  updatedAt: string
+  sections: any[]
 }
 
 interface FormsContentProps {
-  forms: Form[];
-  selectedForm: Form | null;
-  viewMode: "excel" | "table" | "grid" | "list";
-  setSelectedForm: (form: Form | null) => void;
-  openFormDialog: (formId: string) => void;
-  handlePublishForm: (form: Form) => void;
+  forms: Form[]
+  selectedForm: Form | null
+  setSelectedForm: (form: Form | null) => void
+  openFormDialog: (formId: string) => void
+  handlePublishForm?: (form: Form) => void
 }
 
-const FormsContent: React.FC<FormsContentProps> = ({
-  forms,
-  selectedForm,
-  viewMode,
-  setSelectedForm,
-  openFormDialog,
-  handlePublishForm,
-}) => {
-  const renderFormsExcel = (forms: Form[]) => (
-    <div className="overflow-auto border border-gray-300 rounded-lg shadow-sm bg-white">
-      <table className="w-full text-sm">
-        <thead className="bg-gray-100 sticky top-0 z-10 border-b border-gray-300">
-          <tr>
-            <th className="py-1.5 px-4 text-center font-semibold text-gray-700 border-r border-gray-300">
-              Name
-            </th>
-            <th className="py-1.5 px-4 text-center font-semibold text-gray-700 border-r border-gray-300">
-              Status
-            </th>
-            <th className="py-1.5 px-4 text-center font-semibold text-gray-700 border-r border-gray-300">
-              Updated
-            </th>
-            <th className="py-1.5 px-4 text-center font-semibold text-gray-700">
-              Actions
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {forms.map((form, index) => (
-            <tr
-              key={form.id}
-              className={`border-b border-gray-300 hover:bg-gray-50 cursor-pointer ${selectedForm?.id === form.id
-                ? "bg-blue-50"
-                : index % 2 === 0
-                  ? "bg-white"
-                  : "bg-gray-50"
-                }`}
-              onClick={() => setSelectedForm(form)}
-            >
-              <td className="py-1.5 px-4 text-gray-700 border-r border-gray-300 text-center">
-                <button
-                  className="text-blue-500 hover:underline text-xs"
-                  onClick={() => openFormDialog(form.id)}
-                >
-                  {form.name}
-                </button>
-              </td>
-              <td className="py-1.5 px-4 border-r border-gray-300 text-center">
-                <div className="text-xs">
-                  {form.isPublished ? "Published" : "Draft"}
-                </div>
-              </td>
-              <td className="py-1.5 px-4 text-gray-700 border-r border-gray-300 text-center text-xs">
-                {new Date(form.updatedAt).toLocaleDateString()}
-              </td>
-              <td className="py-1.5 px-4 text-right">
-                <div className="flex gap-1 justify-center">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handlePublishForm(form)}
-                    className="h-6 text-xs border-gray-300 hover:bg-gray-100"
-                  >
-                    {form.isPublished ? "Unpublish" : "Publish"}
-                  </Button>
-                  <NextLink href={`/builder/${form.id}`}>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-6 text-xs border-gray-300 hover:bg-gray-100 bg-transparent"
-                    >
-                      Edit
-                    </Button>
-                  </NextLink>
-                </div>
-              </td>
-            </tr>
+const FormsContent: React.FC<FormsContentProps> = ({ forms, setSelectedForm, openFormDialog }) => {
+  const visible = forms.slice(0, 2)
+  const hasMore = forms.length > 2
+
+  const [userId, setUserId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const [attendanceStatus, setAttendanceStatus] = useState({
+    checkedIn: false,
+    checkedOut: false,
+    canCheckIn: true,
+    canCheckOut: false,
+  })
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        setLoading(true)
+        const response = await fetch("/api/auth/me")
+        const data = await response.json()
+
+        if (data.success && data.user?.id) {
+          console.log("[v0] User authenticated:", data.user.id)
+          setUserId(data.user.id)
+        } else {
+          console.log("[v0] User not authenticated")
+          setUserId(null)
+        }
+      } catch (error) {
+        console.error("[v0] Failed to fetch user:", error)
+        setUserId(null)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchUser()
+  }, [])
+
+  useEffect(() => {
+    if (userId) {
+      updateAttendanceStatus()
+    }
+  }, [userId])
+
+  const updateAttendanceStatus = async () => {
+    if (!userId) return
+    const status = await getAttendanceStatus(userId)
+    if (status) {
+      setAttendanceStatus(status)
+    }
+  }
+
+  const getButtonState = (formName: string): { disabled: boolean; title?: string } => {
+    const lowerName = formName.toLowerCase()
+
+    if (lowerName === "check-in") {
+      return {
+        disabled: !attendanceStatus.canCheckIn,
+        title: attendanceStatus.checkedIn ? "Already checked in today" : undefined,
+      }
+    }
+
+    if (lowerName === "check-out") {
+      return {
+        disabled: !attendanceStatus.canCheckOut,
+        title: !attendanceStatus.checkedIn ? "Please complete Check-In first!" : "Already checked out today",
+      }
+    }
+
+    return { disabled: false }
+  }
+
+  const handleFormClick = async (formId: string, formName: string) => {
+    const lowerName = formName.toLowerCase()
+
+    if (lowerName === "check-out") {
+      if (!userId) {
+        alert("User not authenticated")
+        return
+      }
+
+      const canOut = await canCheckOut(userId)
+      if (!canOut) {
+        const status = await getAttendanceStatus(userId)
+        const message = !status?.checkedIn ? "Please complete Check-In first!" : "Already checked out today!"
+        alert(message)
+        return
+      }
+    }
+    ;(window as any).__currentUserId = userId
+    openFormDialog(formId)
+  }
+
+  const handleFormSubmitted = async (formName: string) => {
+    console.log("[v0] Form submitted:", formName)
+    if (formName.toLowerCase() === "check-in" || formName.toLowerCase() === "check-out") {
+      // Update state after attendance form submission
+      setTimeout(() => {
+        updateAttendanceStatus()
+      }, 500)
+    }
+  }
+
+  useEffect(() => {
+    ;(window as any).__handleFormSubmitted = handleFormSubmitted
+  }, [])
+
+  const FormButton = (f: Form) => {
+    const buttonState = getButtonState(f.name)
+
+    return (
+      <Button
+        key={f.id}
+        variant="outline"
+        className="w-full justify-start text-left text-blue-600 hover:text-blue-800 border-blue-600 hover:border-blue-800 disabled:opacity-50 disabled:cursor-not-allowed bg-transparent"
+        onClick={(e) => {
+          e.stopPropagation()
+          handleFormClick(f.id, f.name)
+        }}
+        disabled={buttonState.disabled || loading}
+        title={buttonState.title}
+      >
+        {f.name}
+      </Button>
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="border-gray-300">
+        <div className="grid grid-cols-4 gap-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={`skeleton-${i}`} className="col-span-1 h-10 bg-gray-200 rounded animate-pulse" />
           ))}
-        </tbody>
-      </table>
-    </div>
-  );
-
-  const renderFormsTable = (forms: Form[]) => (
-    <div className="overflow-x-auto border border-gray-300 rounded-lg shadow-sm">
-      <table className="w-full text-sm bg-white">
-        <thead className="bg-gray-100">
-          <tr className="border-b border-gray-300">
-            <th className="py-1.5 px-4 text-center font-semibold text-gray-700">Name</th>
-            <th className="py-1.5 px-4 text-center font-semibold text-gray-700">
-              Status
-            </th>
-            <th className="py-1.5 px-4 text-center font-semibold text-gray-700">
-              Updated
-            </th>
-            <th className="py-1.5 px-4 text-center font-semibold text-gray-700">
-              Actions
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {forms.map((form, index) => (
-            <tr
-              key={form.id}
-              className={`border-b border-gray-300 hover:bg-gray-50 cursor-pointer ${selectedForm?.id === form.id
-                ? "bg-blue-50"
-                : index % 2 === 0
-                  ? "bg-white"
-                  : "bg-gray-50"
-                }`}
-              onClick={() => setSelectedForm(form)}
-            >
-              <td className="py-1.5 px-4 text-gray-700 text-center">
-                <button
-                  className="text-blue-500 hover:underline text-xs"
-                  onClick={() => openFormDialog(form.id)}
-                >
-                  {form.name}
-                </button>
-              </td>
-              <td className="py-1.5 px-4 text-center">
-                <div className="text-xs">
-                  {form.isPublished ? "Published" : "Draft"}
-                </div>
-              </td>
-              <td className="py-1.5 px-4 text-gray-700 text-center text-xs">
-                {new Date(form.updatedAt).toLocaleDateString()}
-              </td>
-              <td className="py-1.5 px-4 text-center">
-                <div className="flex gap-2 justify-center">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handlePublishForm(form)}
-                    className="h-6 text-xs border-gray-300 hover:bg-gray-100"
-                  >
-                    {form.isPublished ? "Unpublish" : "Publish"}
-                  </Button>
-                  <NextLink href={`/builder/${form.id}`}>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-6 text-xs border-gray-300 hover:bg-gray-100 bg-transparent"
-                    >
-                      Edit
-                    </Button>
-                  </NextLink>
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-
-  const renderFormsGrid = (forms: Form[]) => (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-      {forms.map((form) => (
-        <Card
-          key={form.id}
-          className="hover:shadow-md transition-shadow duration-200 border border-gray-300 rounded-lg"
-        >
-          <div className="px-3 pt-2 pb-2">
-            <div className="text-sm font-semibold text-gray-700">
-              <button
-                className="text-blue-500 hover:underline"
-                onClick={() => openFormDialog(form.id)}
-              >
-                {form.name}
-              </button>
-            </div>
-          </div>
-          <div className="px-3 pb-2">
-            <div className="space-y-2">
-              <div className="text-xs">
-                {form.isPublished ? "Published" : "Draft"}
-              </div>
-              <div className="text-xs text-gray-500">
-                Updated {new Date(form.updatedAt).toLocaleDateString()}
-              </div>
-
-              <div className="flex space-x-2 items-end">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handlePublishForm(form)}
-                  className="h-6 text-xs border-gray-300 hover:bg-gray-100"
-                >
-                  {form.isPublished ? "Unpublish" : "Publish"}
-                </Button>
-                <NextLink href={`/builder/${form.id}`} >
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-6 text-xs border-gray-300 hover:bg-gray-100"
-                  >
-                    Edit
-                  </Button>
-                </NextLink>
-              </div>
-            </div>
-          </div>
-        </Card>
-      ))}
-    </div>
-  );
-
-  const renderFormsList = (forms: Form[]) => (
-    <div className="space-y-2">
-      {forms.map((form) => (
-        <Card
-          key={form.id}
-          className="hover:shadow-md transition-shadow duration-200 border border-gray-300 rounded-lg"
-        >
-          <CardContent className="py-2 px-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <FileText className="h-5 w-5 text-gray-400" />
-              <div>
-                <h3 className="text-sm font-semibold text-gray-700">
-                  <button
-                    className="text-blue-500 hover:underline"
-                    onClick={() => openFormDialog(form.id)}
-                  >
-                    {form.name}
-                  </button>
-                </h3>
-                <div className="flex items-center gap-2">
-                  <div className="text-xs">
-                    {form.isPublished ? "Published" : "Draft"}
-                  </div>
-                  <span className="text-xs text-gray-500">
-                    Updated {new Date(form.updatedAt).toLocaleDateString()}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className="flex space-x-2 items-end">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePublishForm(form)}
-                className="h-6 text-xs border-gray-300 hover:bg-gray-100"
-              >
-                {form.isPublished ? "Unpublish" : "Publish"}
-              </Button>
-              <NextLink href={`/builder/${form.id}`}>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-6 text-xs border-gray-300 hover:bg-gray-100 bg-transparent"
-                >
-                  Edit
-                </Button>
-              </NextLink>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  );
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="border-gray-300 shadow-sm bg-white rounded-lg p-4">
-      <div>
-        <CardTitle className="text-[1.1rem] font-semibold text-gray-800 pb-2">
-          Forms
-        </CardTitle>
-      </div>
-      <div>
-        {forms.length ? (
-          <>
-            {viewMode === "excel" && renderFormsExcel(forms)}
-            {viewMode === "table" && renderFormsTable(forms)}
-            {viewMode === "grid" && renderFormsGrid(forms)}
-            {viewMode === "list" && renderFormsList(forms)}
-          </>
-        ) : (
-          <div className="text-center py-4 text-gray-500">
-            No forms in this module
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
+    <div className="border-gray-300">
+      {forms.length ? (
+        <div className="grid grid-cols-4 gap-2">
+          {/* EMPTY CELLS */}
+          {Array.from({ length: 4 - (visible.length + (hasMore ? 1 : 0)) }).map((_, i) => (
+            <div key={`empty-left-${i}`} className="col-span-1" />
+          ))}
 
-export default FormsContent;
+          {/* TWO VISIBLE BUTTONS */}
+          {visible.map((f) => (
+            <div key={f.id} onClick={() => setSelectedForm(f)} className="flex items-center">
+              {FormButton(f)}
+            </div>
+          ))}
+
+          {/* FUNNEL ICON */}
+          {hasMore && (
+            <div className="flex items-center justify-center">
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 rounded-md text-muted-foreground hover:text-foreground"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Filter className="h-4 w-4" />
+                    <span className="sr-only">Open all forms</span>
+                  </Button>
+                </DialogTrigger>
+
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <Filter className="h-5 w-5" />
+                      All Forms ({forms.length})
+                    </DialogTitle>
+                  </DialogHeader>
+
+                  <ScrollArea className="max-h-[60vh] pr-4">
+                    <div className="space-y-2 py-2">{forms.map(FormButton)}</div>
+                  </ScrollArea>
+                </DialogContent>
+              </Dialog>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="text-center py-4 text-gray-500">No forms in this module</div>
+      )}
+    </div>
+  )
+}
+
+export default FormsContent

@@ -1,14 +1,12 @@
-// app/api/forms/[formId]/records/route.ts
 import { type NextRequest, NextResponse } from "next/server"
 import { DatabaseService } from "@/lib/database-service"
 import { validateSession } from "@/lib/auth"
 
 export async function GET(request: NextRequest, { params }: { params: { formId: string } }) {
   try {
-    const { formId } = params
+    const { formId } = await params
     const { searchParams } = new URL(request.url)
 
-    // Parse query parameters
     const page = Number.parseInt(searchParams.get("page") || "1")
     const limit = Number.parseInt(searchParams.get("limit") || "20")
     const status = searchParams.get("status") || undefined
@@ -64,15 +62,14 @@ export async function GET(request: NextRequest, { params }: { params: { formId: 
 
     console.log(`Found ${records.length} records out of ${totalCount} total`)
 
-    // ADD recordId TO EACH RECORD (the only change)
     const recordsWithId = records.map((rec) => ({
       ...rec,
-      recordId: rec.id, // Explicitly expose the primary key as `recordId`
+      recordId: rec.id,
     }))
 
     return NextResponse.json({
       success: true,
-      records: recordsWithId, // Now includes `recordId`
+      records: recordsWithId,
       total: totalCount,
       page,
       limit,
@@ -98,7 +95,7 @@ export async function GET(request: NextRequest, { params }: { params: { formId: 
 
 export async function POST(request: NextRequest, { params }: { params: { formId: string } }) {
   try {
-    const { formId } = params
+    const { formId } = await params
     const body = await request.json()
 
     console.log("Creating new record for form:", formId)

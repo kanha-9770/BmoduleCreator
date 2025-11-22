@@ -6,7 +6,7 @@ export async function GET(
   { params }: { params: { formId: string; recordId: string } }
 ) {
   try {
-    const { formId, recordId } = params
+    const { formId, recordId } = await params
 
     const record = await DatabaseService.getFormRecord(recordId)
 
@@ -51,7 +51,7 @@ export async function PUT(
   { params }: { params: { formId: string; recordId: string } }
 ) {
   try {
-    const { formId, recordId } = params
+    const { formId, recordId } = await params
     const body = await request.json()
 
     const { recordData, status, submittedBy } = body
@@ -94,7 +94,7 @@ export async function DELETE(
   { params }: { params: { formId: string; recordId: string } }
 ) {
   try {
-    const { formId, recordId } = params
+    const { formId, recordId } = await params
 
     const record = await DatabaseService.getFormRecord(recordId)
 

@@ -16,6 +16,7 @@ export async function GET(request: NextRequest) {
         recordData: true,
         submittedAt: true,
         status: true,
+        userId: true,
       },
       where: {
         status: 'submitted', // Only get submitted records

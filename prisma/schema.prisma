@@ -96,6 +96,7 @@ model User {
   unitAssignments UserUnitAssignment[]
   permissionOverrides UserPermissionOverride[]
   employee Employee?
+  attendances Attendance[] @relation("UserAttendance") 
   activities Activity[]
   formRecords1 FormRecord1[] @relation("FormRecord1User") // Added relation
   formRecords2 FormRecord2[] @relation("FormRecord2User") // Added relation
@@ -1205,4 +1206,27 @@ model PayrollRecord {
   @@index([year])
   @@index([status])
   @@map("payroll_records")
+}
+
+
+model Attendance {
+  id String @id @default(cuid())
+  userId String @map("user_id")
+  user User @relation("UserAttendance", fields: [userId], references: [id], onDelete: Cascade)
+  date String // Format: YYYY-MM-DD for easy querying
+  checkedIn Boolean @default(false) @map("checked_in")
+  checkedOut Boolean @default(false) @map("checked_out")
+  checkInTime String? @map("check_in_time") // Stores time as string (e.g., "09:30:00 AM")
+  checkOutTime String? @map("check_out_time") // Stores time as string (e.g., "06:00:00 PM")
+  ipAddress String? @map("ip_address") // Track IP for security
+  notes String? // Optional notes for the attendance record
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  @@unique([userId, date]) // Ensure one attendance record per user per day
+  @@index([userId])
+  @@index([date])
+  @@index([checkedIn])
+  @@index([checkedOut])
+  @@map("attendance_records")
 }

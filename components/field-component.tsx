@@ -13,7 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { GripVertical, Settings, Trash2, EyeOff, Star, Copy, ImageIcon } from "lucide-react";
+import { GripVertical, Settings, Trash2, EyeOff, Star, Copy, ImageIcon, X, Upload } from 'lucide-react';
 import type { FormField, FieldOption } from "@/types/form-builder";
 import { LookupField } from "@/components/lookup-field";
 import FieldSettings from "@/components/field-settings";
@@ -41,6 +41,7 @@ export default function FieldComponent({
   const [showSettings, setShowSettings] = useState(false);
   const [previewValue, setPreviewValue] = useState<any>(field?.defaultValue || "");
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -176,50 +177,6 @@ export default function FieldComponent({
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        setCapturedImage(result);
-        setPreviewValue(result);
-        onUpdate(field.id, { defaultValue: result }).catch((error) => {
-          console.error("Error updating field with file:", error);
-          toast({
-            title: "Error",
-            description: "Failed to save file",
-            variant: "destructive",
-          });
-        });
-      };
-      reader.onerror = () => {
-        toast({
-          title: "Error",
-          description: "Failed to read file",
-          variant: "destructive",
-        });
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleClearImage = () => {
-    setCapturedImage(null);
-    setPreviewValue("");
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-    onUpdate(field.id, { defaultValue: "" }).catch((error) => {
-      console.error("Error clearing file:", error);
-      toast({
-        title: "Error",
-        description: "Failed to clear file",
-        variant: "destructive",
-      });
-    });
-  };
-
   const renderFieldPreview = () => {
     const options = Array.isArray(field.options) ? field.options : [];
     const lookupFieldData = {
@@ -231,6 +188,52 @@ export default function FieldComponent({
       validation: field.validation || { required: false },
       lookup: field.lookup || undefined,
     };
+
+    if (["image", "file", "signature", "camera"].includes(field.type)) {
+      const isImage =
+        previewValue &&
+        /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(previewValue);
+      const isPdfOrDoc =
+        previewValue &&
+        /\.(pdf|doc|docx|xls|xlsx)$/i.test(previewValue);
+
+      return (
+        <div className="space-y-4">
+          {previewValue ? (
+            <div className="relative rounded-lg border-2 border-dashed border-gray-300 p-4 bg-gray-50">
+              {isImage ? (
+                <img
+                  src={previewValue || "/placeholder.svg"}
+                  alt="Preview"
+                  className="max-h-64 w-full object-contain rounded"
+                />
+              ) : isPdfOrDoc ? (
+                <a
+                  href={previewValue}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-blue-600 hover:underline font-medium"
+                >
+                  <Upload className="h-5 w-5" />
+                  View File
+                </a>
+              ) : (
+                <p className="text-gray-600 text-sm">File: {previewValue.split("/").pop()}</p>
+              )}
+            </div>
+          ) : (
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center bg-gray-50">
+              <p className="text-sm text-gray-500 font-medium">Upload disabled in editor</p>
+              <p className="text-xs text-gray-400 mt-2">
+                {field.type === "camera" 
+                  ? "Camera capture is disabled in the editor. Users can capture in the form." 
+                  : "File uploads are managed in the public form dialog. Add/edit files when filling the form."}
+              </p>
+            </div>
+          )}
+        </div>
+      );
+    }
 
     switch (field.type) {
       case "text":
@@ -304,14 +307,18 @@ export default function FieldComponent({
         return (
           <div className="flex items-center space-x-2">
             <Checkbox checked={previewValue} onCheckedChange={setPreviewValue} disabled />
-            <Label className={`text-sm ${isInSubform ? "text-purple-800" : ""}`}>{field.label}</Label>
+            <Label className={`text-sm ${isInSubform ? "text-purple-800" : ""}`}>
+              {field.label}
+            </Label>
           </div>
         );
       case "switch":
         return (
           <div className="flex items-center space-x-2">
             <Switch checked={previewValue} onCheckedChange={setPreviewValue} disabled />
-            <Label className={`text-sm ${isInSubform ? "text-purple-800" : ""}`}>{field.label}</Label>
+            <Label className={`text-sm ${isInSubform ? "text-purple-800" : ""}`}>
+              {field.label}
+            </Label>
           </div>
         );
       case "radio":
@@ -320,7 +327,9 @@ export default function FieldComponent({
             {options.map((option: FieldOption) => (
               <div key={option.id} className="flex items-center space-x-2">
                 <RadioGroupItem value={option.value} />
-                <Label className={`text-sm ${isInSubform ? "text-purple-800" : ""}`}>{option.label}</Label>
+                <Label className={`text-sm ${isInSubform ? "text-purple-800" : ""}`}>
+                  {option.label}
+                </Label>
               </div>
             ))}
           </RadioGroup>
@@ -328,7 +337,9 @@ export default function FieldComponent({
       case "select":
         return (
           <Select value={previewValue} onValueChange={setPreviewValue} disabled>
-            <SelectTrigger className={isInSubform ? "border-purple-200 focus:border-purple-400" : ""}>
+            <SelectTrigger
+              className={isInSubform ? "border-purple-200 focus:border-purple-400" : ""}
+            >
               <SelectValue placeholder={field.placeholder || "Select an option"} />
             </SelectTrigger>
             <SelectContent>
@@ -352,7 +363,13 @@ export default function FieldComponent({
               disabled
               className="w-full"
             />
-            <div className={`text-center text-sm ${isInSubform ? "text-purple-600" : "text-muted-foreground"}`}>
+            <div
+              className={`text-center text-sm ${
+                isInSubform
+                  ? "text-purple-600"
+                  : "text-muted-foreground"
+              }`}
+            >
               Value: {previewValue || field.validation?.min || 0}
             </div>
           </div>
@@ -363,82 +380,32 @@ export default function FieldComponent({
             {[1, 2, 3, 4, 5].map((rating) => (
               <Star
                 key={rating}
-                className={`h-4 w-4 ${rating <= (previewValue || 0) ? "fill-yellow-400 text-yellow-400" : "text-gray-300"}`}
+                className={`h-4 w-4 ${
+                  rating <= (previewValue || 0)
+                    ? "fill-yellow-400 text-yellow-400"
+                    : "text-gray-300"
+                }`}
               />
             ))}
-            <span className={`pl-2 text-sm ${isInSubform ? "text-purple-600" : "text-muted-foreground"}`}>
+            <span
+              className={`pl-2 text-sm ${
+                isInSubform
+                  ? "text-purple-600"
+                  : "text-muted-foreground"
+              }`}
+            >
               {previewValue ? `${previewValue}/5` : "Not rated"}
             </span>
           </div>
         );
       case "lookup":
-        return <LookupField field={lookupFieldData} value={previewValue} onChange={setPreviewValue} disabled={true} />;
-      case "file":
         return (
-          <Input
-            type="file"
-            disabled
-            multiple={field.properties?.multiple || false}
-            accept={field.properties?.accept || undefined}
-            className={isInSubform ? "border-purple-200 focus:border-purple-400" : ""}
-          />
-        );
-      case "camera":
-        return (
-          <CameraCapture
-            onCapture={(imageData) => {
-              setCapturedImage(imageData);
-              setPreviewValue(imageData);
-              onUpdate(field.id, { defaultValue: imageData }).catch((error) => {
-                console.error("Error updating camera field:", error);
-                toast({
-                  title: "Error",
-                  description: "Failed to save captured image",
-                  variant: "destructive",
-                });
-              });
-            }}
-            capturedImage={capturedImage}
-            onClear={handleClearImage}
+          <LookupField
+            field={lookupFieldData}
+            value={previewValue}
+            onChange={setPreviewValue}
             disabled={true}
-            className={isInSubform ? "border-purple-200 focus:border-purple-400" : ""}
           />
-        );
-      case "image":
-      case "signature":
-        return (
-          <div className="space-y-2">
-            {capturedImage ? (
-              <div className="relative">
-                <img
-                  src={capturedImage}
-                  alt={field.type === "image" ? "Uploaded image" : "Uploaded signature"}
-                  className="max-w-full h-auto rounded border"
-                />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="absolute top-1 right-1 bg-white/80 hover:bg-white"
-                  onClick={handleClearImage}
-                  disabled
-                >
-                  <Trash2 className="h-4 w-4 text-red-600" />
-                </Button>
-              </div>
-            ) : (
-              <div className="flex items-center space-x-2">
-                <Input
-                  type="file"
-                  ref={fileInputRef}
-                  accept={field.type === "image" ? "image/*" : "image/png,image/jpeg"}
-                  onChange={handleFileChange}
-                  disabled
-                  className={isInSubform ? "border-purple-200 focus:border-purple-400" : ""}
-                />
-                <ImageIcon className={`h-5 w-5 ${isInSubform ? "text-purple-600" : "text-gray-500"}`} />
-              </div>
-            )}
-          </div>
         );
       case "location":
         return (
@@ -454,11 +421,32 @@ export default function FieldComponent({
       case "hidden":
         return (
           <div
-            className={`flex items-center space-x-2 p-2 rounded border-dashed border-2 ${isInSubform ? "bg-purple-50 border-purple-200" : "bg-gray-100 border-gray-300"}`}
+            className={`flex items-center space-x-2 p-2 rounded border-dashed border-2 ${
+              isInSubform
+                ? "bg-purple-50 border-purple-200"
+                : "bg-gray-100 border-gray-300"
+            }`}
           >
-            <EyeOff className={`h-4 w-4 ${isInSubform ? "text-purple-500" : "text-gray-500"}`} />
-            <span className={`text-sm ${isInSubform ? "text-purple-600" : "text-gray-500"}`}>Hidden Field</span>
-            <Badge variant="outline" className={`text-xs ${isInSubform ? "border-purple-300 text-purple-700" : ""}`}>
+            <EyeOff
+              className={`h-4 w-4 ${
+                isInSubform ? "text-purple-500" : "text-gray-500"
+              }`}
+            />
+            <span
+              className={`text-sm ${
+                isInSubform ? "text-purple-600" : "text-gray-500"
+              }`}
+            >
+              Hidden Field
+            </span>
+            <Badge
+              variant="outline"
+              className={`text-xs ${
+                isInSubform
+                  ? "border-purple-300 text-purple-700"
+                  : ""
+              }`}
+            >
               {field.defaultValue || "No value"}
             </Badge>
           </div>
@@ -500,18 +488,19 @@ export default function FieldComponent({
             <div
               {...attributes}
               {...listeners}
-              className={`opacity-0 group-hover:opacity-100 transition-opacity ${getGripStyles()}`}
+              className={getGripStyles()}
             >
               <GripVertical className="h-4 w-4" />
             </div>
             <div className="flex-1 space-y-2">
               {field.type !== "checkbox" &&
                 field.type !== "switch" &&
-                field.type !== "hidden" &&
-                ( // Exclude location from label display if desired
+                field.type !== "hidden" && (
                   <Label className={`text-sm font-medium ${isInSubform ? "text-purple-800" : ""}`}>
                     {field.label}
-                    {field.validation?.required && <span className="text-red-500 ml-1">*</span>}
+                    {field.validation?.required && (
+                      <span className="text-red-500 ml-1">*</span>
+                    )}
                   </Label>
                 )}
               {renderFieldPreview()}

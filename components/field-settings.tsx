@@ -149,7 +149,7 @@ export default function FieldSettings({ field, open, onOpenChange, onUpdate }: F
       fieldMapping: {
         display: "name",
         value: "id",
-        store: "name", // Default to storing the display value
+        store: "name",
         description: "description",
       },
     }
@@ -235,6 +235,9 @@ export default function FieldSettings({ field, open, onOpenChange, onUpdate }: F
   }
 
   const selectedSource = lookupSources.find((source) => source.id === localField.lookup?.sourceId)
+
+  // Helper to detect location field
+  const isLocationField = ["location", "newlocation"].includes(localField.type ?? "")
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -343,11 +346,15 @@ export default function FieldSettings({ field, open, onOpenChange, onUpdate }: F
                       onCheckedChange={(checked) => handleFieldUpdate({ readonly: checked })}
                     />
                   </div>
+
+                  {/* Auto-fetch toggles */}
                   {localField.type === "date" && (
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
                         <Label>Auto-fetch Current Date</Label>
-                        <p className="text-sm text-muted-foreground">Automatically set the current date as the default value</p>
+                        <p className="text-sm text-muted-foreground">
+                          Automatically set the current date as the default value
+                        </p>
                       </div>
                       <Switch
                         checked={localField.properties?.autoFetchDate || false}
@@ -355,15 +362,33 @@ export default function FieldSettings({ field, open, onOpenChange, onUpdate }: F
                       />
                     </div>
                   )}
+
                   {localField.type === "time" && (
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
                         <Label>Auto-fetch Current Time</Label>
-                        <p className="text-sm text-muted-foreground">Automatically set the current time as the default value</p>
+                        <p className="text-sm text-muted-foreground">
+                          Automatically set the current time as the default value
+                        </p>
                       </div>
                       <Switch
                         checked={localField.properties?.autoFetchTime || false}
                         onCheckedChange={(checked) => handlePropertiesChange("autoFetchTime", checked)}
+                      />
+                    </div>
+                  )}
+
+                  {isLocationField && (
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label>Auto-fetch Current Location</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Automatically fill the user’s GPS location (address + coordinates)
+                        </p>
+                      </div>
+                      <Switch
+                        checked={localField.properties?.autoFetchLocation || false}
+                        onCheckedChange={(checked) => handlePropertiesChange("autoFetchLocation", checked)}
                       />
                     </div>
                   )}

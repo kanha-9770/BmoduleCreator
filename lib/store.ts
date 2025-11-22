@@ -1,15 +1,24 @@
 import { configureStore } from "@reduxjs/toolkit"
-import { apiSlice } from "./api/apiSlice"
+import { authApi } from "./api/auth"
+import { modulesApi } from "./api/modules"
+import { formsApi } from "./api/forms"
+import { recordsApi } from "./api/records"
 
-export const makeStore = () => {
-  return configureStore({
-    reducer: {
-      [apiSlice.reducerPath]: apiSlice.reducer,
-    },
-    middleware: (getDefaultMiddleware) => getDefaultMiddleware().concat(apiSlice.middleware),
-  })
-}
+export const store = configureStore({
+  reducer: {
+    [authApi.reducerPath]: authApi.reducer,
+    [modulesApi.reducerPath]: modulesApi.reducer,
+    [formsApi.reducerPath]: formsApi.reducer,
+    [recordsApi.reducerPath]: recordsApi.reducer,
+  },
+  middleware: (getDefaultMiddleware) =>
+    getDefaultMiddleware().concat([
+      authApi.middleware,
+      modulesApi.middleware,
+      formsApi.middleware,
+      recordsApi.middleware,
+    ]),
+})
 
-export type AppStore = ReturnType<typeof makeStore>
-export type RootState = ReturnType<AppStore["getState"]>
-export type AppDispatch = AppStore["dispatch"]
+export type RootState = ReturnType<typeof store.getState>
+export type AppDispatch = typeof store.dispatch

@@ -1,3 +1,4 @@
+// app/api/create-user-from-employee/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
@@ -8,11 +9,11 @@ export async function POST(request: NextRequest) {
   try {
     console.log('Creating user from employee record...');
     const body = await request.json();
-    const { 
-      employeeRecordId, 
-      employee_id, 
-      employeeName, 
-      email, 
+    const {
+      employeeRecordId,
+      employee_id,
+      employeeName,
+      email,
       password,
       confirmPassword
     } = body;
@@ -21,7 +22,6 @@ export async function POST(request: NextRequest) {
 
     // Validate required fields
     if (!employeeRecordId || !employee_id || !employeeName || !email || !password) {
-      console.log('Missing required fields');
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -59,7 +59,6 @@ export async function POST(request: NextRequest) {
     });
 
     if (existingUser) {
-      console.log('User already exists with email:', email);
       return NextResponse.json(
         { error: 'User with this email already exists' },
         { status: 400 }
@@ -72,7 +71,6 @@ export async function POST(request: NextRequest) {
     });
 
     if (!formRecord) {
-      console.log('Form record not found:', employeeRecordId);
       return NextResponse.json(
         { error: 'Employee form record not found' },
         { status: 404 }
@@ -82,14 +80,8 @@ export async function POST(request: NextRequest) {
     // Parse the form record data
     const parsedData = parseEmployeeData(formRecord.recordData);
 
-    console.log('Parsed employee data:', parsedData);
-
     // Validate essential parsed data
     if (!parsedData.employeeName || !parsedData.email) {
-      console.log('Missing essential parsed data:', { 
-        hasName: !!parsedData.employeeName, 
-        hasEmail: !!parsedData.email 
-      });
       return NextResponse.json(
         { error: 'Unable to extract essential employee information from form data' },
         { status: 400 }
@@ -109,7 +101,7 @@ export async function POST(request: NextRequest) {
     const joiningDate = parsedData.dateOfJoining && parsedData.dateOfJoining !== '0000-00-00' ? new Date(parsedData.dateOfJoining) : null;
     const leavingDate = parsedData.dateOfLeaving && parsedData.dateOfLeaving !== '0000-00-00' ? new Date(parsedData.dateOfLeaving) : null;
 
-    // Map status from form to Employee enum
+    // Map status and gender
     const mapEmployeeStatus = (status: string) => {
       switch (status?.toLowerCase()) {
         case 'active': return 'ACTIVE';
@@ -119,7 +111,6 @@ export async function POST(request: NextRequest) {
       }
     };
 
-    // Map gender from form to User enum
     const mapGender = (gender: string) => {
       switch (gender?.toLowerCase()) {
         case 'male': return 'MALE';
@@ -129,31 +120,31 @@ export async function POST(request: NextRequest) {
     };
 
     console.log('Starting database transaction...');
-    // Create user and employee with transaction to ensure data consistency
+
+    // Main transaction: Create User + Employee + Link FormRecord14
     const result = await prisma.$transaction(async (tx) => {
-      // Create the user
+      // 1. Create the User
       const newUser = await tx.user.create({
         data: {
           email,
           password: hashedPassword,
           first_name: firstName,
           last_name: lastName || null,
-          email_verified: true, // Auto-verify since we're creating from employee data
+          email_verified: true,
           status: 'ACTIVE',
           provider: 'EMAIL',
           department: parsedData.department || null,
           phone: parsedData.phone || null,
           joinDate: joiningDate,
-          // Add employee reference - this will be set after employee creation
         }
       });
 
       console.log('User created:', newUser.id);
 
-      // Create or update employee record
       let employee;
+
+      // 2. Find existing employee by ID (if provided)
       if (employee_id) {
-        // Try to find existing employee
         employee = await tx.employee.findUnique({
           where: { id: employee_id }
         });
@@ -161,11 +152,11 @@ export async function POST(request: NextRequest) {
 
       if (employee) {
         console.log('Updating existing employee:', employee_id);
-        // Update existing employee
+        // Update existing employee → overwrites old userId
         employee = await tx.employee.update({
           where: { id: employee_id },
           data: {
-            userId: newUser.id,
+            userId: newUser.id,  // OVERWRITES any previous userId
             employeeName: parsedData.employeeName,
             emailAddress1: parsedData.email,
             emailAddress2: parsedData.emailAddress2 || null,
@@ -178,7 +169,7 @@ export async function POST(request: NextRequest) {
         });
       } else {
         console.log('Creating new employee record');
-        // Create new employee record
+        // Create new employee
         employee = await tx.employee.create({
           data: {
             userId: newUser.id,
@@ -224,24 +215,26 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      console.log('Employee record processed:', employee.id);
+      // 3. CRITICAL: Update FormRecord14 to link BOTH employee_id AND userId
+      await tx.formRecord14.update({
+        where: { id: employeeRecordId },
+        data: {
+          employee_id: employee.id,     // Link to employee
+          userId: newUser.id,           // LINK TO USER (OVERWRITES old userId)
+        },
+      });
+
+      console.log('FormRecord14 updated with employee_id and userId');
+
       return { user: newUser, employee };
     });
 
     console.log('Transaction completed successfully');
 
-    // Update the FormRecord14 to mark it as processed (optional)
-    await prisma.formRecord14.update({
-      where: { id: employeeRecordId },
-      data: {
-        employee_id: result.employee.id, // Link the form record to the employee
-      }
-    });
-
-    // Create initial session for the new user (optional)
+    // Create session
     const sessionToken = generateSessionToken();
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7); // 7 days
+    expiresAt.setDate(expiresAt.getDate() + 7);
 
     const session = await prisma.userSession.create({
       data: {
@@ -253,7 +246,7 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    // Generate JWT token for additional authentication
+    // Generate JWT
     const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-key';
     const jwtToken = generateJWT(
       {
@@ -266,7 +259,7 @@ export async function POST(request: NextRequest) {
       '7d'
     );
 
-    console.log('User creation completed successfully');
+    console.log('User creation completed successfully for:', result.user.email);
 
     return NextResponse.json({
       success: true,
@@ -285,7 +278,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error creating user from employee:', error);
     return NextResponse.json(
-      { 
+      {
         error: 'Failed to create user',
         details: error instanceof Error ? error.message : 'Unknown error',
         ...(process.env.NODE_ENV === 'development' && {

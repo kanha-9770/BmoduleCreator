@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react"
 import { useToast } from "@/hooks/use-toast"
+
 import {
   Loader2,
   Type,
@@ -18,10 +19,14 @@ import {
   MousePointer2,
   FileText,
 } from "lucide-react"
-import { PublicFormDialog } from "@/components/public-form-dialog"
 import RecordsDisplay from "@/components/modules/recordsDisplay"
 import FormsContent from "@/components/dynamicSubmodule/formsContent"
+import { PublicFormDialog } from "@/components/public-form-dialog"
+import { useGetModuleByIdQuery } from "@/lib/api/modules"
+import { useDeleteRecordMutation, useGetModuleRecordsQuery, useUpdateRecordMutation } from "@/lib/api/records"
+
 // Interfaces (unchanged)
+
 interface FormModule {
   id: string
   name: string
@@ -118,7 +123,7 @@ interface PendingChange {
 export default function ModulePage({
   params,
 }: {
-  params: { moduleName: string; moduleId: string; slug?: string[] }
+  params: { module_name: string; module_Id: string; slug?: string[] }
 }) {
   const { toast } = useToast()
   const { module_name, module_Id, slug } = params
@@ -134,7 +139,6 @@ export default function ModulePage({
   const [allModuleForms, setAllModuleForms] = useState<Form[]>([])
   const [formFieldsWithSections, setFormFieldsWithSections] = useState<FormFieldWithSection[]>([])
   const [loading, setLoading] = useState(true)
-  const [recordsLoading, setRecordsLoading] = useState(false)
   const [viewMode, setViewMode] = useState<"excel" | "table" | "grid" | "list">("excel")
   const [recordSearchQuery, setRecordSearchQuery] = useState("")
   const [recordSortField, setRecordSortField] = useState<string>("")
@@ -153,6 +157,23 @@ export default function ModulePage({
   const [clickCount, setClickCount] = useState<Map<string, number>>(new Map())
   const inputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const {
+    data: moduleData,
+    isLoading: moduleLoading,
+    error: moduleError,
+  } = useGetModuleByIdQuery(moduleId, {
+    skip: !moduleId,
+  })
+
+  const [formIds, setFormIds] = useState<string[]>([])
+
+  const { data: allRecordsData, refetch: refetchRecords } = useGetModuleRecordsQuery(formIds, {
+    skip: formIds.length === 0,
+  })
+
+  const [updateRecord] = useUpdateRecordMutation()
+  const [deleteRecord] = useDeleteRecordMutation()
 
   const openFormDialog = (formId: string) => {
     console.log("ModulePage: Opening form dialog", { formId })
@@ -318,6 +339,65 @@ export default function ModulePage({
     }
   }
 
+  useEffect(() => {
+    if (moduleData?.success && moduleData.data) {
+      setSelectedModule(moduleData.data)
+      const moduleForms = moduleData.data.forms || []
+      setAllModuleForms(moduleForms)
+      setFormIds(moduleForms.map((f) => f.id))
+      setLoading(false)
+    }
+  }, [moduleData])
+
+  useEffect(() => {
+    if (moduleError) {
+      console.error("ModulePage: Error fetching module", moduleError)
+      toast({
+        title: "Error",
+        description: "Failed to load module. Please try again.",
+        variant: "destructive",
+      })
+      setLoading(false)
+    }
+  }, [moduleError, toast])
+
+  useEffect(() => {
+    if (allRecordsData && selectedModule) {
+      const moduleForms = selectedModule.forms || []
+      const allFieldsWithSections: FormFieldWithSection[] = []
+
+      moduleForms.forEach((form) => {
+        if (form.sections) {
+          let fieldOrder = 0
+          form.sections.forEach((section: any) => {
+            if (section.fields) {
+              section.fields.forEach((field: any) => {
+                const uniqueFieldId = `${form.id}_${field.id}`
+                allFieldsWithSections.push({
+                  ...field,
+                  id: uniqueFieldId,
+                  originalId: field.id,
+                  order: field.order || fieldOrder++,
+                  sectionTitle: section.title,
+                  sectionId: section.id,
+                  formId: form.id,
+                  formName: form.name,
+                })
+              })
+            }
+          })
+        }
+      })
+
+      setFormFieldsWithSections(allFieldsWithSections)
+
+      const enhancedRecords = allRecordsData.map((record) => processRecordData(record, allFieldsWithSections))
+
+      setFormRecords(enhancedRecords)
+      console.log("ModulePage: fetchAllModuleRecords completed", { recordsLoading: false })
+    }
+  }, [allRecordsData, selectedModule])
+
   const saveAllPendingChanges = async (changesToSave?: Map<string, PendingChange>) => {
     const changesToProcess = changesToSave || pendingChanges
 
@@ -395,39 +475,19 @@ export default function ModulePage({
           }
         })
 
-        console.log("[v0] Sending PUT request:", {
-          url: `/api/forms/${formId}/records/${actualRecordId}`,
-          recordData: updatedRecordData,
-        })
+        console.log("[v0] Sending update via RTK Query mutation")
 
-        const response = await fetch(`/api/forms/${formId}/records/${actualRecordId}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+        const result = await updateRecord({
+          formId,
+          recordId: actualRecordId,
+          body: {
             recordData: updatedRecordData,
-            submittedBy: "admin",
             status: sourceRecord?.status || "submitted",
-          }),
-        })
+            submittedBy: "admin",
+          },
+        }).unwrap()
 
-        console.log("[v0] PUT response status:", {
-          actualRecordId,
-          status: response.status,
-          ok: response.ok,
-        })
-
-        if (!response.ok) {
-          const errorText = await response.text()
-          console.error("[v0] Save failed:", {
-            actualRecordId,
-            status: response.status,
-            errorText,
-          })
-          throw new Error(`Failed to save record ${actualRecordId}: ${response.status} ${errorText}`)
-        }
-
-        const result = await response.json()
-        console.log("[v0] Save response:", { actualRecordId, result })
+        console.log("[v0] Update response:", { actualRecordId, result })
 
         if (!result.success) {
           throw new Error(`Failed to save record ${actualRecordId}: ${result.error || "Unknown error"}`)
@@ -442,7 +502,7 @@ export default function ModulePage({
 
       console.log("[v0] All records saved, refreshing data:", { totalSaved: savedCount })
 
-      await fetchAllModuleRecords()
+      await refetchRecords()
 
       setPendingChanges(new Map())
       setEditingCell(null)
@@ -493,10 +553,10 @@ export default function ModulePage({
 
         return needsUpdate
           ? {
-            ...record,
-            recordData: updatedRecordData,
-            processedData: updatedProcessedData,
-          }
+              ...record,
+              recordData: updatedRecordData,
+              processedData: updatedProcessedData,
+            }
           : record
       }),
     )
@@ -607,7 +667,8 @@ export default function ModulePage({
       moduleId: selectedModule.id,
     })
     try {
-      setRecordsLoading(true)
+      setFormRecords([])
+      setFormFieldsWithSections([])
       const moduleForms = selectedModule.forms || []
       setAllModuleForms(moduleForms)
       console.log("ModulePage: allModuleForms set", { formCount: moduleForms.length })
@@ -705,9 +766,6 @@ export default function ModulePage({
         description: error.message || "Failed to load records. Please try again.",
         variant: "destructive",
       })
-    } finally {
-      setRecordsLoading(false)
-      console.log("ModulePage: fetchAllModuleRecords completed", { recordsLoading: false })
     }
   }
 
@@ -766,88 +824,108 @@ export default function ModulePage({
     }
   }, [clickTimeout])
 
-  if (loading) {
+  const handleDeleteRecord = async (record: EnhancedFormRecord) => {
+    if (!confirm("Are you sure you want to delete this record?")) return
+
+    try {
+      const result = await deleteRecord({
+        formId: record.formId,
+        recordId: record.id,
+      }).unwrap()
+
+      if (result.success) {
+        toast({
+          title: "Record Deleted",
+          description: "The record has been successfully deleted",
+        })
+        // Records will auto-refresh due to cache invalidation
+      } else {
+        throw new Error(result.error || "Failed to delete record")
+      }
+    } catch (error: any) {
+      console.error("Error deleting record:", error)
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete record",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleFormClose = async () => {
+    closeFormDialog()
+    await refetchRecords()
+  }
+
+  const handleEditRecord = (record: EnhancedFormRecord) => {
+    console.log("Edit record clicked", record)
+  }
+
+  const handleViewDetails = (record: EnhancedFormRecord) => {
+    console.log("View details clicked", record)
+  }
+
+  if (moduleLoading || loading) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-gray-600" />
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
       </div>
     )
   }
 
-  if (!moduleId) {
+  if (!selectedModule) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-xl font-bold text-gray-800">No Module Selected</h2>
-          <p className="text-gray-600">Please provide a module ID in the URL.</p>
-        </div>
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-muted-foreground">Module not found</p>
       </div>
     )
   }
 
   return (
-    <div className="h-screen bg-gray-100 flex flex-col ">
-      <div className="bg-white shadow-md border-b border-gray-200 flex-shrink-0">
-        <div className="container mx-auto px-4 py-1">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-xl font-bold text-gray-800">{moduleName}</h1>
-              <p className="text-sm text-gray-600">{selectedModule?.description || "Manage your forms and records"}</p>
-            </div>
-            <FormsContent
-              forms={selectedModule.forms || []}
-              selectedForm={selectedForm}
-              setSelectedForm={setSelectedForm}
-              openFormDialog={openFormDialog}
-              handlePublishForm={handlePublishForm}
-            />
-          </div>
-        </div>
-      </div>
+    <div className="container mx-auto p-6 space-y-6">
+      <FormsContent
+        forms={allModuleForms}
+        selectedForm={selectedForm}
+        setSelectedForm={setSelectedForm}
+        openFormDialog={openFormDialog}
+      />
 
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="p-6 flex-1 overflow-y-auto">
-          {selectedModule ? (
-            <div>
+      <RecordsDisplay
+        allModuleForms={allModuleForms}
+        formRecords={formRecords}
+        formFieldsWithSections={formFieldsWithSections}
+        recordSearchQuery={recordSearchQuery}
+        selectedFormFilter={selectedFormFilter}
+        recordsPerPage={recordsPerPage}
+        currentPage={currentPage}
+        selectedRecords={selectedRecords}
+        editMode={editMode}
+        editingCell={editingCell}
+        pendingChanges={pendingChanges}
+        savingChanges={savingChanges}
+        recordSortField={recordSortField}
+        recordSortOrder={recordSortOrder}
+        setRecordSearchQuery={setRecordSearchQuery}
+        setSelectedFormFilter={setSelectedFormFilter}
+        setRecordsPerPage={setRecordsPerPage}
+        setCurrentPage={setCurrentPage}
+        setSelectedRecords={setSelectedRecords}
+        setRecordSortField={setRecordSortField}
+        setRecordSortOrder={setRecordSortOrder}
+        getFieldIcon={getFieldIcon}
+        getEditModeInfo={getEditModeInfo}
+        toggleEditMode={toggleEditMode}
+        saveAllPendingChanges={saveAllPendingChanges}
+        discardAllPendingChanges={discardAllPendingChanges}
+        setEditingCell={setEditingCell}
+        setPendingChanges={setPendingChanges}
+        setFormRecords={setFormRecords}
+        onEditRecord={handleEditRecord}
+        onDeleteRecord={handleDeleteRecord}
+        onViewDetails={handleViewDetails}
+      />
 
-              <RecordsDisplay
-                allModuleForms={allModuleForms}
-                formRecords={formRecords}
-                formFieldsWithSections={formFieldsWithSections}
-                recordSearchQuery={recordSearchQuery}
-                selectedFormFilter={selectedFormFilter}
-                recordsPerPage={recordsPerPage}
-                currentPage={currentPage}
-                selectedRecords={selectedRecords}
-                editMode={editMode}
-                editingCell={editingCell}
-                pendingChanges={pendingChanges}
-                savingChanges={savingChanges}
-                recordSortField={recordSortField}
-                recordSortOrder={recordSortOrder}
-                setRecordSearchQuery={setRecordSearchQuery}
-                setSelectedFormFilter={setSelectedFormFilter}
-                setRecordsPerPage={setRecordsPerPage}
-                setCurrentPage={setCurrentPage}
-                setSelectedRecords={setSelectedRecords}
-                setRecordSortField={setRecordSortField}
-                setRecordSortOrder={setRecordSortOrder}
-                getFieldIcon={getFieldIcon}
-                getEditModeInfo={getEditModeInfo}
-                toggleEditMode={toggleEditMode}
-                saveAllPendingChanges={saveAllPendingChanges}
-                discardAllPendingChanges={discardAllPendingChanges}
-                setEditingCell={setEditingCell}
-                setPendingChanges={setPendingChanges}
-                setFormRecords={setFormRecords}
-              />
-            </div>
-          ) : (
-            <div className="text-center py-12 text-gray-500">Loading module data...</div>
-          )}
-        </div>
-      </div>
-      <PublicFormDialog formId={selectedFormForFilling} isOpen={isFormDialogOpen} onClose={closeFormDialog} />
+      <PublicFormDialog formId={selectedFormForFilling} isOpen={isFormDialogOpen} onClose={handleFormClose} />
     </div>
   )
 }

@@ -2,18 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-
 export default function Dashboard() {
   const [user, setUser] = useState<any>(null);
-
   useEffect(() => {
-    // Retrieve user data from sessionStorage
     const storedUser = sessionStorage.getItem("user");
     if (storedUser) {
       setUser(JSON.parse(storedUser));
     }
   }, []);
-
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Main Content */}

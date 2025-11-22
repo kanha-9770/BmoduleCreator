@@ -1,7 +1,8 @@
-"use client";
+"use client"
 
-import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import type React from "react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import {
   ChevronDown,
   ChevronRight,
@@ -17,30 +18,26 @@ import {
   X,
   Building2,
   ChevronLeft,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
-import Link from "next/link";
+} from "lucide-react"
+import { cn } from "@/lib/utils"
+import Link from "next/link"
+import { useGetUserQuery } from "@/lib/api/auth"
 
 interface Module {
-  module_id: string;
-  module_name: string;
-  description?: string;
-  icon?: string;
-  color?: string;
-  path?: string;
-  parent_id?: string;
-  level: number;
-  sort_order: number;
-  module_type: string;
+  module_id: string
+  module_name: string
+  description?: string
+  icon?: string
+  color?: string
+  path?: string
+  parent_id?: string
+  level: number
+  sort_order: number
+  module_type: string
 }
 
-interface User {
-  id: string;
-  email: string;
-  name: string;
-}
+import { useGetPermittedModulesQuery as useGetModulesPermitted } from "@/lib/api/modules"
 
-// Icon mapping for different module types
 const getModuleIcon = (iconName?: string, moduleType?: string) => {
   const iconMap: { [key: string]: React.ComponentType<any> } = {
     home: Home,
@@ -52,182 +49,124 @@ const getModuleIcon = (iconName?: string, moduleType?: string) => {
     shield: Shield,
     folder: Folder,
     building2: Building2,
-  };
+  }
 
   if (iconName && iconMap[iconName]) {
-    return iconMap[iconName];
+    return iconMap[iconName]
   }
 
-  // Fallback icons based on module type
   switch (moduleType) {
     case "admin":
-      return Shield;
+      return Shield
     case "user":
-      return Users;
+      return Users
     case "form":
-      return FileText;
+      return FileText
     case "data":
-      return Database;
+      return Database
     case "master":
-      return Shield; // Added for 'master' type in your sample data
+      return Shield
     default:
-      return Folder;
+      return Folder
   }
-};
+}
 
 export function DynamicSidebar() {
-  const [modules, setModules] = useState<Module[]>([]);
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [expandedModules, setExpandedModules] = useState<Set<string>>(
-    new Set()
-  );
-  const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const router = useRouter();
+  const [modules, setModules] = useState<Module[]>([])
+  const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set())
+  const [isMobileOpen, setIsMobileOpen] = useState(false)
+  const [isCollapsed, setIsCollapsed] = useState(false)
+  const router = useRouter()
 
-  // Function to generate path from module_name if path is null/undefined
+  const { data: modulesData, isLoading, error } = useGetModulesPermitted()
+  const { data: userData } = useGetUserQuery()
+
+  useEffect(() => {
+    if (modulesData?.modules) {
+      setModules(modulesData.modules)
+    }
+  }, [modulesData])
+
   const generatePath = (module: Module): string => {
     if (module.path) {
-      return module.path;
+      return module.path
     }
-    // Convert module_name to kebab-case slug for routing (e.g., "Admin" -> "/admin")
     const slug = module.module_name
       .toLowerCase()
       .trim()
-      .replace(/[^a-z0-9\s-]/g, "") // Remove special characters
-      .replace(/\s+/g, "-") // Replace spaces with hyphens
-      .replace(/-+/g, "-") // Replace multiple hyphens with single
-      .replace(/^-+|-+$/g, ""); // Trim leading/trailing hyphens
-    return `/${slug || "module"}`; // Fallback to '/module' if slug is empty
-  };
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-+|-+$/g, "")
+    return `/${slug || "module"}`
+  }
 
-  // Fetch user data
-  const fetchUser = async () => {
-    try {
-      const response = await fetch("/api/auth/me");
-      if (response.ok) {
-        const data = await response.json();
-        setUser(data.user);
-      } else {
-        throw new Error("Failed to fetch user data");
-      }
-    } catch (error) {
-      console.error("Error fetching user:", error);
-      setError("Failed to load user data");
+  const toggleModule = (moduleId: string) => {
+    const newExpanded = new Set(expandedModules)
+    if (newExpanded.has(moduleId)) {
+      newExpanded.delete(moduleId)
+    } else {
+      newExpanded.add(moduleId)
     }
-  };
+    setExpandedModules(newExpanded)
+  }
 
-  // Fetch permitted modules
-  const fetchModules = async () => {
-    try {
-      const response = await fetch("/api/user/permitted-modules");
-      if (response.ok) {
-        const data = await response.json();
-        console.log("i am akash ", data);
-        setModules(data.modules || []);
-      } else {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to fetch modules");
-      }
-    } catch (error: any) {
-      console.error("Error fetching modules:", error);
-      setError(error.message || "Failed to load modules");
-    } finally {
-      setLoading(false);
+  const handleModuleClick = (module: Module & { children?: Module[] }) => {
+    const moduleHasChildren = hasChildren(module)
+
+    if (moduleHasChildren) {
+      toggleModule(module.module_id)
+    } else {
+      const basePath = generatePath(module)
+      const fullPath = `${basePath}/${module.module_id}`
+      router.push(fullPath)
+      setIsMobileOpen(false)
     }
-  };
+  }
 
-  useEffect(() => {
-    fetchUser();
-    fetchModules();
-  }, []);
+  const hasChildren = (module: Module & { children?: Module[] }) => {
+    return module.children && module.children.length > 0
+  }
 
-  // Build hierarchical structure
   const buildModuleTree = (modules: Module[]): Module[] => {
-    const moduleMap = new Map<string, Module & { children: Module[] }>();
+    const moduleMap = new Map<string, Module & { children: Module[] }>()
 
-    // Initialize all modules
     modules.forEach((module) => {
-      moduleMap.set(module.module_id, { ...module, children: [] });
-    });
+      moduleMap.set(module.module_id, { ...module, children: [] })
+    })
 
-    const rootModules: (Module & { children: Module[] })[] = [];
+    const rootModules: (Module & { children: Module[] })[] = []
 
-    // Build tree structure
     modules.forEach((module) => {
-      const moduleWithChildren = moduleMap.get(module.module_id)!;
+      const moduleWithChildren = moduleMap.get(module.module_id)!
 
-      if (
-        module.parent_id &&
-        module.parent_id !== null &&
-        moduleMap.has(module.parent_id)
-      ) {
-        const parent = moduleMap.get(module.parent_id)!;
-        parent.children.push(moduleWithChildren);
+      if (module.parent_id && module.parent_id !== null && moduleMap.has(module.parent_id)) {
+        const parent = moduleMap.get(module.parent_id)!
+        parent.children.push(moduleWithChildren)
       } else {
-        // This is a root module (no parent_id or parent not found)
-        rootModules.push(moduleWithChildren);
+        rootModules.push(moduleWithChildren)
       }
-    });
+    })
 
-    // Recursively sort all modules by sort_order
     const sortModules = (modules: (Module & { children: Module[] })[]) => {
       modules.forEach((module) => {
         if (module.children.length > 0) {
-          module.children.sort((a, b) => a.sort_order - b.sort_order);
-          // Cast children to correct type for recursion
-          sortModules(module.children as (Module & { children: Module[] })[]);
+          module.children.sort((a, b) => a.sort_order - b.sort_order)
+          sortModules(module.children as (Module & { children: Module[] })[])
         }
-      });
-      return modules.sort((a, b) => a.sort_order - b.sort_order);
-    };
-
-    return sortModules(rootModules);
-  };
-
-  const toggleModule = (moduleId: string) => {
-    const newExpanded = new Set(expandedModules);
-    if (newExpanded.has(moduleId)) {
-      newExpanded.delete(moduleId);
-    } else {
-      newExpanded.add(moduleId);
+      })
+      return modules.sort((a, b) => a.sort_order - b.sort_order)
     }
-    setExpandedModules(newExpanded);
-  };
 
-  const handleModuleClick = (module: Module & { children?: Module[] }) => {
-    const moduleHasChildren = hasChildren(module);
+    return sortModules(rootModules)
+  }
 
-    if (moduleHasChildren) {
-      // If it has children, toggle expand/collapse
-      toggleModule(module.module_id);
-    } else {
-      // For leaf modules, navigate using generated or existing path with name and id
-      const basePath = generatePath(module);
-      const fullPath = `${basePath}/${module.module_id}`;
-      router.push(fullPath);
-      setIsMobileOpen(false);
-    }
-  };
+  const renderModule = (module: Module & { children?: Module[] }, depth = 0) => {
+    const IconComponent = getModuleIcon(module.icon, module.module_type)
+    const moduleHasChildren = hasChildren(module)
+    const isExpanded = expandedModules.has(module.module_id)
 
-  const hasChildren = (module: Module & { children?: Module[] }) => {
-    return module.children && module.children.length > 0;
-  };
-
-  const renderModule = (
-    module: Module & { children?: Module[] },
-    depth = 0
-  ) => {
-    const IconComponent = getModuleIcon(module.icon, module.module_type);
-    const moduleHasChildren = hasChildren(module);
-    const isExpanded = expandedModules.has(module.module_id);
-
-    // Generate href only for leaf modules (no children); use '#' for parents to prevent navigation
-    const href = !moduleHasChildren
-      ? `${generatePath(module)}/${module.module_id}`
-      : "#";
+    const href = !moduleHasChildren ? `${generatePath(module)}/${module.module_id}` : "#"
 
     return (
       <div key={module.module_id} className="w-full">
@@ -240,13 +179,13 @@ export function DynamicSidebar() {
               : "hover:bg-gray-100 dark:hover:bg-gray-700",
             "outline-none",
             moduleHasChildren && "font-semibold",
-            depth > 0 && !isCollapsed && ""
+            depth > 0 && !isCollapsed && "",
           )}
           style={{ paddingLeft: isCollapsed ? "12px" : `${depth * 16 + 12}px` }}
           onClick={(e) => {
             if (moduleHasChildren) {
-              e.preventDefault(); // Prevent navigation for parent modules
-              toggleModule(module.module_id);
+              e.preventDefault()
+              toggleModule(module.module_id)
             }
           }}
         >
@@ -254,11 +193,7 @@ export function DynamicSidebar() {
             <div
               className={cn(
                 "flex-shrink-0 w-5 h-5 mr-2 transition-colors duration-200",
-                module.color
-                  ? `text-[${module.color}]`
-                  : moduleHasChildren
-                  ? "text-gray-500 dark:text-gray-400"
-                  : "text-gray-500 dark:text-gray-400"
+                "text-gray-500 dark:text-gray-400",
               )}
             >
               <IconComponent className="w-5 h-5" />
@@ -271,9 +206,7 @@ export function DynamicSidebar() {
                 </span>
 
                 {moduleHasChildren && (
-                  <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
-                    ({module.children!.length})
-                  </span>
+                  <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">({module.children!.length})</span>
                 )}
               </>
             )}
@@ -291,19 +224,16 @@ export function DynamicSidebar() {
         </Link>
 
         {!isCollapsed && moduleHasChildren && isExpanded && (
-          <div className="space-y-1">
-            {module.children!.map((child) => renderModule(child, depth + 1))}
-          </div>
+          <div className="space-y-1">{module.children!.map((child) => renderModule(child, depth + 1))}</div>
         )}
       </div>
-    );
-  };
+    )
+  }
 
-  const moduleTree = buildModuleTree(modules);
+  const moduleTree = buildModuleTree(modules)
 
   return (
     <>
-      {/* Mobile menu button */}
       <button
         className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-white dark:bg-gray-800 shadow-lg border border-gray-200 dark:border-gray-700"
         onClick={() => setIsMobileOpen(!isMobileOpen)}
@@ -315,24 +245,18 @@ export function DynamicSidebar() {
         )}
       </button>
 
-      {/* Overlay for mobile */}
       {isMobileOpen && (
-        <div
-          className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40"
-          onClick={() => setIsMobileOpen(false)}
-        />
+        <div className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40" onClick={() => setIsMobileOpen(false)} />
       )}
 
-      {/* Sidebar */}
       <div
         className={cn(
           "fixed inset-y-0 left-0 z-50 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transform transition-all duration-300 ease-in-out lg:static lg:inset-0",
           isCollapsed ? "w-16" : "w-60",
-          isMobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+          isMobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
         )}
       >
         <div className="flex flex-col h-full">
-          {/* Header */}
           <div className="flex items-center justify-between py-2 px-4 border-b border-gray-200 dark:border-gray-700">
             {!isCollapsed ? (
               <div className="flex items-center space-x-3">
@@ -357,62 +281,41 @@ export function DynamicSidebar() {
               <ChevronLeft
                 className={cn(
                   "w-5 h-5 p-0.5 text-black transition-transform duration-200",
-                  isCollapsed && "rotate-180"
+                  isCollapsed && "rotate-180",
                 )}
               />
             </button>
           </div>
-          {/* Navigation */}
-          <div
-            className={cn(
-              "flex-1 overflow-y-auto",
-              isCollapsed ? "p-2" : "p-2"
-            )}
-          >
-            {loading ? (
+
+          <div className={cn("flex-1 overflow-y-auto", isCollapsed ? "p-2" : "p-2")}>
+            {isLoading ? (
               <div className="flex items-center justify-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
               </div>
             ) : error ? (
               <div
-                className={cn(
-                  "p-4 bg-red-50 dark:bg-red-900/20 rounded-lg ",
-                  isCollapsed && "flex justify-center p-2"
-                )}
+                className={cn("p-4 bg-red-50 dark:bg-red-900/20 rounded-lg", isCollapsed && "flex justify-center p-2")}
               >
-                <p
-                  className={cn(
-                    "text-sm text-red-600 dark:text-red-400",
-                    isCollapsed && "sr-only"
-                  )}
-                >
-                  {error}
+                <p className={cn("text-sm text-red-600 dark:text-red-400", isCollapsed && "sr-only")}>
+                  Failed to load modules
                 </p>
               </div>
             ) : modules.length === 0 ? (
               <div
                 className={cn(
                   "p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg",
-                  isCollapsed && "flex justify-center p-2"
+                  isCollapsed && "flex justify-center p-2",
                 )}
               >
-                <p
-                  className={cn(
-                    "text-sm text-yellow-600 dark:text-yellow-400",
-                    isCollapsed && "sr-only"
-                  )}
-                >
+                <p className={cn("text-sm text-yellow-600 dark:text-yellow-400", isCollapsed && "sr-only")}>
                   No modules available
                 </p>
               </div>
             ) : (
-              <nav className="space-y-1">
-                {moduleTree.map((module) => renderModule(module))}
-              </nav>
+              <nav className="space-y-1">{moduleTree.map((module) => renderModule(module))}</nav>
             )}
           </div>
 
-          {/* Footer */}
           <div className="p-2 border-t border-gray-200 dark:border-gray-700">
             <div className="flex items-center space-x-3">
               <div className="w-8 h-8 bg-gray-300 dark:bg-gray-600 rounded-full flex items-center justify-center">
@@ -423,11 +326,14 @@ export function DynamicSidebar() {
               {!isCollapsed && (
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                    {user?.name || "User"}
+                    {userData?.user
+                      ? (userData.user.first_name || userData.user.last_name
+                          ? `${userData.user.first_name ?? ""} ${userData.user.last_name ?? ""}`.trim()
+                          : (userData.user.username ?? userData.user.email ?? "User")
+                        )
+                      : "User"}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                    {user?.email}
-                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{userData?.user?.email}</p>
                 </div>
               )}
             </div>
@@ -435,5 +341,5 @@ export function DynamicSidebar() {
         </div>
       </div>
     </>
-  );
+  )
 }

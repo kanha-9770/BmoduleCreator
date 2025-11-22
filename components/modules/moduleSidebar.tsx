@@ -62,27 +62,21 @@ const ModuleSidebar: React.FC<ModuleSidebarProps> = ({
     }
     return 240;
   };
-
   const [width, setWidth] = useState(getInitialWidth);
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
-
   const MIN_WIDTH = 150;
   const MAX_WIDTH = 300;
-
   // Save width to localStorage whenever it changes
   useEffect(() => {
     localStorage.setItem("module-sidebar-width", width.toString());
   }, [width]);
-
   // Handle resizing with mouse
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing || !sidebarRef.current) return;
-
       const rect = sidebarRef.current.getBoundingClientRect();
       const newWidth = e.clientX - rect.left;
-
       if (newWidth >= MIN_WIDTH && newWidth <= MAX_WIDTH) {
         setWidth(newWidth);
       } else if (newWidth < MIN_WIDTH) {
@@ -91,11 +85,9 @@ const ModuleSidebar: React.FC<ModuleSidebarProps> = ({
         setWidth(MAX_WIDTH);
       }
     };
-
     const handleMouseUp = () => {
       setIsResizing(false);
     };
-
     if (isResizing) {
       document.addEventListener("mousemove", handleMouseMove);
       document.addEventListener("mouseup", handleMouseUp);
@@ -125,9 +117,8 @@ const ModuleSidebar: React.FC<ModuleSidebarProps> = ({
         className="border-b border-gray-200 last:border-b-0"
       >
         <AccordionTrigger
-          className={`py-2 pl-${
-            4 + level * 2
-          } pr-2 hover:bg-gray-100 rounded-lg transition-colors duration-200`}
+          className={`py-2 pl-${4 + level * 2
+            } pr-2 hover:bg-gray-100 rounded-lg transition-colors duration-200`}
         >
           <div className="flex items-center text-left text-sm font-medium text-gray-700 h-4">
             <FileText className="h-4 w-4 text-gray-500 mr-1 min-w-max" />
