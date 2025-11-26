@@ -17,7 +17,7 @@ import { createPortal } from "react-dom"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
 import FormCanvas from "@/components/form-canvas"
-import ResizableSidebar from "@/components/resizable-sidebar";
+import ResizableSidebar from "@/components/resizable-sidebar"
 import FieldPalette, { PaletteItemDragOverlay, type fieldTypes } from "@/components/field-palette"
 import PublishFormDialog from "@/components/publish-form-dialog"
 import LookupConfigurationDialog from "@/components/lookup-configuration-dialog"
@@ -50,8 +50,8 @@ export default function FormBuilderPage() {
   const [isPublishDialogOpen, setIsPublishDialogOpen] = useState(false)
   const [isLookupDialogOpen, setIsLookupDialogOpen] = useState(false)
   const [isUserFormSettingsOpen, setIsUserFormSettingsOpen] = useState(false)
-  const [pendingLookupSectionId, setPendingLookupSectionId] = useState<string | null>(null)
-  const [pendingLookupSubformId, setPendingLookupSubformId] = useState<string | null>(null)
+  const [pendingLookupSectionId, setPendingLookupSectionId] = useState<string | undefined>(undefined)
+  const [pendingLookupSubformId, setPendingLookupSubformId] = useState<string | undefined>(undefined)
   const [activePaletteItem, setActivePaletteItem] = useState<(typeof fieldTypes)[0] | null>(null)
   const [subformHierarchyMap, setSubformHierarchyMap] = useState<Map<string, SubformHierarchy>>(new Map())
 
@@ -88,7 +88,7 @@ export default function FormBuilderPage() {
           level,
           parentPath: parentPath || undefined,
           sectionId,
-          parentSubformId: subform.parentSubformId,
+          parentSubformId: subform.parentSubformId ?? undefined,
           children: [],
         }
 
@@ -247,8 +247,8 @@ export default function FormBuilderPage() {
 
     if (active.data.current?.type === "PaletteField") {
       const fieldType = active.data.current.fieldType as string
-      let sectionId: string | null = null
-      let subformId: string | null = null
+      let sectionId: string | undefined = undefined
+      let subformId: string | undefined = undefined
       let insertIndex = 0
 
       if (over.data.current?.isSectionDropzone) {
@@ -299,7 +299,7 @@ export default function FormBuilderPage() {
   const createSingleField = async (
     fieldType: string,
     sectionId: string,
-    subformId: string | null,
+    subformId: string | undefined,
     insertionIndex: number,
   ) => {
     if (!form) return
@@ -309,12 +309,13 @@ export default function FormBuilderPage() {
       const newField: FormField = {
         id: tempId,
         sectionId: subformId ? undefined : sectionId,
-        subformId,
+        subformId: subformId ?? undefined,
         type: fieldType,
         label: `New ${fieldType.charAt(0).toUpperCase() + fieldType.slice(1)}`,
         placeholder: "",
         description: "",
         defaultValue: "",
+        value: "", // REQUIRED FIELD ADDED
         options: [],
         validation: {},
         visible: true,
@@ -405,8 +406,7 @@ export default function FormBuilderPage() {
 
         toast({
           title: "Success",
-          description: `${fieldType.charAt(0).toUpperCase() + fieldType.slice(1)} field added to ${subformId ? `subform ${getSubformPath(subformId)}` : "section"
-            } successfully`,
+          description: `${fieldType.charAt(0).toUpperCase() + fieldType.slice(1)} field added successfully`,
         })
       } else {
         throw new Error(result.error || "Failed to create field")
@@ -420,16 +420,19 @@ export default function FormBuilderPage() {
     }
   }
 
-  const createSubform = async (sectionId: string, parentSubformId: string | null) => {
+  const createSubform = async (sectionId: string, parentSubformId: string | undefined) => {
     if (!form) return
 
     try {
       const tempId = `temp_${uuidv4()}`
       let nextPath = "1"
+      let level = 1
+
       if (parentSubformId) {
         const parentHierarchy = subformHierarchyMap.get(parentSubformId)
         if (parentHierarchy) {
           nextPath = `${parentHierarchy.path}.${parentHierarchy.children.length + 1}`
+          level = parentHierarchy.level + 1
         }
       } else {
         const section = form.sections.find((s) => s.id === sectionId)
@@ -441,7 +444,7 @@ export default function FormBuilderPage() {
       const newSubform: Subform = {
         id: tempId,
         sectionId: parentSubformId ? undefined : sectionId,
-        parentSubformId,
+        parentSubformId: parentSubformId ?? undefined,
         name: `Subform ${nextPath}`,
         order: parentSubformId ? 0 : form.sections.find((s) => s.id === sectionId)?.subforms.length || 0,
         columns: 1,
@@ -450,6 +453,9 @@ export default function FormBuilderPage() {
         collapsed: false,
         fields: [],
         childSubforms: [],
+        level, // REQUIRED
+        createdAt: new Date(), // REQUIRED
+        updatedAt: new Date(), // REQUIRED
       }
 
       const updatedForm = { ...form }
@@ -527,8 +533,7 @@ export default function FormBuilderPage() {
 
         toast({
           title: "Success",
-          description: `Subform ${nextPath} created successfully${parentSubformId ? ` under ${getSubformPath(parentSubformId)}` : ""
-            }`,
+          description: `Subform ${nextPath} created successfully`,
         })
       } else {
         throw new Error(result.error || "Failed to create subform")
@@ -572,7 +577,7 @@ export default function FormBuilderPage() {
     newAllItems.forEach((item, index) => (item.order = index))
 
     const newFields = newAllItems.filter((i): i is FormField => "type" in i)
-    const newSubforms = newAllItems.filter((i): i is Subform => (!type) in i)
+    const newSubforms = newAllItems.filter((i): i is Subform => !("type" in i))
 
     const updatedSections = form.sections.map((s) =>
       s.id === sectionId ? { ...s, fields: newFields, subforms: newSubforms } : s,
@@ -657,6 +662,7 @@ export default function FormBuilderPage() {
             id: result.data.id,
             sectionId: pendingLookupSubformId ? undefined : pendingLookupSectionId,
             subformId: pendingLookupSubformId,
+            value: "", // REQUIRED
             createdAt: new Date(),
             updatedAt: new Date(),
             conditional: null,
@@ -703,12 +709,11 @@ export default function FormBuilderPage() {
 
       toast({
         title: "Success",
-        description: `${createdFields.length} lookup field${createdFields.length !== 1 ? "s" : ""} created in ${pendingLookupSubformId ? `subform ${getSubformPath(pendingLookupSubformId)}` : "section"
-          } successfully`,
+        description: `${createdFields.length} lookup field${createdFields.length !== 1 ? "s" : ""} created successfully`,
       })
 
-      setPendingLookupSectionId(null)
-      setPendingLookupSubformId(null)
+      setPendingLookupSectionId(undefined)
+      setPendingLookupSubformId(undefined)
     } catch (error: any) {
       toast({
         title: "Error",
@@ -787,7 +792,7 @@ export default function FormBuilderPage() {
     >
       <div className="flex h-screen bg-gray-50 font-sans">
         <aside className="w-max flex-shrink-0 border-r bg-white">
-          <ResizableSidebar defaultWidth={288} collapsedWidth={100} >
+          <ResizableSidebar defaultWidth={288} collapsedWidth={100}>
             <FieldPalette />
           </ResizableSidebar>
         </aside>
@@ -864,7 +869,7 @@ export default function FormBuilderPage() {
         onOpenChange={setIsLookupDialogOpen}
         onConfirm={handleLookupFieldsConfirm}
         sectionId={pendingLookupSectionId || ""}
-        subformId={pendingLookupSubformId || undefined}
+        subformId={pendingLookupSubformId}
       />
       <UserFormSettingsDialog
         form={form}

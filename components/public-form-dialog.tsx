@@ -384,7 +384,7 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
     setSubmitting(true);
     try {
       const userId = (window as any).__currentUserId;
-      
+
       if (!userId) {
         toast({ title: "Error", description: "User not authenticated", variant: "destructive" });
         setSubmitting(false);
@@ -706,7 +706,7 @@ export function PublicFormDialog({ formId, isOpen, onClose }: PublicFormDialogPr
           placeholder: field.placeholder,
           description: field.description,
           validation: field.validation || { required: false },
-          lookup: field.lookup,
+          lookup: field.lookup ?? undefined,
         };
         return (
           <LookupField

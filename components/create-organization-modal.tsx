@@ -75,7 +75,7 @@ export function CreateOrganizationModal({ open, onSuccess }: CreateOrganizationM
 
   return (
     <Dialog open={open} onOpenChange={() => {}}>
-      <DialogContent className="sm:max-w-[500px]" showCloseButton={false}>
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <div className="mx-auto h-12 w-12 flex items-center justify-center bg-blue-600 rounded-full mb-4">
             <Building2 className="h-6 w-6 text-white" />

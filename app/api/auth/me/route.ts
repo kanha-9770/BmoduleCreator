@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { type NextRequest, NextResponse } from "next/server"
 import { validateSession } from "@/lib/auth"
 
@@ -82,20 +83,22 @@ export async function GET(request: NextRequest) {
               bonusAfterYears: session.user.employee.bonusAfterYears,
               companyName: session.user.employee.companyName,
               totalSalary: session.user.employee.totalSalary
-                ? Number.parseFloat(session.user.employee.totalSalary)
+                ? Number(session.user.employee.totalSalary.toString())
                 : null,
               givenSalary: session.user.employee.givenSalary
-                ? Number.parseFloat(session.user.employee.givenSalary)
+                ? Number(session.user.employee.givenSalary.toString())
                 : null,
               bonusAmount: session.user.employee.bonusAmount
-                ? Number.parseFloat(session.user.employee.bonusAmount)
+                ? Number(session.user.employee.bonusAmount.toString())
                 : null,
               nightAllowance: session.user.employee.nightAllowance
-                ? Number.parseFloat(session.user.employee.nightAllowance)
+                ? Number(session.user.employee.nightAllowance.toString())
                 : null,
-              overTime: session.user.employee.overTime ? Number.parseFloat(session.user.employee.overTime) : null,
+              overTime: session.user.employee.overTime
+                ? Number(session.user.employee.overTime.toString())
+                : null,
               oneHourExtra: session.user.employee.oneHourExtra
-                ? Number.parseFloat(session.user.employee.oneHourExtra)
+                ? Number(session.user.employee.oneHourExtra.toString())
                 : null,
               companySimIssue: session.user.employee.companySimIssue,
             }

@@ -1,6 +1,10 @@
+// app/api/attendance/status/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getToday } from "@/lib/attendance";
 import { prisma } from "@/lib/prisma";
+
+// This tells Next.js: "This API route MUST run at request time"
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,7 +20,6 @@ export async function GET(request: NextRequest) {
 
     const today = getToday();
 
-    // Get today's record
     const todayRecord = await prisma.attendance.findFirst({
       where: {
         userId,

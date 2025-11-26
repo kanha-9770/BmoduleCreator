@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 import { NextRequest, NextResponse } from "next/server";
 import { validateSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma"; // ✅ using global instance (no new PrismaClient per request)

@@ -116,11 +116,6 @@ export class DatabaseService {
   // Updated getModuleHierarchy (implements exact original logic + hierarchy build)
   static async getModuleHierarchy(userId?: string): Promise<any[]> {
     try {
-      console.log(
-        `[DatabaseService] Getting module hierarchy for userId: ${
-          userId || "unauthenticated"
-        }`
-      );
 
       if (!userId) {
         console.log("[DatabaseService] No user ID provided, returning empty");

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 import { type NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { sendOTPEmail } from "@/lib/email"
@@ -51,7 +53,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create or update OTP
-    await prisma.OTPCode.upsert({
+    await prisma.oTPCode.upsert({
       where: {
         userId_type: {
           userId: user.id,

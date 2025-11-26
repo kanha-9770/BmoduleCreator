@@ -19,13 +19,11 @@ import {
   MousePointer2,
   FileText,
 } from "lucide-react"
-import RecordsDisplay from "@/components/modules/recordsDisplay"
 import FormsContent from "@/components/dynamicSubmodule/formsContent"
 import { PublicFormDialog } from "@/components/public-form-dialog"
 import { useGetModuleByIdQuery } from "@/lib/api/modules"
 import { useDeleteRecordMutation, useGetModuleRecordsQuery, useUpdateRecordMutation } from "@/lib/api/records"
-
-// Interfaces (unchanged)
+import RecordsDisplay from "@/components/modules/recordsDisplay"
 
 interface FormModule {
   id: string
@@ -74,6 +72,10 @@ interface FormRecord {
 }
 
 interface ProcessedFieldData {
+  recordId?: string
+  recordIdFromAPI?: string
+  lookup: any
+  options: any
   fieldId: string
   fieldLabel: string
   fieldType: string
@@ -85,8 +87,6 @@ interface ProcessedFieldData {
   sectionTitle?: string
   formId?: string
   formName?: string
-  recordId: string
-  recordIdFromAPI: string
 }
 
 interface EnhancedFormRecord extends FormRecord {
@@ -305,8 +305,8 @@ export default function ModulePage({
           const value = fieldData && typeof fieldData === "object" && "value" in fieldData ? fieldData.value : fieldData
           const displayValue = formatFieldValue(formField.type || "text", value)
           processedData.push({
-            recordId: record.id, // Actual database UUID
-            recordIdFromAPI: record.id, // Same as recordId
+            recordId: record.id,
+            recordIdFromAPI: record.id,
             fieldId: fieldKey,
             fieldLabel: formField.label || fieldKey,
             fieldType: formField.type || "text",
@@ -318,6 +318,8 @@ export default function ModulePage({
             sectionTitle: formField.sectionTitle,
             formId: record.formId,
             formName: record.formName,
+            lookup: formField.lookup || {},
+            options: formField.options || [],
           })
         } else {
           console.warn("ModulePage: Form field not found for key", { fieldKey })
@@ -341,7 +343,7 @@ export default function ModulePage({
 
   useEffect(() => {
     if (moduleData?.success && moduleData.data) {
-      setSelectedModule(moduleData.data)
+      setSelectedModule(moduleData?.data as unknown as FormModule)
       const moduleForms = moduleData.data.forms || []
       setAllModuleForms(moduleForms)
       setFormIds(moduleForms.map((f) => f.id))
@@ -360,6 +362,49 @@ export default function ModulePage({
       setLoading(false)
     }
   }, [moduleError, toast])
+
+  const [optimisticRecords, setOptimisticRecords] = useState<Map<string, EnhancedFormRecord>>(new Map())
+
+  useEffect(() => {
+    ; (window as any).__handleOptimisticRecordAdd = (newRecord: any) => {
+      console.log("[v0] Optimistic record add:", newRecord)
+      const enhancedRecord = processRecordData(newRecord, formFieldsWithSections)
+      setOptimisticRecords((prev) => {
+        const updated = new Map(prev)
+        updated.set(newRecord.id, enhancedRecord)
+        return updated
+      })
+      setFormRecords((prev) => [enhancedRecord, ...prev])
+    }
+      ; (window as any).__handleOptimisticRecordRemove = (recordId: string) => {
+        console.log("[v0] Optimistic record remove:", recordId)
+        setOptimisticRecords((prev) => {
+          const updated = new Map(prev)
+          updated.delete(recordId)
+          return updated
+        })
+        setFormRecords((prev) => prev.filter((r) => r.id !== recordId))
+      }
+      ; (window as any).__handleOptimisticRecordReplace = (oldId: string, newRecord: any) => {
+        console.log("[v0] Optimistic record replace:", { oldId, newId: newRecord.id })
+
+        setOptimisticRecords((prev) => {
+          const updated = new Map(prev)
+          updated.delete(oldId)
+          return updated
+        })
+
+        const enhancedRecord = processRecordData(newRecord, formFieldsWithSections)
+
+        setFormRecords((prev) => prev.map((r) => (r.id === oldId ? enhancedRecord : r)))
+      }
+
+    return () => {
+      delete (window as any).__handleOptimisticRecordAdd
+      delete (window as any).__handleOptimisticRecordRemove
+      delete (window as any).__handleOptimisticRecordReplace
+    }
+  }, [formFieldsWithSections])
 
   useEffect(() => {
     if (allRecordsData && selectedModule) {
@@ -393,10 +438,13 @@ export default function ModulePage({
 
       const enhancedRecords = allRecordsData.map((record) => processRecordData(record, allFieldsWithSections))
 
-      setFormRecords(enhancedRecords)
+      const optimisticRecordIds = Array.from(optimisticRecords.keys())
+      const filteredRealRecords = enhancedRecords.filter((r) => !optimisticRecordIds.includes(r.id))
+      const existingOptimistics = Array.from(optimisticRecords.values())
+      setFormRecords([...existingOptimistics, ...filteredRealRecords])
       console.log("ModulePage: fetchAllModuleRecords completed", { recordsLoading: false })
     }
-  }, [allRecordsData, selectedModule])
+  }, [allRecordsData, selectedModule, optimisticRecords])
 
   const saveAllPendingChanges = async (changesToSave?: Map<string, PendingChange>) => {
     const changesToProcess = changesToSave || pendingChanges
@@ -405,14 +453,6 @@ export default function ModulePage({
       changesToSaveProvided: !!changesToSave,
       pendingChangesSize: pendingChanges.size,
       changesToProcessSize: changesToProcess.size,
-      allChanges: Array.from(changesToProcess.entries()).map(([key, change]) => ({
-        key,
-        recordId: change.recordId,
-        fieldId: change.fieldId,
-        originalFieldId: change.originalFieldId,
-        value: change.value,
-        originalValue: change.originalValue,
-      })),
     })
 
     if (changesToProcess.size === 0) {
@@ -424,6 +464,50 @@ export default function ModulePage({
       })
       return
     }
+
+    const optimisticUpdates = new Map<string, any>()
+
+    changesToProcess.forEach((change) => {
+      if (!optimisticUpdates.has(change.recordId)) {
+        const record = formRecords.find((r) => r.id === change.recordId)
+        if (record) {
+          optimisticUpdates.set(change.recordId, { ...record })
+        }
+      }
+
+      const record = optimisticUpdates.get(change.recordId)
+      if (record) {
+        record.recordData = {
+          ...record.recordData,
+          [change.originalFieldId || change.fieldId]: {
+            value: change.value,
+            type: change.fieldType,
+            label: change.fieldLabel,
+          },
+        }
+
+        record.processedData = record.processedData.map((pd: any) =>
+          pd.fieldId === change.fieldId
+            ? { ...pd, value: change.value, displayValue: formatFieldValue(change.fieldType, change.value) }
+            : pd,
+        )
+      }
+    })
+
+    setFormRecords((prev) =>
+      prev.map((record) => {
+        const update = optimisticUpdates.get(record.id)
+        return update || record
+      }),
+    )
+
+    setPendingChanges(new Map())
+    setEditingCell(null)
+
+    toast({
+      title: "Saving Changes...",
+      description: `Updating ${changesToProcess.size} ${changesToProcess.size === 1 ? "change" : "changes"}`,
+    })
 
     setSavingChanges(true)
     try {
@@ -438,20 +522,9 @@ export default function ModulePage({
         changesByRecord.get(change.recordId)!.changes.push(change)
       })
 
-      console.log("[v0] Grouped changes by actual database record ID:", {
-        recordCount: changesByRecord.size,
-        recordIds: Array.from(changesByRecord.keys()),
-      })
-
       let savedCount = 0
 
       for (const [actualRecordId, { changes, formId }] of changesByRecord) {
-        console.log("[v0] Processing actual database record:", {
-          actualRecordId,
-          formId,
-          changeCount: changes.length,
-        })
-
         let updatedRecordData: Record<string, any> = {}
 
         const sourceRecord = formRecords.find((r) => r.id === actualRecordId)
@@ -461,12 +534,6 @@ export default function ModulePage({
 
         changes.forEach((change) => {
           const dbFieldKey = change.originalFieldId || change.fieldId
-          console.log("[v0] Applying change:", {
-            actualRecordId,
-            fieldId: change.fieldId,
-            dbFieldKey,
-            newValue: change.value,
-          })
 
           updatedRecordData[dbFieldKey] = {
             value: change.value,
@@ -474,8 +541,6 @@ export default function ModulePage({
             label: change.fieldLabel,
           }
         })
-
-        console.log("[v0] Sending update via RTK Query mutation")
 
         const result = await updateRecord({
           formId,
@@ -487,35 +552,27 @@ export default function ModulePage({
           },
         }).unwrap()
 
-        console.log("[v0] Update response:", { actualRecordId, result })
-
         if (!result.success) {
           throw new Error(`Failed to save record ${actualRecordId}: ${result.error || "Unknown error"}`)
         }
 
         savedCount += changes.length
-        console.log("[v0] Successfully saved record:", {
-          actualRecordId,
-          savedCount,
-        })
       }
 
-      console.log("[v0] All records saved, refreshing data:", { totalSaved: savedCount })
-
-      await refetchRecords()
-
-      setPendingChanges(new Map())
-      setEditingCell(null)
+      refetchRecords()
 
       toast({
         title: "Changes Saved",
-        description: `Successfully saved ${savedCount} ${savedCount === 1 ? "change" : "changes"} to database`,
+        description: `Successfully saved ${savedCount} ${savedCount === 1 ? "change" : "changes"}`,
       })
     } catch (error: any) {
       console.error("[v0] Save error:", error)
+
+      await refetchRecords()
+
       toast({
         title: "Error Saving Changes",
-        description: error.message || "Failed to save changes. Please try again.",
+        description: error.message || "Failed to save changes. Changes have been reverted.",
         variant: "destructive",
       })
     } finally {
@@ -553,10 +610,10 @@ export default function ModulePage({
 
         return needsUpdate
           ? {
-              ...record,
-              recordData: updatedRecordData,
-              processedData: updatedProcessedData,
-            }
+            ...record,
+            recordData: updatedRecordData,
+            processedData: updatedProcessedData,
+          }
           : record
       }),
     )
@@ -570,7 +627,7 @@ export default function ModulePage({
   const toggleEditMode = () => {
     console.log("ModulePage: toggleEditMode triggered", { currentEditMode: editMode })
     if (editMode !== "locked" && (pendingChanges.size > 0 || editingCell)) {
-      console.log("ModulePage: Unsaved changes detected", {
+      console.log("ModulePage: Pending changes detected", {
         pendingChangesSize: pendingChanges.size,
         editingCell,
       })
@@ -657,173 +714,6 @@ export default function ModulePage({
     }
   }
 
-  const fetchAllModuleRecords = async () => {
-    if (!selectedModule) {
-      console.warn("ModulePage: fetchAllModuleRecords skipped, no selectedModule")
-      return
-    }
-
-    console.log("ModulePage: fetchAllModuleRecords started", {
-      moduleId: selectedModule.id,
-    })
-    try {
-      setFormRecords([])
-      setFormFieldsWithSections([])
-      const moduleForms = selectedModule.forms || []
-      setAllModuleForms(moduleForms)
-      console.log("ModulePage: allModuleForms set", { formCount: moduleForms.length })
-
-      const allFieldsWithSections: FormFieldWithSection[] = []
-      const allRecords: FormRecord[] = []
-
-      for (const form of moduleForms) {
-        console.log("ModulePage: Fetching form data", { formId: form.id })
-        const formResponse = await fetch(`/api/forms/${form.id}`)
-        const formData = await formResponse.json()
-        console.log("ModulePage: Form data response", { formId: form.id, formData })
-
-        if (formData.success && formData.data) {
-          const formDetail = formData.data
-
-          if (formDetail.sections) {
-            let fieldOrder = 0
-            formDetail.sections.forEach((section: any) => {
-              if (section.fields) {
-                section.fields.forEach((field: any) => {
-                  const uniqueFieldId = `${form.id}_${field.id}`
-                  allFieldsWithSections.push({
-                    ...field,
-                    id: uniqueFieldId,
-                    originalId: field.id,
-                    order: field.order || fieldOrder++,
-                    sectionTitle: section.title,
-                    sectionId: section.id,
-                    formId: form.id,
-                    formName: form.name,
-                  })
-                })
-              }
-            })
-            console.log("ModulePage: Processed form fields", {
-              formId: form.id,
-              fieldCount: allFieldsWithSections.length,
-            })
-          }
-
-          console.log("ModulePage: Fetching form records", { formId: form.id })
-          const recordsResponse = await fetch(`/api/forms/${form.id}/records`)
-          const recordsData = await recordsResponse.json()
-          console.log("ModulePage: Form records response", { formId: form.id, recordsData })
-
-          if (recordsData.success && recordsData.records) {
-            const formRecords = (recordsData.records || []).map((record: FormRecord) => ({
-              ...record,
-              formName: form.name,
-            }))
-            allRecords.push(...formRecords)
-            console.log("ModulePage: Added form records", {
-              formId: form.id,
-              recordCount: formRecords.length,
-            })
-          }
-        }
-      }
-
-      const uniqueFieldsMap = new Map<string, FormFieldWithSection>()
-      allFieldsWithSections.forEach((field) => {
-        const key = `${field.label}_${field.type}`
-        if (!uniqueFieldsMap.has(key)) {
-          uniqueFieldsMap.set(key, field)
-        }
-      })
-
-      const uniqueFields = Array.from(uniqueFieldsMap.values())
-      setFormFieldsWithSections(uniqueFields)
-      console.log("ModulePage: formFieldsWithSections set", {
-        fieldCount: uniqueFields.length,
-      })
-
-      const processedRecords = allRecords.map((record: FormRecord) => processRecordData(record, uniqueFields))
-      setFormRecords(processedRecords)
-      console.log("ModulePage: formRecords set", {
-        recordCount: processedRecords.length,
-      })
-
-      if (processedRecords.length === 0) {
-        console.log("ModulePage: No records found")
-        toast({
-          title: "No Data",
-          description: "No records found for the selected module.",
-          variant: "default",
-        })
-      }
-    } catch (error: any) {
-      console.error("ModulePage: Error fetching module records", error)
-      setFormRecords([])
-      setFormFieldsWithSections([])
-      toast({
-        title: "Error",
-        description: error.message || "Failed to load records. Please try again.",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const handlePublishForm = async (form: Form) => {
-    console.log("ModulePage: handlePublishForm triggered", { formId: form.id, isPublished: form.isPublished })
-    try {
-      const response = await fetch(`/api/forms/${form.id}/publish`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isPublished: !form.isPublished }),
-      })
-      const data = await response.json()
-      console.log("ModulePage: handlePublishForm response", { formId: form.id, data })
-
-      if (data.success) {
-        if (moduleId) {
-          await fetchModuleById(moduleId)
-        }
-        toast({
-          title: "Success",
-          description: `Form ${form.isPublished ? "unpublished" : "published"} successfully!`,
-        })
-      } else {
-        throw new Error(data.error || "Failed to publish form")
-      }
-    } catch (error: any) {
-      console.error("ModulePage: Error publishing form", error)
-      toast({
-        title: "Error",
-        description: error.message || "Failed to publish form.",
-        variant: "destructive",
-      })
-    }
-  }
-
-  useEffect(() => {
-    console.log("ModulePage: useEffect for fetchModuleById", { moduleId })
-    if (moduleId) {
-      fetchModuleById(moduleId)
-    }
-  }, [moduleId])
-
-  useEffect(() => {
-    console.log("ModulePage: useEffect for fetchAllModuleRecords", { selectedModule })
-    if (selectedModule) {
-      fetchAllModuleRecords()
-    }
-  }, [selectedModule])
-
-  useEffect(() => {
-    console.log("ModulePage: useEffect for clickTimeout cleanup", { clickTimeout })
-    return () => {
-      if (clickTimeout) {
-        clearTimeout(clickTimeout)
-      }
-    }
-  }, [clickTimeout])
-
   const handleDeleteRecord = async (record: EnhancedFormRecord) => {
     if (!confirm("Are you sure you want to delete this record?")) return
 
@@ -838,7 +728,6 @@ export default function ModulePage({
           title: "Record Deleted",
           description: "The record has been successfully deleted",
         })
-        // Records will auto-refresh due to cache invalidation
       } else {
         throw new Error(result.error || "Failed to delete record")
       }
@@ -867,29 +756,28 @@ export default function ModulePage({
 
   if (moduleLoading || loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      <div className="flex items-center justify-center min-h-screen px-4">
+        <Loader2 className="h-8 w-8 md:h-10 md:w-10 animate-spin text-blue-600" />
       </div>
     )
   }
 
   if (!selectedModule) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-muted-foreground">Module not found</p>
+      <div className="flex items-center justify-center min-h-screen px-4">
+        <p className="text-sm md:text-base text-muted-foreground text-center">Module not found</p>
       </div>
     )
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto px-3 sm:px-4 md:px-6 py-4 md:py-6 space-y-4 md:space-y-6 max-w-full overflow-x-hidden">
       <FormsContent
         forms={allModuleForms}
         selectedForm={selectedForm}
         setSelectedForm={setSelectedForm}
         openFormDialog={openFormDialog}
       />
-
       <RecordsDisplay
         allModuleForms={allModuleForms}
         formRecords={formRecords}
@@ -924,7 +812,6 @@ export default function ModulePage({
         onDeleteRecord={handleDeleteRecord}
         onViewDetails={handleViewDetails}
       />
-
       <PublicFormDialog formId={selectedFormForFilling} isOpen={isFormDialogOpen} onClose={handleFormClose} />
     </div>
   )

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 import { DatabaseRoles } from "@/lib/DatabaseRoles"
 import { NextRequest, NextResponse } from "next/server"
 

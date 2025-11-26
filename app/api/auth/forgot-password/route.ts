@@ -1,4 +1,6 @@
 // src/app/api/auth/forgot-password/route.ts
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { sendOTPEmail } from '@/lib/email'

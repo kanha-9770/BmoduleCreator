@@ -449,7 +449,7 @@ export class DatabaseRecords {
       throw new Error(`Failed to fetch form records: ${error?.message}`)
     }
   }
-  static async getFormSubmissionCount(formId: string): Promise<number> {
+  static async getFormSubmissionCount(formId: string, userId: string | undefined): Promise<number> {
     try {
       const tableName = await DatabaseTransforms.getFormRecordTable(formId)
 

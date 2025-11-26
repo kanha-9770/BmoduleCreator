@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Bell, Search } from 'lucide-react';
+import { Bell, Search, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -16,152 +16,158 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
+import { useGetUserQuery, useLogoutMutation } from '@/lib/api/auth';
+
+interface UnitAssignment {
+  unit: { id: string; name: string };
+  role: { id: string; name: string };
+  notes?: string;
+}
 
 interface User {
   id: string;
-  name: string;
   email: string;
-  email_verified?: boolean;
+  username?: string;
+  first_name?: string;
+  last_name?: string;
+  email_verified: boolean;
   status: string;
   createdAt: string;
+  mobile?: string;
+  mobile_verified?: boolean;
+  avatar?: string;
+  department?: string;
+  phone?: string;
+  location?: string;
+  joinDate?: string;
+  organization?: { id: string; name: string };
+  unitAssignments?: Array<UnitAssignment>;
+  employee?: {
+    employeeName: string;
+    // ... other fields
+  };
 }
 
 export function Header() {
+  const { data: userData, isLoading, error, refetch } = useGetUserQuery(undefined, { skip: false });
+  const [logout, { isLoading: isLoggingOut }] = useLogoutMutation();
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
   const { toast } = useToast();
 
-  // Define public routes where auth checks should be skipped
-  const publicRoutes = [
-    '/login',
-    '/register',
-    '/verify-otp',
-    '/forgot-password',
-    '/reset-password',
-    '/',
-  ];
+  const publicRoutes = ['/login', '/register', '/verify-otp', '/forgot-password', '/reset-password', '/'];
+
+  // IMPORTANT: Your API returns role.name as "ADMIN" (uppercase), so match exactly
+  const isAdmin = user?.unitAssignments?.some(
+    (assignment) => assignment.role.name.toUpperCase() === 'ADMIN'
+  ) || false;
 
   useEffect(() => {
-    console.log('Header component mounted, checking user data', { pathname });
+    if (publicRoutes.includes(pathname)) return;
 
-    // Skip auth check for public routes
-    if (publicRoutes.includes(pathname)) {
-      console.log('Public route detected, skipping auth check', { pathname });
-      setIsLoading(false);
-      return;
-    }
-
-    const fetchUser = async () => {
-      console.log('Fetching user data from /api/auth/me');
-      try {
-        const response = await fetch('/api/auth/me', {
-          method: 'GET',
-          credentials: 'include',
-        });
-        console.log('User fetch response status:', response.status);
-        const result = await response.json();
-        console.log('User fetch result:', result);
-
-        if (!response.ok) {
-          console.log('User fetch failed, redirecting to login');
-          toast({
-            title: 'Error',
-            description: 'Failed to load user data',
-            variant: 'destructive',
-          });
-          sessionStorage.removeItem('user');
-          router.push('/login');
-          return;
-        }
-
-        console.log('User data loaded successfully:', result.user);
-        sessionStorage.setItem('user', JSON.stringify(result.user));
-        setUser(result.user);
-      } catch (error) {
-        console.error('Error fetching user data:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to load user data',
-          variant: 'destructive',
-        });
+    const checkUser = async () => {
+      if (error && !isLoading) {
+        toast({ title: 'Error', description: 'Failed to load user data', variant: 'destructive' });
         sessionStorage.removeItem('user');
         router.push('/login');
-      } finally {
-        setIsLoading(false);
+        return;
+      }
+
+      if (userData?.user) {
+        sessionStorage.setItem('user', JSON.stringify(userData.user));
+        setUser(userData.user);
+      } else if (!isLoading && !userData?.user) {
+        sessionStorage.removeItem('user');
+        router.push('/login');
       }
     };
 
-    // Check sessionStorage
     const storedUser = sessionStorage.getItem('user');
-    if (storedUser) {
+    if (storedUser && !userData && !isLoading) {
       try {
-        const parsedUser = JSON.parse(storedUser);
-        console.log('Found valid user data in sessionStorage:', parsedUser);
-        setUser(parsedUser);
-        setIsLoading(false);
-      } catch (error) {
-        console.error('Error parsing sessionStorage user data:', error);
-        console.log('Invalid user data in sessionStorage, fetching new data');
+        setUser(JSON.parse(storedUser) as User);
+      } catch {
         sessionStorage.removeItem('user');
-        fetchUser();
+        refetch();
       }
     } else {
-      console.log('No user data in sessionStorage, fetching from API');
-      fetchUser();
+      checkUser();
     }
-  }, [router, toast, pathname]);
+  }, [router, toast, pathname, userData, isLoading, error, refetch]);
 
   const handleLogout = async () => {
-    console.log('Initiating logout');
     try {
-      const response = await fetch('/api/auth/logout', {
-        method: 'POST',
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        console.log('Logout successful');
-        sessionStorage.removeItem('user');
-        document.cookie = 'auth-token=; path=/; max-age=0';
-        toast({
-          title: 'Logged out',
-          description: 'You have been successfully logged out',
-        });
-        router.push('/login');
-      } else {
-        throw new Error('Logout failed');
-      }
-    } catch (error) {
-      console.error('Error during logout:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to logout. Please try again.',
-        variant: 'destructive',
-      });
+      await logout().unwrap();
+      sessionStorage.removeItem('user');
+      document.cookie = 'auth-token=; path=/; max-age=0';
+      toast({ title: 'Logged out', description: 'You have been successfully logged out' });
+      router.push('/login');
+    } catch {
+      toast({ title: 'Error', description: 'Failed to logout.', variant: 'destructive' });
     }
   };
 
-  const displayName = user?.name || 'Guest';
-  const displayEmail = user?.email || 'No email provided';
-  const avatarFallback = user?.name?.[0] || 'JD';
+  const displayName = user?.first_name || user?.username || user?.employee?.employeeName || 'Guest';
+  const displayEmail = user?.email || 'No email';
+  const avatarFallback = displayName.charAt(0).toUpperCase() || 'U';
+
+  if (publicRoutes.includes(pathname)) {
+    return (
+      <header className="bg-white border-b border-gray-200 px-6 py-1">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4 flex-1">
+            <div className="relative max-w-md flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input placeholder="Search..." className="pl-10 h-9" />
+            </div>
+          </div>
+          <Button variant="ghost" size="icon" disabled>
+            <Bell className="h-4 w-4" />
+          </Button>
+        </div>
+      </header>
+    );
+  }
 
   return (
     <header className="bg-white border-b border-gray-200 px-6 py-1">
       <div className="flex items-center justify-between">
+        {/* Search Bar */}
         <div className="flex items-center gap-4 flex-1">
-          <div className="relative max-w-md flex-1 h-8">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-8 w-3" />
-            <Input placeholder="Search orders, products, customers..." className="pl-10 h-8 outline-none " />
+          <div className="relative max-w-md flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input placeholder="Search orders, products, customers..." className="pl-10 h-9" />
           </div>
         </div>
-        <div className="flex items-center gap-4">
+
+        {/* Right Side: Admin Button (conditional) + Notification + Profile */}
+        <div className="flex items-center gap-3">
+          {/* Admin Button - Only for admins, appears BEFORE profile */}
+          {isAdmin && (
+            <Link href="/admin/modules">
+              <Button variant="default" size="sm" className="flex items-center gap-2">
+                <Shield className="h-4 w-4" />
+                <span className="hidden sm:inline">Admin</span>
+              </Button>
+            </Link>
+          )}
+
+          {/* Notification Bell */}
+          <Button variant="ghost" size="icon" disabled={isLoading}>
+            <Bell className="h-4 w-4" />
+          </Button>
+
+          {/* Profile Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="relative h-8 w-8 rounded-full" disabled={isLoading}>
-                <Avatar className="h-8 w-8">
-                  <AvatarImage src="/placeholder-user.jpg" alt="User" />
+              <Button
+                variant="ghost"
+                className="relative h-9 w-9 rounded-full p-0"
+                disabled={isLoading || isLoggingOut}
+              >
+                <Avatar className="h-9 w-9">
+                  <AvatarImage src={user?.avatar || '/placeholder-user.jpg'} alt={displayName} />
                   <AvatarFallback>{avatarFallback}</AvatarFallback>
                 </Avatar>
               </Button>
@@ -180,7 +186,7 @@ export function Header() {
               <DropdownMenuItem>Settings</DropdownMenuItem>
               <DropdownMenuItem>Support</DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">
+              <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600">
                 Log out
               </DropdownMenuItem>
             </DropdownMenuContent>

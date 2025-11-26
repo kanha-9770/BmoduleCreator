@@ -1,25 +1,25 @@
+export const dynamic = 'force-dynamic';
+// app/api/user-unit-assignments/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    if (!body.user_id || !body.unit_id || !body.role_id) {
+    const { user_id, unit_id, role_id, notes } = body;
+
+    if (!user_id || !unit_id || !role_id) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "Missing required fields: user_id, unit_id, or role_id",
-        },
+        { success: false, error: "Missing required fields" },
         { status: 400 }
       );
     }
 
-    // Verify user, unit, and role exist
-    const user = await prisma.user.findUnique({ where: { id: body.user_id } });
-    const unit = await prisma.organizationUnit.findUnique({
-      where: { id: body.unit_id },
-    });
-    const role = await prisma.role.findUnique({ where: { id: body.role_id } });
+    const [user, unit, role] = await Promise.all([
+      prisma.user.findUnique({ where: { id: user_id } }),
+      prisma.organizationUnit.findUnique({ where: { id: unit_id } }),
+      prisma.role.findUnique({ where: { id: role_id } }),
+    ]);
 
     if (!user || !unit || !role) {
       return NextResponse.json(
@@ -28,27 +28,23 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Upsert user-unit assignment
     const assignment = await prisma.userUnitAssignment.upsert({
       where: {
-        user_id_unit_id_role_id: {
-          user_id: body.user_id,
-          unit_id: body.unit_id,
-          role_id: body.role_id,
-        },
+        userId_unitId: { userId: user_id, unitId: unit_id },
       },
       update: {
-        notes: body.notes || "",
-        updated_at: new Date(),
+        roleId: role_id,
+        notes: notes ?? null,
+        updatedAt: new Date(),
       },
       create: {
-        id: require("cuid")(),
-        user_id: body.user_id,
-        unit_id: body.unit_id,
-        role_id: body.role_id,
-        notes: body.notes || "",
-        created_at: new Date(),
-        updated_at: new Date(),
+        id: crypto.randomUUID(),
+        userId: user_id,
+        unitId: unit_id,
+        roleId: role_id,
+        notes: notes ?? null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       },
     });
 
@@ -60,11 +56,7 @@ export async function PUT(request: NextRequest) {
   } catch (error) {
     console.error("[v0] Error in PUT /api/user-unit-assignments:", error);
     return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to update user unit assignment",
-        details: error instanceof Error ? error.message : "Unknown error",
-      },
+      { success: false, error: "Failed to update user unit assignment" },
       { status: 500 }
     );
   }

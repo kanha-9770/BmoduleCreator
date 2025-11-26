@@ -289,7 +289,7 @@ export default function FormCanvas({
   }
 
   // PERFORMANCE FIX: Optimistic subform addition
-  const addSubform = async (sectionId: string, subformData: Partial<Subform>, parentSubformId?: string) => {
+  const addSubform = async (sectionId: string, subformData: Partial<Subform>, parentSubformId?: string): Promise<void> => {
     try {
       const response = await fetch("/api/subforms", {
         method: "POST",
@@ -343,7 +343,6 @@ export default function FormCanvas({
           title: "Success",
           description: `Subform created successfully${parentSubformId ? " as nested subform" : ""}`,
         })
-        return newSubform
       } else {
         throw new Error(result.error || "Failed to create subform")
       }

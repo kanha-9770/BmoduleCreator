@@ -29,7 +29,7 @@ export async function GET(request: NextRequest, { params }: { params: { formId: 
 
     // Get current user from session
     const token = request.cookies.get("auth-token")?.value
-    let userId: string | null = null
+    let userId: string | undefined = undefined
     if (token) {
       const session = await validateSession(token)
       if (session?.user?.id) {

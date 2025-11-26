@@ -6,6 +6,7 @@ import { parseRecordData } from "@/lib/response-parser";
 // Import the unified parser (adjust path to your parsers file, e.g., if it's lib/unified_parser.ts)
 
 export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 
 export async function GET(request: NextRequest) {
   try {

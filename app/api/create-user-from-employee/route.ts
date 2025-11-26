@@ -1,4 +1,6 @@
 // app/api/create-user-from-employee/route.ts
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
@@ -102,7 +104,7 @@ export async function POST(request: NextRequest) {
     const leavingDate = parsedData.dateOfLeaving && parsedData.dateOfLeaving !== '0000-00-00' ? new Date(parsedData.dateOfLeaving) : null;
 
     // Map status and gender
-    const mapEmployeeStatus = (status: string) => {
+    const mapEmployeeStatus = (status: string | undefined) => {
       switch (status?.toLowerCase()) {
         case 'active': return 'ACTIVE';
         case 'inactive': return 'INACTIVE';
@@ -111,7 +113,7 @@ export async function POST(request: NextRequest) {
       }
     };
 
-    const mapGender = (gender: string) => {
+    const mapGender = (gender: string | undefined) => {
       switch (gender?.toLowerCase()) {
         case 'male': return 'MALE';
         case 'female': return 'FEMALE';

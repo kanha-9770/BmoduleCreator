@@ -1,4 +1,6 @@
 // pages/api/permissions.ts
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 import { getPermissions } from "@/lib/database";
 import { NextResponse } from "next/server";
 

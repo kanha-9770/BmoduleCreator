@@ -124,7 +124,7 @@ export class AuthMiddleware {
       return {
         authorized: false,
         error: 'Access check failed',
-        user,
+        user: (req as any).user || null,
       };
     }
   }
@@ -173,10 +173,7 @@ export class AuthMiddleware {
    * Check if user has access to a specific form
    */
   static hasFormPermission(
-    formId: string,
-    moduleId: string,
-    action: 'view' | 'create' | 'edit' | 'delete' = 'view'
-  ): boolean {
+formId: string, moduleId: string, id: string, p0: string, action: 'view' | 'create' | 'edit' | 'delete' = 'view'  ): boolean {
     return this.hasModulePermission(moduleId); // Inherit module access
   }
 }

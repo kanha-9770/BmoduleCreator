@@ -155,6 +155,16 @@ interface ViewDetailsModalProps {
   record: EnhancedFormRecord | null
 }
 
+const isImageUrl = (val: any): boolean => {
+  if (typeof val !== 'string') return false;
+  return val.startsWith('http') && /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(val);
+};
+
+const isImageField = (label: string): boolean => {
+  const lowerLabel = label.toLowerCase();
+  return lowerLabel.includes('image') || lowerLabel.includes('photo') || lowerLabel.includes('camera');
+};
+
 const ViewDetailsModal: React.FC<ViewDetailsModalProps> = ({ isOpen, onClose, record }) => {
   const [userInfo, setUserInfo] = React.useState<any>(null)
   const [recordDataByForm, setRecordDataByForm] = React.useState<Map<string, Map<string, ProcessedFieldData[]>>>(
@@ -168,9 +178,11 @@ const ViewDetailsModal: React.FC<ViewDetailsModalProps> = ({ isOpen, onClose, re
       setLoading(true)
       const fetchData = async () => {
         try {
-          const userRes = await fetch("/api/attendance-user")
+          const userRes = await fetch("/api/user/attendance-user")
+          console.log("[ViewDetailsModal] Fetched user response:", userRes)
           if (userRes.ok) {
             const userData = await userRes.json()
+            console.log("[ViewDetailsModal] Fetched user data:", userData)
             setUserInfo(userData.user)
           }
 
@@ -218,6 +230,14 @@ const ViewDetailsModal: React.FC<ViewDetailsModalProps> = ({ isOpen, onClose, re
               }
               seenFields.add(fieldKey)
 
+              let displayVal = fieldValue.value != null ? String(fieldValue.value) : "";
+              if (Array.isArray(fieldValue.value)) {
+                const imgCount = fieldValue.value.filter((v: any) => isImageUrl(v)).length;
+                displayVal = imgCount > 0 ? `${imgCount} image${imgCount > 1 ? 's' : ''}` : displayVal;
+              } else if (isImageUrl(fieldValue.value)) {
+                displayVal = "Image";
+              }
+
               if (!sectionMap.has(sectionKey)) {
                 sectionMap.set(sectionKey, [])
               }
@@ -230,7 +250,7 @@ const ViewDetailsModal: React.FC<ViewDetailsModalProps> = ({ isOpen, onClose, re
                 fieldLabel: fieldValue.label || key,
                 fieldType: fieldValue.type || "text",
                 value: fieldValue.value,
-                displayValue: fieldValue.value != null ? String(fieldValue.value) : "",
+                displayValue: displayVal,
                 icon: "",
                 order: fieldValue.order || 999,
                 sectionId: fieldValue.sectionId,
@@ -288,26 +308,79 @@ const ViewDetailsModal: React.FC<ViewDetailsModalProps> = ({ isOpen, onClose, re
   }
 
   const renderFieldContent = (field: ProcessedFieldData) => {
-    if (field.fieldLabel === "New Camera" && field.value) {
+    let value = field.value || field.displayValue;
+
+    // Handle array of images
+    if (Array.isArray(value)) {
+      return (
+        <div className="flex flex-wrap gap-2 justify-center">
+          {value
+            .filter((img) => isImageUrl(img))
+            .map((img, idx) => (
+              <div key={idx} className="flex flex-col items-center">
+                <Image
+                  src={img}
+                  alt={`${field.fieldLabel} ${idx + 1}`}
+                  width={150}
+                  height={150}
+                  className="rounded-lg object-cover shadow-lg border-2 border-gray-200"
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none";
+                    const sibling = e.currentTarget.nextElementSibling as HTMLElement;
+                    if (sibling) sibling.style.display = "block";
+                  }}
+                />
+                <span className="hidden text-gray-500 text-sm mt-1">No Image Available</span>
+              </div>
+            ))}
+          {value.length === 0 && <span className="text-gray-500">No images</span>}
+        </div>
+      );
+    }
+
+    // Handle single image URL
+    if (isImageUrl(value)) {
       return (
         <div className="flex items-center justify-center w-full">
           <Image
-            src={field.value || "/placeholder.svg"}
+            src={value}
             alt={field.fieldLabel}
             width={150}
             height={150}
             className="rounded-lg object-cover shadow-lg border-2 border-gray-200"
             onError={(e) => {
-              e.currentTarget.style.display = "none"
-              const sibling = e.currentTarget.nextElementSibling as HTMLElement
-              if (sibling) sibling.style.display = "block"
+              e.currentTarget.style.display = "none";
+              const sibling = e.currentTarget.nextElementSibling as HTMLElement;
+              if (sibling) sibling.style.display = "block";
             }}
           />
           <span className="hidden text-gray-500 text-sm">No Image Available</span>
         </div>
-      )
+      );
     }
-    return renderFieldValue(field.value || field.displayValue)
+
+    // Fallback for legacy "New Camera" field (in case value isn't detected as URL)
+    if (field.fieldLabel === "New Camera" && value) {
+      return (
+        <div className="flex items-center justify-center w-full">
+          <Image
+            src={value || "/placeholder.svg"}
+            alt={field.fieldLabel}
+            width={150}
+            height={150}
+            className="rounded-lg object-cover shadow-lg border-2 border-gray-200"
+            onError={(e) => {
+              e.currentTarget.style.display = "none";
+              const sibling = e.currentTarget.nextElementSibling as HTMLElement;
+              if (sibling) sibling.style.display = "block";
+            }}
+          />
+          <span className="hidden text-gray-500 text-sm">No Image Available</span>
+        </div>
+      );
+    }
+
+    return renderFieldValue(value);
   }
 
   const isMergedRecord = record.formId === "merged"
@@ -362,10 +435,13 @@ const ViewDetailsModal: React.FC<ViewDetailsModalProps> = ({ isOpen, onClose, re
                         <div className="flex-shrink-0">
                           <div className="relative">
                             <div className="h-28 w-28 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 shadow-lg overflow-hidden border-4 border-white">
-                              <img
+                              <Image
                                 src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${userInfo.username || userInfo.email || "user"}`}
                                 alt={`${userInfo.first_name} ${userInfo.last_name}`}
+                                width={112}
+                                height={112}
                                 className="h-full w-full object-cover"
+                                unoptimized
                               />
                             </div>
                             <div className="absolute bottom-0 right-0 h-9 w-9 rounded-full bg-blue-600 border-4 border-white shadow-lg flex items-center justify-center hover:bg-blue-700 transition-colors cursor-pointer group">
@@ -695,22 +771,31 @@ const RecordsDisplay: React.FC<RecordsDisplayProps> = ({
   const [selectedUserId, setSelectedUserId] = React.useState<string>("")
 
   const buildProcessedDataFromRecordData = (rec: EnhancedFormRecord): ProcessedFieldData[] => {
-    return Object.entries(rec.recordData).map(([key, field]: [string, any]) => ({
-      recordId: rec.id,
-      lookup: field.lookup,
-      options: field.options,
-      fieldId: field.fieldId || key,
-      fieldLabel: field.label,
-      fieldType: field.type,
-      value: field.value,
-      displayValue: field.value != null ? field.value.toString() : "",
-      icon: "",
-      order: field.order || 999,
-      sectionId: field.sectionId,
-      sectionTitle: field.sectionTitle || "Default Section",
-      formId: rec.formId,
-      formName: rec.formName || "Unknown Form",
-    }))
+    return Object.entries(rec.recordData).map(([key, field]: [string, any]) => {
+      let displayVal = field.value != null ? String(field.value) : "";
+      if (Array.isArray(field.value)) {
+        const imgCount = field.value.filter((v: any) => isImageUrl(v)).length;
+        displayVal = imgCount > 0 ? `${imgCount} image${imgCount > 1 ? 's' : ''}` : displayVal;
+      } else if (isImageUrl(field.value)) {
+        displayVal = "Image";
+      }
+      return {
+        recordId: rec.id,
+        lookup: field.lookup,
+        options: field.options,
+        fieldId: field.fieldId || key,
+        fieldLabel: field.label,
+        fieldType: field.type,
+        value: field.value,
+        displayValue: displayVal,
+        icon: "",
+        order: field.order || 999,
+        sectionId: field.sectionId,
+        sectionTitle: field.sectionTitle || "Default Section",
+        formId: rec.formId,
+        formName: rec.formName || "Unknown Form",
+      }
+    })
   }
 
   const getFieldData = (record: EnhancedFormRecord, fieldDef: FormFieldWithSection): ProcessedFieldData | undefined => {
@@ -729,6 +814,25 @@ const RecordsDisplay: React.FC<RecordsDisplayProps> = ({
 
       if (matchingFields.length === 1) {
         return matchingFields[0]
+      }
+
+      // If multiple fields with same label, handle image merging if applicable
+      if (isImageField(fieldDef.label)) {
+        const allImages: string[] = [];
+        matchingFields.forEach((f) => {
+          if (Array.isArray(f.value)) {
+            allImages.push(...f.value.filter((v: any) => isImageUrl(v)));
+          } else if (isImageUrl(f.value)) {
+            allImages.push(f.value);
+          }
+        });
+        if (allImages.length > 0) {
+          return {
+            ...matchingFields[0],
+            value: allImages,
+            displayValue: `${allImages.length} image${allImages.length !== 1 ? 's' : ''}`,
+          };
+        }
       }
 
       // If multiple fields with same label, merge and return the one with the newest/most recent value
@@ -765,12 +869,22 @@ const RecordsDisplay: React.FC<RecordsDisplayProps> = ({
         const fieldId = fieldData.fieldId
         const fieldLabel = fieldData.fieldLabel
 
+        console.log("[v0] Field data:", {
+          fieldLabel,
+          formName: fieldData.formName,
+          recordFormName: record.formName,
+          formId: formId,
+        })
+
         // Create unique key based on formId and fieldLabel to merge duplicates within same form
         const uniqueKey = isMerged
           ? `${formId}::${fieldLabel}` // For merged view: form + label (merge duplicates in same form)
           : fieldId // For single form: just fieldId
 
         if (!fieldMap.has(uniqueKey)) {
+          const resolvedFormName = fieldData.formName || record.formName || "Unknown Form"
+          console.log("[v0] Adding field to map:", { uniqueKey, resolvedFormName })
+
           fieldMap.set(uniqueKey, {
             id: uniqueKey,
             originalId: fieldId,
@@ -780,7 +894,7 @@ const RecordsDisplay: React.FC<RecordsDisplayProps> = ({
             sectionTitle: fieldData.sectionTitle || "Default Section",
             sectionId: fieldData.sectionId || "",
             formId,
-            formName: fieldData.formName || record.formName || "Unknown Form",
+            formName: resolvedFormName,
             options: fieldData.options,
             lookup: fieldData.lookup,
           })
@@ -793,17 +907,19 @@ const RecordsDisplay: React.FC<RecordsDisplayProps> = ({
     return fieldsArray.sort((a, b) => a.order - b.order)
   }
 
-  const renderFieldEditor = (record: EnhancedFormRecord, fieldDef: FormFieldWithSection) => {
+  const renderFieldEditor = (record: EnhancedFormRecord, fieldDef: FormFieldWithSection, actualValue: any, displayText: string) => {
     const fieldData = getFieldData(record, fieldDef)
     const actualRecordId = fieldData?.recordId || record.id
     const actualFormId = fieldData?.formId || record.formId
     const pendingChange = pendingChanges.get(`${record.id}-${fieldDef.id}`)
-    const currentValue = pendingChange ? pendingChange.value : (fieldData?.value ?? "")
+    const currentValue = pendingChange ? pendingChange.value : actualValue
     const originalValue = fieldData?.value ?? ""
     const originalFieldId = fieldData?.fieldId || fieldDef.originalId
 
-    if (fieldDef.label === "New Camera") {
-      return <Input value={currentValue} disabled className="h-7 text-[10px] sm:text-xs p-1 bg-gray-100" />
+    const hasImages = Array.isArray(currentValue) ? currentValue.some(isImageUrl) : isImageUrl(currentValue);
+
+    if (isImageField(fieldDef.label) || hasImages) {
+      return <Input value={displayText} disabled className="h-7 text-[10px] sm:text-xs p-1 bg-gray-100" />
     }
 
     if (!["lookup", "dropdown"].includes(fieldDef.type)) {
@@ -911,7 +1027,7 @@ const RecordsDisplay: React.FC<RecordsDisplayProps> = ({
       const mergedRecord: EnhancedFormRecord = {
         id: `merged-${i}`,
         formId: "merged",
-        formName: "Merged",
+        formName: "", // Will be set from the actual forms
         recordData: {},
         submittedAt: "",
         status: "submitted",
@@ -951,6 +1067,13 @@ const RecordsDisplay: React.FC<RecordsDisplayProps> = ({
       mergedRecord.processedData = combinedProcessedData
       mergedRecord.recordData = combinedRecordData
       mergedRecord.status = latestStatus
+
+      // Set formName for the merged record by concatenating names of constituent forms
+      const constituentFormNames = Array.from(recordsByForm.entries())
+        .filter(([_, records]) => i < records.length)
+        .map(([formId, _]) => allModuleForms.find((f) => f.id === formId)?.name || formId)
+        .filter(Boolean) // Remove null/undefined if form name not found
+      mergedRecord.formName = constituentFormNames.join(" + ") || "Merged Record"
 
       if (latestSubmittedAt > 0) {
         mergedRecordsList.push(mergedRecord)
@@ -1003,10 +1126,14 @@ const RecordsDisplay: React.FC<RecordsDisplayProps> = ({
   }
 
   const handleDoubleClick = (record: EnhancedFormRecord, fieldDef: FormFieldWithSection) => {
-    if (editMode !== "double-click" || savingChanges || fieldDef.label === "New Camera") return
+    if (editMode !== "double-click" || savingChanges || isImageField(fieldDef.label)) return
 
     const fieldData = getFieldData(record, fieldDef)
     if (!fieldData) return
+
+    const actualValue = fieldData.value || ""
+    const hasImages = Array.isArray(actualValue) ? actualValue.some(isImageUrl) : isImageUrl(actualValue);
+    if (hasImages) return;
 
     setEditingCell({
       recordId: record.id,
@@ -1023,9 +1150,13 @@ const RecordsDisplay: React.FC<RecordsDisplayProps> = ({
     record: EnhancedFormRecord,
     fieldDef: FormFieldWithSection,
   ) => {
-    if (e.key === "Enter" && !savingChanges && editMode !== "locked" && fieldDef.label !== "New Camera") {
+    if (e.key === "Enter" && !savingChanges && editMode !== "locked" && !isImageField(fieldDef.label)) {
       const fieldData = getFieldData(record, fieldDef)
       if (!fieldData) return
+
+      const actualValue = fieldData.value || ""
+      const hasImages = Array.isArray(actualValue) ? actualValue.some(isImageUrl) : isImageUrl(actualValue);
+      if (hasImages) return;
 
       setEditingCell({
         recordId: record.id,
@@ -1426,11 +1557,11 @@ const RecordsDisplay: React.FC<RecordsDisplayProps> = ({
                         {uniqueFieldDefs.map((fieldDef) => {
                           const fieldData = getFieldData(record, fieldDef)
                           const pendingChange = pendingChanges.get(`${record.id}-${fieldDef.id}`)
-                          const displayValue = pendingChange
-                            ? pendingChange.value
-                            : fieldData?.displayValue || fieldData?.value || ""
+                          const actualValue = pendingChange ? pendingChange.value : fieldData?.value || null
+                          const displayText = pendingChange ? pendingChange.value?.toString() || fieldData?.displayValue || "" : fieldData?.displayValue || ""
                           const isEditing =
                             editingCell && editingCell.recordId === record.id && editingCell.fieldId === fieldDef.id
+                          const hasImages = actualValue ? (Array.isArray(actualValue) ? actualValue.some(isImageUrl) : isImageUrl(actualValue)) : false;
                           return (
                             <div
                               key={`${record.id}-${fieldDef.id}`}
@@ -1441,38 +1572,46 @@ const RecordsDisplay: React.FC<RecordsDisplayProps> = ({
                                 pendingChange && !isEditing && "bg-yellow-50 font-semibold",
                                 editMode === "double-click" &&
                                   !isEditing &&
-                                  fieldDef.label !== "New Camera" &&
+                                  !isImageField(fieldDef.label) &&
+                                  !hasImages &&
                                   "cursor-pointer hover:bg-gray-100",
                               )}
-                              title={`${fieldDef.label}: ${displayValue}`}
+                              title={`${fieldDef.label}: ${displayText}`}
                               onDoubleClick={() => handleDoubleClick(record, fieldDef)}
                               onKeyDown={(e) => handleKeyDown(e, record, fieldDef)}
-                              tabIndex={fieldDef.label !== "New Camera" ? 0 : undefined}
-                              role={fieldDef.label !== "New Camera" ? "button" : undefined}
+                              tabIndex={(!isImageField(fieldDef.label) && !hasImages) ? 0 : undefined}
+                              role={(!isImageField(fieldDef.label) && !hasImages) ? "button" : undefined}
                               aria-label={
-                                fieldDef.label !== "New Camera" ? `${fieldDef.label}: ${displayValue}` : undefined
+                                (!isImageField(fieldDef.label) && !hasImages) ? `${fieldDef.label}: ${displayText}` : undefined
                               }
                             >
                               {isEditing ? (
-                                renderFieldEditor(record, fieldDef)
-                              ) : fieldDef.label === "New Camera" && displayValue ? (
+                                renderFieldEditor(record, fieldDef, actualValue, displayText)
+                              ) : hasImages ? (
                                 <div className="flex items-center justify-center w-full h-full">
-                                  <Image
-                                    src={displayValue || "/placeholder.svg"}
-                                    alt="New Camera"
-                                    width={40}
-                                    height={40}
-                                    className="rounded object-cover"
-                                    onError={(e) => {
-                                      e.currentTarget.style.display = "none"
-                                      const sibling = e.currentTarget.nextElementSibling as HTMLElement
-                                      if (sibling) sibling.style.display = "block"
-                                    }}
-                                  />
+                                  {actualValue && (
+                                    <>
+                                      <Image
+                                        src={Array.isArray(actualValue) ? (actualValue.find(isImageUrl) || "/placeholder.svg") : (actualValue || "/placeholder.svg")}
+                                        alt={fieldDef.label}
+                                        width={40}
+                                        height={40}
+                                        className="rounded object-cover flex-shrink-0"
+                                        onError={(e) => {
+                                          e.currentTarget.style.display = "none"
+                                          const sibling = e.currentTarget.nextElementSibling as HTMLElement
+                                          if (sibling) sibling.style.display = "block"
+                                        }}
+                                      />
+                                      {Array.isArray(actualValue) && actualValue.filter(isImageUrl).length > 1 && (
+                                        <span className="ml-1 text-xs text-gray-500">+{actualValue.filter(isImageUrl).length - 1}</span>
+                                      )}
+                                    </>
+                                  )}
                                   <span className="hidden text-gray-500 text-xs">No Image</span>
                                 </div>
                               ) : (
-                                <span className="truncate">{displayValue || "—"}</span>
+                                <span className="truncate">{displayText || "—"}</span>
                               )}
                             </div>
                           )

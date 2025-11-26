@@ -8,7 +8,7 @@ import Dashboard from '@/components/dashboard';
 import PayrollEngine from '@/components/payroll-engine';
 
 export default function PayrollPage() {
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [] = useState(0);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {

@@ -29,6 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useGetUserQuery, useLogoutMutation } from "@/lib/api/auth";
 
 interface Organization {
   id: string;
@@ -111,71 +112,159 @@ interface User {
 }
 
 export default function DashboardPage() {
+  const { data: userData, isLoading, error, refetch } = useGetUserQuery(undefined, { skip: false });
+  const [logout, { isLoading: isLoggingOut }] = useLogoutMutation();
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
 
+  // Check if user is admin based on unitAssignments
+  const isAdmin = user?.unitAssignments?.some(assignment => assignment.role.name === 'admin') || false;
+
   useEffect(() => {
-    console.log("Profile component mounted, fetching user data");
-    fetchUser();
-  }, []);
+    console.log("Profile component mounted, checking user data");
 
-  const fetchUser = async () => {
-    console.log("Fetching user data from /api/auth/me");
-    try {
-      const response = await fetch("/api/auth/me");
-      console.log("User fetch response status:", response.status);
-      const result = await response.json();
-      console.log("User fetch result:", result);
-
-      if (!response.ok) {
-        console.log("User fetch failed, redirecting to login");
-        router.push("/login");
+    const checkUser = async () => {
+      console.log('Checking user data from RTK Query');
+      if (error && !isLoading) {
+        console.log('User fetch failed via RTK, redirecting to login');
+        toast({
+          title: 'Error',
+          description: 'Failed to load user data',
+          variant: 'destructive',
+        });
+        router.push('/login');
         return;
       }
 
-      console.log("User data loaded successfully:", result.user);
-      setUser(result.user);
-    } catch (error) {
-      console.error("Error fetching user data:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load user data",
-        variant: "destructive",
-      });
-      router.push("/login");
-    } finally {
-      setIsLoading(false);
+      if (userData?.user) {
+        console.log('User data loaded successfully via RTK:', userData.user);
+        // Normalize RTK response to match local User type (convert undefined -> null, ensure arrays)
+        const ud = userData.user;
+
+        // Normalize unitAssignments
+        const normalizedUnitAssignments: UnitAssignment[] = (ud.unitAssignments ?? []).map((assignment: any) => ({
+          unit: assignment.unit,
+          role: assignment.role,
+          notes: assignment.notes ?? null,
+        }));
+
+        // Normalize employee
+        let normalizedEmployee: Employee | null = null;
+        if (ud.employee) {
+          const emp = ud.employee;
+          normalizedEmployee = {
+            employeeName: emp.employeeName || '', // Ensure non-null for required field
+            gender: emp.gender ?? null,
+            department: emp.department ?? null,
+            designation: emp.designation ?? null,
+            dob: emp.dob ?? null,
+            nativePlace: emp.nativePlace ?? null,
+            country: emp.country ?? null,
+            permanentAddress: emp.permanentAddress ?? null,
+            currentAddress: emp.currentAddress ?? null,
+            personalContact: emp.personalContact ?? null,
+            alternateNo1: emp.alternateNo1 ?? null,
+            alternateNo2: emp.alternateNo2 ?? null,
+            emailAddress1: emp.emailAddress1 ?? null,
+            emailAddress2: emp.emailAddress2 ?? null,
+            aadharCardNo: emp.aadharCardNo ?? null,
+            bankName: emp.bankName ?? null,
+            bankAccountNo: emp.bankAccountNo ?? null,
+            ifscCode: emp.ifscCode ?? null,
+            status: emp.status ?? null,
+            shiftType: emp.shiftType ?? null,
+            inTime: emp.inTime ?? null,
+            outTime: emp.outTime ?? null,
+            dateOfJoining: emp.dateOfJoining ?? null,
+            dateOfLeaving: emp.dateOfLeaving ?? null,
+            incrementMonth: emp.incrementMonth ? Number(emp.incrementMonth) : null,
+            yearsOfAgreement: emp.yearsOfAgreement ? Number(emp.yearsOfAgreement) : null,
+            bonusAfterYears: emp.bonusAfterYears ? Number(emp.bonusAfterYears) : null,
+            companyName: emp.companyName ?? null,
+            totalSalary: emp.totalSalary ? Number(emp.totalSalary) : null,
+            givenSalary: emp.givenSalary ? Number(emp.givenSalary) : null,
+            bonusAmount: emp.bonusAmount ? Number(emp.bonusAmount) : null,
+            nightAllowance: emp.nightAllowance ? Number(emp.nightAllowance) : null,
+            overTime: emp.overTime ? Number(emp.overTime) : null,
+            oneHourExtra: emp.oneHourExtra ? Number(emp.oneHourExtra) : null,
+            // Handle companySimIssue: convert string to boolean if needed, or assume it's boolean-like
+            companySimIssue:
+              typeof emp.companySimIssue === 'boolean'
+                ? emp.companySimIssue
+                : emp.companySimIssue === 'true'
+                ? true
+                : emp.companySimIssue === 'false'
+                ? false
+                : null,
+          };
+        }
+
+        const normalizedUser: User = {
+          id: ud.id,
+          email: ud.email,
+          username: ud.username ?? null,
+          first_name: ud.first_name ?? null,
+          last_name: ud.last_name ?? null,
+          email_verified: ud.email_verified,
+          status: ud.status,
+          createdAt: ud.createdAt,
+          mobile: ud.mobile ?? null,
+          mobile_verified: ud.mobile_verified ?? null,
+          avatar: ud.avatar ?? null,
+          department: ud.department ?? null,
+          phone: ud.phone ?? null,
+          location: ud.location ?? null,
+          joinDate: ud.joinDate ?? null,
+          organization: ud.organization ?? null,
+          unitAssignments: normalizedUnitAssignments,
+          employee: normalizedEmployee,
+        };
+        sessionStorage.setItem('user', JSON.stringify(normalizedUser));
+        setUser(normalizedUser);
+      } else if (!isLoading && !userData?.user) {
+        console.log('No user data, redirecting to login');
+        router.push('/login');
+      }
+    };
+
+    // Check sessionStorage first as fallback
+    const storedUser = sessionStorage.getItem('user');
+    if (storedUser && !userData && !isLoading) {
+      try {
+        const parsedUser = JSON.parse(storedUser) as User;
+        console.log('Found valid user data in sessionStorage:', parsedUser);
+        setUser(parsedUser);
+      } catch (error) {
+        console.error('Error parsing sessionStorage user data:', error);
+        console.log('Invalid user data in sessionStorage, refetching');
+        sessionStorage.removeItem('user');
+        refetch();
+      }
+    } else {
+      checkUser();
     }
-  };
+  }, [router, toast, userData, isLoading, error, refetch]);
 
   const handleLogout = async () => {
-    setIsLoggingOut(true);
-
+    console.log('Initiating logout');
     try {
-      const response = await fetch("/api/auth/logout", {
-        method: "POST",
-      });
-
-      if (response.ok) {
-        toast({
-          title: "Logged out",
-          description: "You have been successfully logged out",
-        });
-        router.push("/login");
-      } else {
-        throw new Error("Logout failed");
-      }
-    } catch (error) {
+      await logout().unwrap();
+      console.log('Logout successful');
+      sessionStorage.removeItem('user');
+      document.cookie = 'auth-token=; path=/; max-age=0';
       toast({
-        title: "Error",
-        description: "Failed to logout. Please try again.",
-        variant: "destructive",
+        title: 'Logged out',
+        description: 'You have been successfully logged out',
       });
-    } finally {
-      setIsLoggingOut(false);
+      router.push('/login');
+    } catch (error) {
+      console.error('Error during logout:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to logout. Please try again.',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -778,6 +867,16 @@ export default function DashboardPage() {
                   <Mail className="h-4 w-4 mr-2" />
                   Email Preferences
                 </Button>
+                {isAdmin && (
+                  <Button 
+                    variant="outline" 
+                    className="h-8 justify-start"
+                    onClick={() => router.push('/admin')}
+                  >
+                    <Shield className="h-4 w-4 mr-2" />
+                    Admin Panel
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>

@@ -191,12 +191,10 @@ export default function HomePage() {
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null)
   const [pendingChanges, setPendingChanges] = useState<Map<string, PendingChange>>(new Map())
   const [savingChanges, setSavingChanges] = useState(false)
-  const [clickTimeout, setClickTimeout] = useState<NodeJS.Timeout | null>(null)
-  const [clickCount, setClickCount] = useState<Map<string, number>>(new Map())
+  const [clickTimeout] = useState<NodeJS.Timeout | null>(null)
+  const [, setClickCount] = useState<Map<string, number>>(new Map())
   const [mergeMode, setMergeMode] = useState<"vertical" | "horizontal">("horizontal")
   const [mergedRecords, setMergedRecords] = useState<EnhancedFormRecord[]>([])
-  const inputRef = useRef<HTMLInputElement>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [organizationId, setOrganizationId] = useState<string | null>(null)
 
   const openFormDialog = (formId: string) => {
@@ -390,152 +388,11 @@ export default function HomePage() {
     }
   }
 
-  const handleCellClick = (
-    recordId: string,
-    fieldId: string,
-    currentValue: any,
-    fieldType: string,
-    event: React.MouseEvent,
-  ) => {
-    event.preventDefault()
-    event.stopPropagation()
-    const cellKey = `${recordId}-${fieldId}`
-    if (fieldType === "file") {
-      toast({
-        title: "Cannot Edit",
-        description: "File fields cannot be edited inline",
-        variant: "destructive",
-      })
-      return
-    }
 
-    if (editMode === "locked") {
-      return
-    }
 
-    if (editMode === "single-click") {
-      startCellEdit(recordId, fieldId, currentValue, fieldType)
-      return
-    }
 
-    if (editMode === "double-click") {
-      const currentCount = clickCount.get(cellKey) || 0
-      const newCount = currentCount + 1
-      if (clickTimeout) {
-        clearTimeout(clickTimeout)
-      }
 
-      setClickCount((prev) => new Map(prev.set(cellKey, newCount)))
-      if (newCount === 1) {
-        const timeout = setTimeout(() => {
-          setClickCount((prev) => {
-            const newMap = new Map(prev)
-            newMap.delete(cellKey)
-            return newMap
-          })
-        }, 300)
-        setClickTimeout(timeout)
-      } else if (newCount >= 2) {
-        if (clickTimeout) {
-          clearTimeout(clickTimeout)
-        }
-        setClickCount((prev) => {
-          const newMap = new Map(prev)
-          newMap.delete(cellKey)
-          return newMap
-        })
-        startCellEdit(recordId, fieldId, currentValue, fieldType)
-      }
-    }
-  }
 
-  const startCellEdit = (recordId: string, fieldId: string, currentValue: any, fieldType: string) => {
-    const field = formFieldsWithSections.find((f) => f.id === fieldId)
-    if (!field) {
-      return
-    }
-
-    setEditingCell({
-      recordId,
-      fieldId,
-      value: currentValue,
-      originalValue: currentValue,
-      fieldType,
-      options: field.options,
-    })
-
-    setTimeout(() => {
-      if (inputRef.current) {
-        inputRef.current.focus()
-        if (fieldType === "text" || fieldType === "email" || fieldType === "url") {
-          inputRef.current.select()
-        }
-      } else if (textareaRef.current) {
-        textareaRef.current.focus()
-        textareaRef.current.select()
-      }
-    }, 100)
-  }
-
-  const updateCellValue = (newValue: any) => {
-    if (!editingCell) return
-    setEditingCell({
-      ...editingCell,
-      value: newValue,
-    })
-  }
-
-  const saveCellEdit = async () => {
-    if (!editingCell) return
-    const changeKey = `${editingCell.recordId}-${editingCell.fieldId}`
-    const field = formFieldsWithSections.find((f) => f.id === editingCell.fieldId)
-
-    setPendingChanges((prev) => {
-      const newChanges = new Map(prev)
-      newChanges.set(changeKey, {
-        recordId: editingCell.recordId,
-        fieldId: editingCell.fieldId,
-        originalFieldId: field?.originalId || editingCell.fieldId,
-        value: editingCell.value,
-        originalValue: editingCell.originalValue,
-        fieldType: editingCell.fieldType,
-        fieldLabel: field?.label || editingCell.fieldId,
-      })
-      return newChanges
-    })
-
-    setFormRecords((prevRecords) => {
-      return prevRecords.map((record) => {
-        if (record.id === editingCell.recordId) {
-          const updatedProcessedData = record.processedData.map((field) => {
-            if (field.fieldId === editingCell.fieldId) {
-              return {
-                ...field,
-                value: editingCell.value,
-                displayValue: formatFieldValue(editingCell.fieldType, editingCell.value),
-              }
-            }
-            return field
-          })
-          return {
-            ...record,
-            processedData: updatedProcessedData,
-          }
-        }
-        return record
-      })
-    })
-
-    setEditingCell(null)
-    toast({
-      title: "Change Staged",
-      description: `Field "${field?.label}" has been modified. Click "Save All Changes" to persist.`,
-    })
-  }
-
-  const cancelCellEdit = () => {
-    setEditingCell(null)
-  }
 
   const saveAllPendingChanges = async (changesToSave?: Map<string, PendingChange>) => {
     const changes = changesToSave || pendingChanges
@@ -642,16 +499,7 @@ export default function HomePage() {
     }
   }
 
-  const getCurrentFieldValue = (recordId: string, fieldId: string, originalValue: any) => {
-    const changeKey = `${recordId}-${fieldId}`
-    const pendingChange = pendingChanges.get(changeKey)
-    return pendingChange ? pendingChange.value : originalValue
-  }
 
-  const hasFieldChanged = (recordId: string, fieldId: string) => {
-    const changeKey = `${recordId}-${fieldId}`
-    return pendingChanges.has(changeKey)
-  }
 
   const getEditModeInfo = () => {
     switch (editMode) {
@@ -690,11 +538,11 @@ export default function HomePage() {
     })
 
     const formsWithOneRecord = Array.from(recordsByForm.entries()).filter(
-      ([formId, formRecords]) => formRecords.length === 1,
+      ([, formRecords]) => formRecords.length === 1,
     )
 
     const formsWithMultipleRecords = Array.from(recordsByForm.entries()).filter(
-      ([formId, formRecords]) => formRecords.length > 1,
+      ([, formRecords]) => formRecords.length > 1,
     )
 
     const mergedResults: EnhancedFormRecord[] = []
@@ -741,7 +589,7 @@ export default function HomePage() {
       mergedResults.push(...formsWithOneRecord[0][1])
     }
 
-    formsWithMultipleRecords.forEach(([formId, formRecords]) => {
+    formsWithMultipleRecords.forEach(([, formRecords]) => {
       mergedResults.push(...formRecords)
     })
 
@@ -1044,14 +892,6 @@ export default function HomePage() {
     }
   }
 
-  const copyFormLink = (formId: string) => {
-    const link = `${window.location.origin}/form/${formId}`
-    navigator.clipboard.writeText(link)
-    toast({
-      title: "Success",
-      description: "Form link copied to clipboard!",
-    })
-  }
 
   const openEditDialog = (module: FormModule) => {
     setEditingModule(module)
@@ -1294,7 +1134,6 @@ export default function HomePage() {
                 <FormsContent
                   forms={selectedModule.forms || []}
                   selectedForm={selectedForm}
-                  viewMode={viewMode}
                   setSelectedForm={setSelectedForm}
                   openFormDialog={openFormDialog}
                   handlePublishForm={handlePublishForm}
@@ -1328,8 +1167,13 @@ export default function HomePage() {
                   getEditModeInfo={getEditModeInfo}
                   toggleEditMode={toggleEditMode}
                   saveAllPendingChanges={saveAllPendingChanges}
-                  discardAllPendingChanges={discardAllPendingChanges}
-                />
+                  discardAllPendingChanges={discardAllPendingChanges} onEditRecord={function (record: EnhancedFormRecord): void {
+                    throw new Error("Function not implemented.")
+                  }} onDeleteRecord={function (record: EnhancedFormRecord): Promise<void> {
+                    throw new Error("Function not implemented.")
+                  }} onViewDetails={function (record: EnhancedFormRecord): void {
+                    throw new Error("Function not implemented.")
+                  }} />
               </div>
             ) : (
               <div className="text-center py-12 text-gray-500">

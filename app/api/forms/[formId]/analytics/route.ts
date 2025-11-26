@@ -24,8 +24,8 @@ export async function GET(request: Request, { params }: { params: { formId: stri
     // Generate mock field stats
     const form = await DatabaseService.getForm(params.formId)
     const fieldStats =
-      form?.sections.flatMap((section) =>
-        section.fields.map((field) => ({
+      form?.sections.flatMap((section: { fields: any[] }) =>
+        section.fields.map((field: { label: any }) => ({
           fieldName: field.label,
           completionRate: Math.round(Math.random() * 40 + 60),
           averageTime: Math.round(Math.random() * 30 + 10),

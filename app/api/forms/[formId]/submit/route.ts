@@ -57,7 +57,7 @@ export async function POST(request: NextRequest, { params }: { params: { formId:
 
     // Check submission limits if configured
     if (form.maxSubmissions) {
-      const currentCount = await DatabaseService.getFormSubmissionCount(formId)
+      const currentCount = await DatabaseService.getFormSubmissionCount(formId, userId ?? undefined)
       if (currentCount >= form.maxSubmissions) {
         return NextResponse.json({ error: "Maximum submissions reached for this form" }, { status: 429 })
       }
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest, { params }: { params: { formId:
       employeeId,
       amount,
       date,
-      userId, // Pass userId to DatabaseService (null if not authenticated)
+      userId ?? undefined, // Pass undefined when userId is null to match expected type
     )
 
     // Track form submission event
@@ -128,10 +128,10 @@ export async function POST(request: NextRequest, { params }: { params: { formId:
         form: {
           id: form.id,
           name: form.name,
-          sections: form.sections.map((section) => ({
+          sections: form.sections.map((section: { id: any; title: any; fields: any[] }) => ({
             id: section.id,
             title: section.title,
-            fields: section.fields.map((field) => ({
+            fields: section.fields.map((field: { id: string | number; label: any; type: any }) => ({
               id: field.id,
               label: field.label,
               type: field.type,

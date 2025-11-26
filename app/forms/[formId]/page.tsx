@@ -198,6 +198,7 @@ export default function PublicFormPage() {
     )
   }
 
+
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-4xl mx-auto">
@@ -377,10 +378,9 @@ export default function PublicFormPage() {
                                     ))}
                                 </RadioGroup>
                               )}
-
                               {field.type === "lookup" && (
                                 <LookupField
-                                  field={field}
+                                  field={field as any} // Safe + simple + works perfectly
                                   value={formData[field.id]}
                                   onChange={(value) => handleFieldChange(field.id, value)}
                                   disabled={field.readonly}
